@@ -1,0 +1,201 @@
+/*Desktop layout*/
+
+body {
+    background-color: #121213;
+    color: white;
+    font-family: 'Courier New', Courier, monospace;
+    display: flex;
+    flex-direction: column; /* Stack: Header -> Board -> Keyboard */
+    align-items: center;
+    /* Use 100dvh for mobile browsers (ignores address bar shifting) */
+    height: 100vh;
+    height: 100dvh; 
+    margin: 0;
+    overflow: hidden; /* Prevent the whole page from scrolling */
+}
+
+/* 1. STICKY HEADER */
+header {
+    border-bottom: 1px solid #3a3a3c;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 15px 0;
+    flex-shrink: 0; /* Never shrink the header */
+    position: relative;
+    z-index: 50;
+    background-color: #121213;
+}
+
+h1 { margin: 0; font-size: 1.5rem; letter-spacing: 2px; }
+
+.header-tools {
+    position: absolute;
+    right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px; 
+}
+
+.header-tools button {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0;
+    color: #fff;
+}
+
+/* --- 2. SCROLLABLE GAME BOARD --- */
+#game-board {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    
+    /* THE SCROLL MAGIC */
+    flex-grow: 1;      /* Fill all available space between header and keyboard */
+    overflow-y: auto;  /* Scroll if content is too big */
+    width: 100%;
+    align-items: center;
+    padding-top: 20px;
+    padding-bottom: 20px;
+}
+
+/* Hide scrollbar for a cleaner look */
+#game-board::-webkit-scrollbar { display: none; }
+#game-board { -ms-overflow-style: none; scrollbar-width: none; }
+
+.row { display: flex; gap: 5px; align-items: center; }
+
+.tile {
+    width: 50px;
+    height: 50px;
+    border: 2px solid #3a3a3c;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 2rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    user-select: none; /* Prevent text selection on tap */
+}
+.tile.active { border-color: #818384; }
+
+/* FEEDBACK DOTS */
+.feedback-box {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin-left: 10px;
+    padding: 5px;
+    border-left: 1px solid #3a3a3c;
+}
+.dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    border: 2px solid #3a3a3c; /* Hollow Ring */
+    background-color: transparent;
+}
+.dot.miss { background-color: #3a3a3c; border-color: #3a3a3c; }
+.dot.bull { background-color: #538d4e; border-color: #538d4e; box-shadow: 0 0 5px #538d4e; }
+.dot.cow { background-color: #b59f3b; border-color: #b59f3b; box-shadow: 0 0 5px #b59f3b; }
+
+/* 3. STICKY KEYBOARD */
+#keyboard {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    padding: 10px;
+    width: 95%;
+    max-width: 500px; /* Don't get too wide on desktop */
+    flex-shrink: 0;   /* Never shrink the keyboard */
+    background-color: #121213;
+    padding-bottom: 40px; /* Safe space for bottom of phone */
+}
+
+.key {
+    background-color: #818384;
+    border: none;
+    padding: 15px 0; /* Vertical padding */
+    border-radius: 4px;
+    color: white;
+    font-size: 1.2rem;
+    font-weight: bold;
+    cursor: pointer;
+    touch-action: manipulation; /* Faster taps on mobile */
+    -webkit-tap-highlight-color: transparent;
+}
+.key:active { background-color: #565758; }
+.key.big-key { grid-column: span 1; font-size: 0.9rem; background-color: #3a3a3c;}
+.key.crossed-out { background-color: #1c1c1e; color: #3a3a3c; text-decoration: line-through; }
+
+/* MOBILE RESPONSIVENESS */
+
+@media (max-width: 600px) {
+    /* Shrink the header text */
+    h1 { font-size: 1.2rem; }
+    .header-tools { gap: 15px; right: 10px; }
+    .header-tools button { font-size: 1.2rem; }
+
+    /* Shrink the Game Board Tiles */
+    .tile {
+        width: 40px;  /* Smaller tiles */
+        height: 40px;
+        font-size: 1.5rem;
+    }
+    
+    /* If Insane Mode (6 tiles), shrink even more so it fits width */
+    .row { gap: 3px; }
+    
+    /* Shrink Dots */
+    .feedback-box { gap: 2px; margin-left: 5px; padding: 2px; }
+    .dot { width: 8px; height: 8px; }
+
+    /* Shrink Keyboard */
+    #keyboard { gap: 4px; padding: 5px; padding-bottom: 15px; }
+    .key { padding: 12px 0; font-size: 1.1rem; }
+}
+
+/* EXTRA SMALL SCREENS (iPhone SE, etc) */
+@media (max-width: 350px) {
+    .tile { width: 32px; height: 32px; font-size: 1.2rem; }
+}
+
+/* ANIMATION & MODALS */
+@keyframes shake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); }
+    75% { transform: translateX(-5px); }
+    100% { transform: translateX(0); }
+}
+.shake { animation: shake 0.3s ease-in-out; border-color: #cf6679 !important; }
+
+.modal {
+    display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.85); justify-content: center; align-items: center; z-index: 1000;
+}
+.modal.hidden { display: none; }
+.modal-content {
+    background-color: #121213; border: 1px solid #3a3a3c; padding: 20px;
+    border-radius: 10px; width: 85%; max-width: 400px; color: white; text-align: center;
+    position: relative; max-height: 80vh; overflow-y: auto;
+}
+.close-btn { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: #818384; }
+
+/* RE-ADD MISSING STATS STYLES */
+#stats-summary { display: flex; justify-content: space-around; margin-bottom: 20px; }
+.stat-item { display: flex; flex-direction: column; align-items: center; }
+.stat-num { font-size: 1.5rem; font-weight: bold; }
+.stat-label { font-size: 0.7rem; color: #818384; }
+#guess-distribution { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
+.dist-row { display: flex; align-items: center; width: 100%; }
+.dist-label { width: 20px; font-weight: bold; font-size: 0.8rem; }
+.dist-bar-container { flex-grow: 1; margin-left: 10px; }
+.dist-bar {
+    background-color: #3a3a3c; color: white;
+    text-align: right; padding-right: 5px; min-width: 15px;
+    font-size: 0.8rem; font-weight: bold;
+}
+.dist-bar.highlight { background-color: #538d4e; }

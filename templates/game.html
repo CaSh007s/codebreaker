@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Playing CodeBreaker...</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+
+    <header>
+        <h1 style="flex-grow: 1; text-align: center;">
+            CODEBREAKER
+            <span id="timer-display" style="display:none; font-size: 1.2rem; color: #cf6679; margin-left: 15px;">03:00</span>
+        </h1>
+        
+        <div class="header-tools">
+            <button id="stats-btn" title="Statistics">📊</button>
+            <button id="hint-btn" title="Get a Hint">💡</button>
+            <button id="giveup-btn" title="Give Up" style="font-size: 1.5rem;">🏳️</button>
+        </div>
+    </header>
+
+    <div id="game-board">
+        </div>
+
+    <div id="keyboard">
+        <button class="key" onclick="handleInput('1')" oncontextmenu="toggleNote(event, this)">1</button>
+        <button class="key" onclick="handleInput('2')" oncontextmenu="toggleNote(event, this)">2</button>
+        <button class="key" onclick="handleInput('3')" oncontextmenu="toggleNote(event, this)">3</button>
+        <button class="key" onclick="handleInput('4')" oncontextmenu="toggleNote(event, this)">4</button>
+        <button class="key" onclick="handleInput('5')" oncontextmenu="toggleNote(event, this)">5</button>
+        
+        <button class="key" onclick="handleInput('6')" oncontextmenu="toggleNote(event, this)">6</button>
+        <button class="key" onclick="handleInput('7')" oncontextmenu="toggleNote(event, this)">7</button>
+        <button class="key" onclick="handleInput('8')" oncontextmenu="toggleNote(event, this)">8</button>
+        <button class="key" onclick="handleInput('9')" oncontextmenu="toggleNote(event, this)">9</button>
+        <button class="key" onclick="handleInput('0')" oncontextmenu="toggleNote(event, this)">0</button>
+
+        <button id="del-btn" class="key big-key" style="grid-column: span 2;">DELETE</button>
+        <button id="enter-btn" class="key big-key" style="grid-column: span 3; background-color: #538d4e;">ENTER</button>
+    </div>
+
+    <button onclick="toggleGameRules(true)" title="Rules" 
+        style="position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; border-radius: 50%; border: none; background: #3a3a3c; color: white; font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 90;">
+        ?
+    </button>
+
+    <div id="gameRulesModal" class="modal hidden" style="z-index: 200;">
+        <div class="modal-content">
+            <span class="close-btn" onclick="toggleGameRules(false)">&times;</span>
+            <h2>FIELD MANUAL</h2>
+            <hr style="border-color: #3a3a3c;">
+            <div class="example-row"><span class="example-dot green"></span> <span><strong>BULL:</strong> Right Num, Right Spot</span></div>
+            <div class="example-row"><span class="example-dot yellow"></span> <span><strong>COW:</strong> Right Num, Wrong Spot</span></div>
+            <p><strong>Controls:</strong> Right-Click pad to strike out.</p>
+            <button class="btn-start" style="padding: 10px; margin-top:10px;" onclick="toggleGameRules(false)">BACK TO ACTION</button>
+        </div>
+    </div>
+
+    <div id="statsModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeStats()">&times;</span>
+            <h2>STATISTICS</h2>
+            <div id="stats-summary">
+                <div class="stat-item"><div class="stat-num" id="stat-played">0</div><div class="stat-label">Played</div></div>
+                <div class="stat-item"><div class="stat-num" id="stat-winpct">0</div><div class="stat-label">Win %</div></div>
+                <div class="stat-item"><div class="stat-num" id="stat-streak">0</div><div class="stat-label">Streak</div></div>
+                <div class="stat-item"><div class="stat-num" id="stat-max">0</div><div class="stat-label">Max Streak</div></div>
+            </div>
+            <h3>GUESS DISTRIBUTION</h3>
+            <div id="guess-distribution"></div>
+        </div>
+    </div>
+
+    <script>
+        const CODE_LENGTH = Number("{{ length }}"); 
+        const TIME_LIMIT = Number("{{ time_limit }}");
+    </script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Over</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        /* Specific styles for the result page */
+        .result-container {
+            text-align: center;
+            max-width: 600px;
+            width: 90%;
+            background: #121213;
+            border: 1px solid #3a3a3c;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .big-title { font-size: 3rem; margin: 0; letter-spacing: 5px; }
+        .win { color: #538d4e; }
+        .loss { color: #cf6679; }
+        
+        .code-reveal {
+            font-size: 4rem;
+            font-weight: bold;
+            margin: 20px 0;
+            letter-spacing: 15px;
+            background: #1a1a1b;
+            padding: 10px;
+            border-radius: 5px;
+            display: inline-block;
+        }
+
+        .action-btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: inherit;
+            transition: transform 0.2s;
+        }
+        .btn-replay { background-color: #538d4e; color: white; }
+        .btn-menu { background-color: transparent; border: 2px solid #3a3a3c; color: #818384; }
+        .action-btn:hover { transform: scale(1.02); }
+        .btn-menu:hover { border-color: white; color: white; }
+
+        body {
+        justify-content: center;
+        min-height: 100vh;       
+    }
+    </style>
+</head>
+<body>
+
+    <div class="result-container">
+        {% if outcome == 'win' %}
+            <h1 class="big-title win">VICTORY</h1>
+            <p style="color: #818384;">Target Acquired.</p>
+        {% else %}
+            <h1 class="big-title loss">DEFEAT</h1>
+            <p style="color: #818384;">Mission Failed.</p>
+        {% endif %}
+
+        <div class="code-reveal">{{ code }}</div>
+
+        <hr style="border-color: #3a3a3c; margin: 30px 0;">
+        <h3>MISSION REPORT</h3>
+        <div id="stats-summary" style="margin-bottom: 20px;">
+            <div class="stat-item"><div class="stat-num" id="stat-played">0</div><div class="stat-label">Played</div></div>
+            <div class="stat-item"><div class="stat-num" id="stat-winpct">0</div><div class="stat-label">Win %</div></div>
+            <div class="stat-item"><div class="stat-num" id="stat-streak">0</div><div class="stat-label">Streak</div></div>
+        </div>
+
+        <a href="/game/{{ mode }}" class="action-btn btn-replay">PLAY AGAIN</a>
+        <a href="/" class="action-btn btn-menu">MAIN MENU</a>
+    </div>
+
+    <script>
+        // 1. Run Confetti if they won
+        const outcome = "{{ outcome }}";
+        if (outcome === 'win') {
+            confetti({ particleCount: 200, spread: 100, origin: { y: 0.6 } });
+        }
+
+        // 2. Load Stats from LocalStorage (Same logic as script.js)
+        const STORAGE_KEY = 'codebreaker_stats';
+        const stats = JSON.parse(localStorage.getItem(STORAGE_KEY)) || { played: 0, won: 0, streak: 0 };
+        
+        document.getElementById('stat-played').innerText = stats.played;
+        document.getElementById('stat-winpct').innerText = stats.played > 0 ? Math.round((stats.won/stats.played)*100) : 0;
+        document.getElementById('stat-streak').innerText = stats.streak;
+    </script>
+</body>
+</html>

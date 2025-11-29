@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeBreaker | Rookie</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+
+    <header>
+        <h1 style="flex-grow: 1; text-align: center;">ROOKIE MODE
+            <span id="timer-display" style="display:none; font-size: 1.2rem; color: #cf6679; margin-left: 15px;">00:00</span>
+        </h1>
+        <div class="header-tools">
+            <button id="stats-btn" class="tool-btn" title="Statistics">📊</button>
+            <button id="hint-btn" class="tool-btn" title="Get a Hint">💡</button>
+            <button id="giveup-btn" class="tool-btn" title="Give Up" style="font-size: 1.5rem;">🏳️</button>
+        </div>
+    </header>
+
+    <div id="game-board">
+        </div>
+
+    <div id="keyboard">
+        <button class="key">1</button>
+        <button class="key">2</button>
+        <button class="key">3</button>
+        <button class="key">4</button>
+        <button class="key">5</button>
+        
+        <button class="key">6</button>
+        <button class="key">7</button>
+        <button class="key">8</button>
+        <button class="key">9</button>
+        <button class="key">0</button>
+
+        <button id="del-btn" class="key big-key" style="grid-column: span 2;">DELETE</button>
+        <button id="enter-btn" class="key big-key" style="grid-column: span 3; background-color: #538d4e;">ENTER</button>
+    </div>
+
+    <div id="statsModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-btn" id="close-stats">&times;</span>
+            <h2>STATISTICS</h2>
+            <div id="stats-summary">
+                <div class="stat-item"><div class="stat-num" id="stat-played">0</div><div class="stat-label">Played</div></div>
+                <div class="stat-item"><div class="stat-num" id="stat-winpct">0</div><div class="stat-label">Win %</div></div>
+                <div class="stat-item"><div class="stat-num" id="stat-streak">0</div><div class="stat-label">Streak</div></div>
+            </div>
+            <h3>GUESS DISTRIBUTION</h3>
+            <div id="guess-distribution"></div>
+        </div>
+    </div>
+
+    <button onclick="toggleGameRules(true)" title="Rules" 
+        style="position: fixed; bottom: 30px; right: 20px; width: 40px; height: 40px; border-radius: 50%; border: none; background: #3a3a3c; color: white; font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 100;">
+        ?
+    </button>
+
+    <div id="gameRulesModal" class="modal hidden" style="z-index: 200;">
+        <div class="modal-content" style="text-align: left; max-width: 500px;">
+            <span class="close-btn" onclick="toggleGameRules(false)">&times;</span>
+            <h2 style="margin-top: 0; text-align: center;">OPERATOR'S MANUAL</h2>
+            
+            <hr style="border-color: #3a3a3c;">
+
+            <h3 style="color: #538d4e; margin-bottom: 10px;">1. The Logic</h3>
+            <div class="example-row">
+                <span class="dot bull" style="display:inline-block;"></span> 
+                <span><strong>BULL (Green):</strong> Right Number, Right Spot.</span>
+            </div>
+            <div class="example-row">
+                <span class="dot cow" style="display:inline-block;"></span>
+                <span><strong>COW (Yellow):</strong> Right Number, Wrong Spot.</span>
+            </div>
+            <div class="example-row">
+                <span class="dot miss" style="display:inline-block;"></span>
+                <span><strong>GRAY (Solid):</strong> Wrong Number completely.</span>
+            </div>
+            <div class="example-row">
+                <span class="dot" style="display:inline-block;"></span>
+                <span><strong>RING (Hollow):</strong> Waiting for input.</span>
+            </div>
+
+            <h3 style="color: #b59f3b; margin-bottom: 10px;">2. Tools</h3>
+            <ul style="padding-left: 20px; line-height: 1.5; color: #d1d1d1; font-size: 0.95rem;">
+                <li style="margin-bottom: 5px;"><strong>🕵️ Detective Mode:</strong> Right-Click (or Long Press) a keypad number to strike it out.</li>
+                <li style="margin-bottom: 5px;"><strong>💡 Hint:</strong> Reveals one correct digit (Max 2).</li>
+                <li><strong>🏳️ Surrender:</strong> Give up to reveal the code.</li>
+            </ul>
+
+            <div style="text-align: center; margin-top: 25px;">
+                <button class="btn-start" style="padding: 10px 30px; font-size: 1rem;" onclick="toggleGameRules(false)">RESUME MISSION</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CODE_LENGTH = 3;
+        const TIME_LIMIT = Number("{{ time_limit|default(0) }}");
+        const MAX_ATTEMPTS = 10;
+    </script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    
+</body>
+</html>

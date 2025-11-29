@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeBreaker | The Logic Game</title>
+    <style>
+        /* Minimalist Dark Mode Styles */
+        body {
+            margin: 0;
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #121213;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            text-align: center;
+        }
+        .container {
+            max-width: 600px;
+            padding: 20px;
+        }
+        h1 { font-size: 3.5rem; letter-spacing: 5px; margin-bottom: 0; text-transform: uppercase;}
+        p.subtitle { color: #818384; margin-top: 10px; font-size: 1.2rem; }
+        
+        .settings-box {
+            background: #272729;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 30px 0;
+            text-align: left;
+        }
+        
+        .setting-row { margin-bottom: 20px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; color: #b0b3b8; }
+        
+        select, input[type="range"] {
+            width: 100%;
+            padding: 10px;
+            background: #121213;
+            border: 1px solid #3a3a3c;
+            color: white;
+            border-radius: 5px;
+            font-family: inherit;
+        }
+
+        /* BUTTONS */
+        .btn-start {
+            background-color: #538d4e;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            border-radius: 50px;
+            font-weight: bold;
+            width: 100%;
+            transition: transform 0.2s;
+        }
+        .btn-start:hover { transform: scale(1.05); }
+
+        .btn-rules {
+            background: transparent;
+            color: #818384;
+            border: 1px solid #3a3a3c;
+            padding: 10px 20px;
+            margin-top: 15px;
+            cursor: pointer;
+            border-radius: 20px;
+            font-family: inherit;
+        }
+        .btn-rules:hover { color: white; border-color: white; }
+
+        /* MODAL (Pop-up) STYLES */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.85);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #121213;
+            border: 1px solid #3a3a3c;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 500px;
+            text-align: left;
+            position: relative;
+        }
+        .close-btn {
+            position: absolute;
+            top: 10px; right: 15px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #818384;
+        }
+        .example-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+        .example-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block;}
+        .green { background-color: #538d4e; }
+        .yellow { background-color: #b59f3b; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>CodeBreaker</h1>
+        <p class="subtitle">Crack the code. Watch your step.</p>
+
+        <div class="settings-box">
+            <div class="setting-row">
+                <label>Difficulty Level</label>
+                <select id="difficulty">
+                    <option value="easy">Rookie (3 Digits)</option>
+                    <option value="standard" selected>Standard (4 Digits)</option>
+                    <option value="hard">Expert (5 Digits)</option>
+                    <option value="master">Master (4 Digits + Repeats)</option>
+                    <option value="insane">Insane (6 Digits + Repeats)</option>
+                </select>
+            </div>
+            <div class="setting-row" style="display: flex; justify-content: space-between; align-items: center;">
+                <label for="timer-toggle" style="margin:0; cursor:pointer;">⚡ Enable Timer (3 Mins)</label>
+                <input type="checkbox" id="timer-toggle" style="width: 20px; height: 20px; accent-color: #cf6679;">
+            </div>
+        </div>
+
+        <button class="btn-start" onclick="startGame()">START GAME</button>
+        <br>
+        <button class="btn-rules" onclick="toggleModal(true)">How to Play?</button>
+    </div>
+
+    <div id="rulesModal" class="modal">
+        <div class="modal-content">
+    <span class="close-btn" onclick="toggleModal(false)">&times;</span>
+    <h2 style="margin-top: 0;">OPERATOR'S MANUAL</h2>
+    <p style="color: #818384;">Welcome to the deduction protocol.</p>
+    
+    <hr style="border-color: #3a3a3c;">
+
+    <h3 style="color: #538d4e;">1. The Objective</h3>
+    <p>Guess the secret code within the attempt limit.</p>
+    <div class="example-row">
+        <span class="example-dot green"></span> 
+        <span><strong>BULL:</strong> Correct Number, Correct Spot.</span>
+    </div>
+    <div class="example-row">
+        <span class="example-dot yellow"></span>
+        <span><strong>COW:</strong> Correct Number, Wrong Spot.</span>
+    </div>
+
+    <h3 style="color: #b59f3b;">2. Controls & Tools</h3>
+    <ul style="text-align: left; padding-left: 20px; line-height: 1.6;">
+        <li><strong>⌨️ Typing:</strong> Use your physical keyboard or the on-screen pad.</li>
+        <li><strong>🕵️ Detective Mode:</strong> Right-click (or Long Press) a number on the pad to <span style="text-decoration: line-through; color: #818384;">cross it out</span>. Use this to track impossible numbers.</li>
+        <li><strong>💡 Hint:</strong> Reveals one digit (Max 2 per game).</li>
+        <li><strong>🏳️ Surrender:</strong> Give up and reveal the code.</li>
+    </ul>
+
+    <h3 style="color: #cf6679;">3. Difficulty Classes</h3>
+    <ul style="text-align: left; padding-left: 20px; font-size: 0.9rem;">
+        <li><strong>Rookie:</strong> 3 Digits. Simple.</li>
+        <li><strong>Standard:</strong> 4 Digits. The classic experience.</li>
+        <li><strong>Expert:</strong> 5 Digits. For veterans.</li>
+        <li><strong>Master:</strong> 4 Digits + <em style="color:#b59f3b">Repeats allowed.</em></li>
+        <li><strong>INSANE:</strong> 6 Digits + <em style="color:#cf6679">Repeats allowed.</em> Good luck.</li>
+    </ul>
+    
+    <br>
+    <button class="btn-start" style="padding: 10px;" onclick="toggleModal(false)">ACKNOWLEDGE</button>
+</div>
+    </div>
+    
+    <script>
+        function toggleModal(show) {
+            const modal = document.getElementById('rulesModal');
+            modal.style.display = show ? 'flex' : 'none';
+        }
+
+        function startGame() {
+    const diff = document.getElementById('difficulty').value;
+    const timerOn = document.getElementById('timer-toggle').checked;
+
+    // 1. UPDATE: Add 'mode: standard' to default
+    let settings = { length: 4, repeats: false, max_attempts: 10, mode: 'standard' };
+    
+    // 2. UPDATE: Add specific 'mode' strings to every difficulty
+    if (diff === 'easy')   settings = { length: 3, repeats: false, max_attempts: 10, mode: 'rookie' };
+    if (diff === 'hard')   settings = { length: 5, repeats: false, max_attempts: 12, mode: 'expert' };
+    if (diff === 'master') settings = { length: 4, repeats: true,  max_attempts: 12, mode: 'master' };
+    if (diff === 'insane') settings = { length: 6, repeats: true,  max_attempts: 15, mode: 'insane' };
+
+    // 3. Add Timer if checked (This adds to the existing object)
+    if (timerOn) settings.timer = 180;
+    
+    fetch('/api/new_game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            if (diff === 'easy') window.location.href = "/game/rookie";
+            else if (diff === 'standard') window.location.href = "/game/standard";
+            else if (diff === 'hard') window.location.href = "/game/expert";
+            else if (diff === 'master') window.location.href = "/game/master";
+            else if (diff === 'insane') window.location.href = "/game/insane";
+        }
+    });
+}
+    
+    // Call the API...
+    fetch('/api/new_game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            window.location.href = "/game";
+        }
+    });
+    </script>
+</body>
+</html>
