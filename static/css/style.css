@@ -155,6 +155,21 @@ h1 { margin: 0; font-size: 1.5rem; letter-spacing: 2px; }
     /* Shrink Keyboard */
     #keyboard { gap: 4px; padding: 5px; padding-bottom: 15px; }
     .key { padding: 12px 0; font-size: 1.1rem; }
+
+    /* NEW: Modal fixes for Phone Screens */
+    .modal-content {
+        padding: 15px !important;    /* Less padding */
+        max-height: 75vh !important; /* Leave room for iPhone Safe Areas */
+        width: 90% !important;
+        overflow-y: auto;            /* Force scroll if still too big */
+    }
+
+    .modal-content h2 { font-size: 1.2rem; }
+    .modal-content h3 { font-size: 1rem; }
+    .modal-content p, .modal-content li, .modal-content span { font-size: 0.85rem !important; }
+    
+    .example-row { gap: 5px; margin: 5px 0; }
+
 }
 
 /* EXTRA SMALL SCREENS (iPhone SE, etc) */
