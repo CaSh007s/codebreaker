@@ -102,11 +102,11 @@
             </div>
         </div>
     </div>
-    
+
     <script>
         const CODE_LENGTH = 5;
         const TIME_LIMIT = Number("{{ time_limit|default(0) }}");
-        const MAX_ATTEMPTS = 12;
+        const MAX_ATTEMPTS = Number("{{ max_attempts|default(12) }}");
     </script>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
     

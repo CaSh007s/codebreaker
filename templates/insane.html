@@ -106,7 +106,7 @@
     <script>
         const CODE_LENGTH = 6;
         const TIME_LIMIT = Number("{{ time_limit|default(0) }}");
-        const MAX_ATTEMPTS = 15;
+        const MAX_ATTEMPTS = Number("{{ max_attempts|default(15) }}");
     </script>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
     

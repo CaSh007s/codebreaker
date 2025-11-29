@@ -12,6 +12,7 @@ let gameOver = false;
 let currentGuess = "";
 let isSubmitting = false; // The Lock against double-clicks
 let timerInterval;
+let currentRenderedRows = 0;
 
 // 3. INITIALIZATION
 document.addEventListener("DOMContentLoaded", () => {
@@ -89,35 +90,49 @@ function createGrid() {
     const board = document.getElementById("game-board");
     board.innerHTML = ""; 
     
-    for (let i = 0; i < maxTries; i++) {
-        const row = document.createElement("div");
-        row.classList.add("row");
-        row.id = `row-${i}`;
+    currentRenderedRows = 0;
 
-        // Create Grid Tiles
-        for (let j = 0; j < gameLength; j++) {
-            const tile = document.createElement("div");
-            tile.classList.add("tile");
-            tile.id = `row-${i}-tile-${j}`;
-            row.appendChild(tile);
-        }
-
-        // Create Feedback Box (Dots)
-        const feedbackBox = document.createElement("div");
-        feedbackBox.classList.add("feedback-box");
-        feedbackBox.id = `feedback-${i}`;
-        
-        // Placeholder dots
-        for (let k = 0; k < gameLength; k++) {
-            const dot = document.createElement("div");
-            dot.classList.add("dot");
-            feedbackBox.appendChild(dot);
-        }
-        
-        row.appendChild(feedbackBox);
-        board.appendChild(row);
+    // STARTING ROWS: 
+    // If it's a normal game (e.g. 10 tries), draw all 10.
+    // If it's Infinite (10000 tries), ONLY draw 12 to start (performance).
+    let rowsToDraw = maxTries;
+    if (maxTries > 50) {
+        rowsToDraw = 12; 
     }
-    board.scrollTop = 0;
+
+    for (let i = 0; i < rowsToDraw; i++) {
+        addSingleRow(i); // Helper function
+    }
+}
+
+// Helper to add just ONE row (We extract this so we can reuse it)
+function addSingleRow(rowIndex) {
+    const board = document.getElementById("game-board");
+    const row = document.createElement("div");
+    row.classList.add("row");
+    row.id = `row-${rowIndex}`;
+
+    for (let j = 0; j < gameLength; j++) {
+        const tile = document.createElement("div");
+        tile.classList.add("tile");
+        tile.id = `row-${rowIndex}-tile-${j}`;
+        row.appendChild(tile);
+    }
+
+    const feedbackBox = document.createElement("div");
+    feedbackBox.classList.add("feedback-box");
+    feedbackBox.id = `feedback-${rowIndex}`;
+    
+    for (let k = 0; k < gameLength; k++) {
+        const dot = document.createElement("div");
+        dot.classList.add("dot");
+        feedbackBox.appendChild(dot);
+    }
+    
+    row.appendChild(feedbackBox);
+    board.appendChild(row);
+    
+    currentRenderedRows++;
 }
 
 function handleInput(number) {
@@ -177,6 +192,15 @@ function submitGuess() {
                 currentRow++;
                 currentTile = 0;
                 currentGuess = "";
+
+                if (currentRow >= currentRenderedRows - 2 && currentRenderedRows < maxTries) {
+                    // Add 5 more rows dynamically
+                    for (let k = 0; k < 5; k++) {
+                        if (currentRenderedRows < maxTries) {
+                            addSingleRow(currentRenderedRows);
+                        }
+                    }
+                }
 
                 const nextRow = document.getElementById(`row-${currentRow}`);
                 if (nextRow) {
