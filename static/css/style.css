@@ -1,20 +1,26 @@
-/*Desktop layout*/
-
+/* 1. BASE LAYOUT (Mobile First Architecture)*/
 body {
     background-color: #121213;
     color: white;
     font-family: 'Courier New', Courier, monospace;
     display: flex;
-    flex-direction: column; /* Stack: Header -> Board -> Keyboard */
+    flex-direction: column; /* Stack items: Header -> Board -> Keyboard */
     align-items: center;
-    /* Use 100dvh for mobile browsers (ignores address bar shifting) */
+    
+    /* THE MAGIC UNIT: 100dvh ignores the mobile address bar shrinking/growing */
     height: 100vh;
     height: 100dvh; 
+    
     margin: 0;
-    overflow: hidden; /* Prevent the whole page from scrolling */
+    overflow: hidden; /* No scrolling the whole page */
+    
+    /* PREVENT NATIVE MOBILE BEHAVIORS */
+    user-select: none; /* Stop user from highlighting text */
+    -webkit-user-select: none;
+    -webkit-touch-callout: none; /* Stop the "Copy/Paste" menu on long press */
 }
 
-/* 1. STICKY HEADER */
+/* 2. STICKY HEADER */
 header {
     border-bottom: 1px solid #3a3a3c;
     width: 100%;
@@ -22,7 +28,7 @@ header {
     justify-content: center;
     align-items: center;
     padding: 15px 0;
-    flex-shrink: 0; /* Never shrink the header */
+    flex-shrink: 0; /* Keep header fixed size */
     position: relative;
     z-index: 50;
     background-color: #121213;
@@ -38,179 +44,164 @@ h1 { margin: 0; font-size: 1.5rem; letter-spacing: 2px; }
     gap: 20px; 
 }
 
-.header-tools button {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    cursor: pointer;
-    padding: 0;
-    color: #fff;
+.tool-btn {
+    background: none; border: none; font-size: 1.5rem;
+    cursor: pointer; padding: 0; color: #fff;
+    transition: transform 0.2s;
 }
+.tool-btn:active { transform: scale(0.9); } /* Tactile click feel */
 
-/* --- 2. SCROLLABLE GAME BOARD --- */
+/* 3. SCROLLABLE GAME BOARD */
 #game-board {
     display: flex;
     flex-direction: column;
     gap: 5px;
     
-    /* THE SCROLL MAGIC */
-    flex-grow: 1;      /* Fill all available space between header and keyboard */
-    overflow-y: auto;  /* Scroll if content is too big */
+    /* FILL AVAILABLE SPACE */
+    flex-grow: 1; 
+    overflow-y: auto; /* Scroll ONLY inside this box */
     width: 100%;
     align-items: center;
-    padding-top: 20px;
-    padding-bottom: 20px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    
+    /* Hide scrollbars for cleaner look */
+    scrollbar-width: none; 
+    -ms-overflow-style: none;
 }
-
-/* Hide scrollbar for a cleaner look */
 #game-board::-webkit-scrollbar { display: none; }
-#game-board { -ms-overflow-style: none; scrollbar-width: none; }
 
 .row { display: flex; gap: 5px; align-items: center; }
 
 .tile {
-    width: 50px;
-    height: 50px;
+    /* Responsive Sizing: Use 'vmin' to scale relative to screen size */
+    width: 13vmin; 
+    height: 13vmin;
+    max-width: 60px; max-height: 60px; /* But don't get too huge on desktop */
+    min-width: 40px; min-height: 40px; /* Don't get too tiny */
+    
     border: 2px solid #3a3a3c;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 2rem;
-    font-weight: bold;
-    text-transform: uppercase;
-    user-select: none; /* Prevent text selection on tap */
+    display: flex; justify-content: center; align-items: center;
+    font-size: 1.8rem; font-weight: bold; text-transform: uppercase;
 }
 .tile.active { border-color: #818384; }
 
 /* FEEDBACK DOTS */
 .feedback-box {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px;
-    margin-left: 10px;
-    padding: 5px;
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 4px; margin-left: 10px; padding: 5px;
     border-left: 1px solid #3a3a3c;
 }
 .dot {
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    border: 2px solid #3a3a3c; /* Hollow Ring */
-    background-color: transparent;
+    width: 10px; height: 10px; border-radius: 50%;
+    border: 2px solid #3a3a3c; background-color: transparent;
 }
 .dot.miss { background-color: #3a3a3c; border-color: #3a3a3c; }
 .dot.bull { background-color: #538d4e; border-color: #538d4e; box-shadow: 0 0 5px #538d4e; }
 .dot.cow { background-color: #b59f3b; border-color: #b59f3b; box-shadow: 0 0 5px #b59f3b; }
 
-/* 3. STICKY KEYBOARD */
+/* 4. STICKY KEYBOARD (The Controls)*/
 #keyboard {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 8px;
-    padding: 10px;
-    width: 95%;
-    max-width: 500px; /* Don't get too wide on desktop */
-    flex-shrink: 0;   /* Never shrink the keyboard */
+    grid-template-columns: repeat(5, 1fr); /* 5 buttons per row */
+    gap: 6px;
+    padding: 8px;
+    width: 96%;
+    max-width: 500px;
+    flex-shrink: 0;
     background-color: #121213;
-    padding-bottom: 40px; /* Safe space for bottom of phone */
+    z-index: 10;
+    
+    /* THE SAFE AREA FIX FOR IPHONES */
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
 }
 
 .key {
-    background-color: #818384;
-    border: none;
-    padding: 15px 0; /* Vertical padding */
-    border-radius: 4px;
-    color: white;
-    font-size: 1.2rem;
-    font-weight: bold;
+    background-color: #818384; border: none;
+    padding: 15px 0; border-radius: 6px;
+    color: white; font-size: 1.25rem; font-weight: bold;
     cursor: pointer;
-    touch-action: manipulation; /* Faster taps on mobile */
-    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation; /* Faster response */
 }
-.key:active { background-color: #565758; }
+.key:active { background-color: #565758; transform: translateY(2px); }
 .key.big-key { grid-column: span 1; font-size: 0.9rem; background-color: #3a3a3c;}
 .key.crossed-out { background-color: #1c1c1e; color: #3a3a3c; text-decoration: line-through; }
 
-/* MOBILE RESPONSIVENESS */
-
-@media (max-width: 600px) {
-    /* Shrink the header text */
-    h1 { font-size: 1.2rem; }
-    .header-tools { gap: 15px; right: 10px; }
-    .header-tools button { font-size: 1.2rem; }
-
-    /* Shrink the Game Board Tiles */
-    .tile {
-        width: 40px;  /* Smaller tiles */
-        height: 40px;
-        font-size: 1.5rem;
-    }
-    
-    /* If Insane Mode (6 tiles), shrink even more so it fits width */
-    .row { gap: 3px; }
-    
-    /* Shrink Dots */
-    .feedback-box { gap: 2px; margin-left: 5px; padding: 2px; }
-    .dot { width: 8px; height: 8px; }
-
-    /* Shrink Keyboard */
-    #keyboard { gap: 4px; padding: 5px; padding-bottom: 15px; }
-    .key { padding: 12px 0; font-size: 1.1rem; }
-
-    /* NEW: Modal fixes for Phone Screens */
-    .modal-content {
-        padding: 15px !important;    /* Less padding */
-        max-height: 75vh !important; /* Leave room for iPhone Safe Areas */
-        width: 90% !important;
-        overflow-y: auto;            /* Force scroll if still too big */
-    }
-
-    .modal-content h2 { font-size: 1.2rem; }
-    .modal-content h3 { font-size: 1rem; }
-    .modal-content p, .modal-content li, .modal-content span { font-size: 0.85rem !important; }
-    
-    .example-row { gap: 5px; margin: 5px 0; }
-
-}
-
-/* EXTRA SMALL SCREENS (iPhone SE, etc) */
-@media (max-width: 350px) {
-    .tile { width: 32px; height: 32px; font-size: 1.2rem; }
-}
-
-/* ANIMATION & MODALS */
-@keyframes shake {
-    0% { transform: translateX(0); }
-    25% { transform: translateX(-5px); }
-    50% { transform: translateX(5px); }
-    75% { transform: translateX(-5px); }
-    100% { transform: translateX(0); }
-}
-.shake { animation: shake 0.3s ease-in-out; border-color: #cf6679 !important; }
-
+/* 5. RESPONSIVE MODAL (The Fix)*/
 .modal {
     display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background-color: rgba(0,0,0,0.85); justify-content: center; align-items: center; z-index: 1000;
 }
 .modal.hidden { display: none; }
+
 .modal-content {
     background-color: #121213; border: 1px solid #3a3a3c; padding: 20px;
-    border-radius: 10px; width: 85%; max-width: 400px; color: white; text-align: center;
-    position: relative; max-height: 80vh; overflow-y: auto;
+    border-radius: 10px; width: 85%; max-width: 450px; 
+    text-align: center; color: white;
+    
+    /* SCROLL FIX: If screen is small, let the modal scroll internally */
+    max-height: 80vh; 
+    overflow-y: auto;
 }
-.close-btn { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: #818384; }
 
-/* RE-ADD MISSING STATS STYLES */
-#stats-summary { display: flex; justify-content: space-around; margin-bottom: 20px; }
-.stat-item { display: flex; flex-direction: column; align-items: center; }
-.stat-num { font-size: 1.5rem; font-weight: bold; }
-.stat-label { font-size: 0.7rem; color: #818384; }
-#guess-distribution { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
-.dist-row { display: flex; align-items: center; width: 100%; }
-.dist-label { width: 20px; font-weight: bold; font-size: 0.8rem; }
-.dist-bar-container { flex-grow: 1; margin-left: 10px; }
-.dist-bar {
-    background-color: #3a3a3c; color: white;
-    text-align: right; padding-right: 5px; min-width: 15px;
-    font-size: 0.8rem; font-weight: bold;
+.close-btn { position: absolute; top: 10px; right: 15px; font-size: 28px; cursor: pointer; color: #818384; z-index: 10; }
+.example-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+
+.btn-start {
+    background-color: #538d4e; color: white; border: none;
+    padding: 12px 30px; font-size: 1.2rem; cursor: pointer;
+    border-radius: 50px; font-weight: bold; width: 100%; margin-top: 10px;
 }
-.dist-bar.highlight { background-color: #538d4e; }
+
+/* 6. MOBILE & RESPONSIVE TWEAKS*/
+@media (max-width: 600px) {
+    /* --- HEADER FIX: STOP OVERLAPPING --- */
+    header {
+        justify-content: space-between; /* Push Title Left, Buttons Right */
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+
+    h1 { 
+        font-size: 1.1rem; 
+        text-align: left; /* Align text to left */
+        /* No flex-grow needed, just let it sit there */
+    }
+
+    .header-tools {
+        position: static; /* STOP Floating! Join the layout flow. */
+        right: auto;
+        gap: 12px; /* Tighter gap between icons */
+    }
+
+    .header-tools button { 
+        font-size: 1.2rem; /* Slightly smaller icons */
+    }
+
+    /* --- OTHER MOBILE TWEAKS --- */
+    #keyboard { 
+        gap: 4px; 
+        padding: 5px; 
+        /* Ensure chin is safe */
+        padding-bottom: calc(30px + env(safe-area-inset-bottom)); 
+    }
+    
+    .key { padding: 12px 0; font-size: 1.1rem; }
+    
+    /* Shrink tiles to fit width */
+    .tile { 
+        width: 11vmin; 
+        height: 11vmin; 
+        font-size: 1.4rem;
+    }
+    
+    /* Modal fixes */
+    .modal-content {
+        padding: 15px !important;
+        max-height: 75vh !important;
+        width: 90% !important;
+        overflow-y: auto;
+    }
+    .modal-content h2 { font-size: 1.2rem; }
+    .modal-content p, .modal-content li { font-size: 0.85rem !important; }
+}

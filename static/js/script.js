@@ -34,40 +34,71 @@ function setupKeyboard() {
     const keyboard = document.getElementById("keyboard");
     if (!keyboard) return;
 
-    // PART 1: LEFT CLICK (Type Numbers, Enter, Delete)
-    keyboard.addEventListener("click", (e) => {
-        const btn = e.target.closest("button");
-        if (!btn) return; 
+    let longPressTimer;
+    let isLongPress = false;
 
-        e.preventDefault(); 
-        btn.blur();         
-
-        const val = btn.innerText.trim(); 
-
-        if (val === "ENTER") {
-            submitGuess();
-        } else if (val === "DELETE") {
-            deleteNumber();
-        } else {
-            handleInput(val);
-        }
-    });
-
-    // RIGHT CLICK (Cross out feature)
-    keyboard.addEventListener("contextmenu", (e) => {
-        const btn = e.target.closest("button");
-        if (!btn) return;
-
-        e.preventDefault(); // Stop the browser right-click menu
-        
-        // We only want to cross out Numbers, not ENTER or DELETE
+    // HELPER: The "Cross Out" Action
+    const triggerRightClick = (btn) => {
         const val = btn.innerText.trim();
         if (val !== "ENTER" && val !== "DELETE") {
             btn.classList.toggle("crossed-out");
-            
-            // Optional: Vibrate on mobile for tactile feedback
+            // Tactile feedback (Vibrate)
             if (navigator.vibrate) navigator.vibrate(50);
         }
+    };
+
+    // 1. HANDLE TOUCH EVENTS (Mobile Long Press)
+    keyboard.addEventListener("touchstart", (e) => {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+        
+        isLongPress = false;
+        // Start the timer
+        longPressTimer = setTimeout(() => {
+            isLongPress = true;
+            triggerRightClick(btn);
+        }, 500); // 500ms hold time
+    }, { passive: true });
+
+    keyboard.addEventListener("touchend", (e) => {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+        
+        clearTimeout(longPressTimer); // Cancel timer if finger lifted early
+        
+        if (isLongPress) {
+            e.preventDefault(); // Don't trigger a click if we just did a long press
+        }
+    });
+
+    keyboard.addEventListener("touchmove", () => {
+        // If user drags their finger, cancel everything
+        clearTimeout(longPressTimer);
+        isLongPress = false;
+    });
+
+    // 2. HANDLE MOUSE EVENTS (Desktop Right Click)
+    keyboard.addEventListener("contextmenu", (e) => {
+        e.preventDefault(); // Stop browser menu
+        const btn = e.target.closest("button");
+        if (btn) triggerRightClick(btn);
+    });
+
+    // 3. HANDLE CLICKS (Normal Input)
+    keyboard.addEventListener("click", (e) => {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+
+        e.preventDefault();
+        btn.blur();
+
+        // If we just finished a long press, ignore this click
+        if (isLongPress) return;
+
+        const val = btn.innerText.trim();
+        if (val === "ENTER") submitGuess();
+        else if (val === "DELETE") deleteNumber();
+        else handleInput(val);
     });
 }
 
