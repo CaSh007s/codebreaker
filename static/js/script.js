@@ -36,72 +36,55 @@ function setupKeyboard() {
 
     let longPressTimer;
     let isLongPress = false;
-    let startX = 0;
-    let startY = 0;
 
     // HELPER: The "Cross Out" Action
     const triggerRightClick = (btn) => {
         const val = btn.innerText.trim();
         if (val !== "ENTER" && val !== "DELETE") {
             btn.classList.toggle("crossed-out");
-            if (navigator.vibrate) navigator.vibrate(50); // Haptic feedback for Android
+            // Tactile feedback (Vibrate)
+            if (navigator.vibrate) navigator.vibrate(50);
         }
     };
 
-    // 1. TOUCH START
+    // 1. HANDLE TOUCH EVENTS (Mobile Long Press)
     keyboard.addEventListener("touchstart", (e) => {
         const btn = e.target.closest("button");
         if (!btn) return;
         
-        isLongPress = false; // Reset flag
-        
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-
+        isLongPress = false;
+        // Start the timer
         longPressTimer = setTimeout(() => {
-            isLongPress = true; // Mark as handled
+            isLongPress = true;
             triggerRightClick(btn);
-        }, 400); 
+        }, 500); // 500ms hold time
     }, { passive: true });
 
-    // 2. TOUCH MOVE (Android Wiggle Fix)
-    keyboard.addEventListener("touchmove", (e) => {
-        if (!longPressTimer) return;
-
-        const currentX = e.touches[0].clientX;
-        const currentY = e.touches[0].clientY;
-        const diffX = Math.abs(currentX - startX);
-        const diffY = Math.abs(currentY - startY);
-
-        // Allow 10px of shake before cancelling
-        if (diffX > 10 || diffY > 10) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-        }
-    }, { passive: true });
-
-    // 3. TOUCH END
     keyboard.addEventListener("touchend", (e) => {
         const btn = e.target.closest("button");
         if (!btn) return;
         
-        clearTimeout(longPressTimer);
+        clearTimeout(longPressTimer); // Cancel timer if finger lifted early
         
         if (isLongPress) {
-            e.preventDefault(); // Stop any following clicks
+            e.preventDefault(); // Don't trigger a click if we just did a long press
         }
     });
 
-    // 4. MOUSE CONTEXT MENU (Desktop & Android Protection)
-    keyboard.addEventListener("contextmenu", (e) => {
-        e.preventDefault(); // ALWAYS stop the browser menu
-        if (isLongPress) return; 
+    keyboard.addEventListener("touchmove", () => {
+        // If user drags their finger, cancel everything
+        clearTimeout(longPressTimer);
+        isLongPress = false;
+    });
 
+    // 2. HANDLE MOUSE EVENTS (Desktop Right Click)
+    keyboard.addEventListener("contextmenu", (e) => {
+        e.preventDefault(); // Stop browser menu
         const btn = e.target.closest("button");
         if (btn) triggerRightClick(btn);
     });
 
-    // 5. CLICK (Normal Input)
+    // 3. HANDLE CLICKS (Normal Input)
     keyboard.addEventListener("click", (e) => {
         const btn = e.target.closest("button");
         if (!btn) return;
@@ -109,10 +92,8 @@ function setupKeyboard() {
         e.preventDefault();
         btn.blur();
 
-        if (isLongPress) {
-            isLongPress = false; 
-            return;
-        }
+        // If we just finished a long press, ignore this click
+        if (isLongPress) return;
 
         const val = btn.innerText.trim();
         if (val === "ENTER") submitGuess();

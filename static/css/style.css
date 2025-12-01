@@ -116,27 +116,16 @@ h1 { margin: 0; font-size: 1.5rem; letter-spacing: 2px; }
     padding-bottom: calc(20px + env(safe-area-inset-bottom));
 }
 
-/* static/css/style.css */
-
 .key {
-    background-color: #818384;
-    border: none;
-    padding: 15px 0;
-    border-radius: 6px;
-    color: white;
-    font-size: 1.25rem;
-    font-weight: bold;
+    background-color: #818384; border: none;
+    padding: 15px 0; border-radius: 6px;
+    color: white; font-size: 1.25rem; font-weight: bold;
     cursor: pointer;
-    
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-    
-    /* Prevent text selection and context menus */
-    -webkit-touch-callout: none !important;
-    -webkit-user-select: none !important;
-    user-select: none !important;
-
+    touch-action: manipulation; /* Faster response */
 }
+.key:active { background-color: #565758; transform: translateY(2px); }
+.key.big-key { grid-column: span 1; font-size: 0.9rem; background-color: #3a3a3c;}
+.key.crossed-out { background-color: #1c1c1e; color: #3a3a3c; text-decoration: line-through; }
 
 /* 5. RESPONSIVE MODAL (The Fix)*/
 .modal {
