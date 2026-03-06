@@ -277,15 +277,28 @@ def on_join_game(data):
         sid = session.get('sid')
         player = room['players'].get(sid)
         
+        # Sync current room wins to the client
+        wins = {pid: pdata.get('wins', 0) for pid, pdata in room['players'].items()}
+        emit('sync_stats', {'wins': wins}, room=sid)
+        
         # Only notify "reconnected" if they actually disconnected previously
         if player and player.get('disconnected'):
             player['disconnected'] = False
             emit('opponent_reconnected', {'username': player['username']}, room=room_code, include_self=False)
-            
-        # Optional: Sync their stats back up if missed
-        if player and 'stats' in data:
-            player['stats'] = data['stats']
-            emit('opponent_stats', {'sid': sid, 'stats': data['stats']}, room=room_code, include_self=False)
+
+@socketio.on('leave_match')
+def on_leave_match(data):
+    room_code = data.get('room')
+    sid = session.get('sid')
+    if room_code in active_rooms:
+        room = active_rooms[room_code]
+        if sid in room['players']:
+            del room['players'][sid]
+            # If no players left, or if game was finished and one leaves, we can cleanup
+            if not room['players'] or room['status'] == 'finished':
+                if room_code in active_rooms:
+                    del active_rooms[room_code]
+        leave_room(room_code)
     
 @socketio.on('send_chat')
 def on_chat(data):

@@ -789,6 +789,7 @@
               width: 100%;
               max-width: 350px;
             "
+            onclick="socket.emit('leave_match', { room: roomCode })"
             >START OVER</a
           >
         </div>
@@ -834,20 +835,11 @@
         document.getElementById("mobile-my-name-display").innerText = selfName;
         document.getElementById("mobile-my-avatar").src = selfAvatar;
 
-        // Load stats
-        const statsStr = localStorage.getItem("codebreaker_stats");
-        if (statsStr) {
-          try {
-            const stats = JSON.parse(statsStr);
-            document.getElementById("desktop-my-wins").innerText =
-              stats.won || 0;
-            document.getElementById("mobile-my-wins").innerText =
-              stats.won || 0;
-          } catch (e) {}
-        }
+        // Initial Wins set to 0 strictly for multiplayer room sessions
+        document.getElementById("desktop-my-wins").innerText = "0";
+        document.getElementById("mobile-my-wins").innerText = "0";
 
         updateMuteButton();
-
         createGrid();
 
         if (myHistory && myHistory.length > 0) {
@@ -1130,22 +1122,21 @@
           document.getElementById("winner-name").innerText =
             `You won! ${data.loser || "Your opponent"} lost!`;
 
-          // Stat update local tracking if they won (played count handled independently)
-          const localStatsStr = localStorage.getItem("codebreaker_stats");
-          let myStats = { won: 0, played: 0 };
-          if (localStatsStr) {
-            try {
-              myStats = JSON.parse(localStatsStr);
-            } catch (e) {}
-          }
-          myStats.won++;
-          myStats.played++;
-          localStorage.setItem("codebreaker_stats", JSON.stringify(myStats));
-          document.getElementById("desktop-my-wins").innerText = myStats.won;
-          document.getElementById("mobile-my-wins").innerText = myStats.won;
+          // Track room-specific wins visually
+          const myWinEl = document.getElementById("desktop-my-wins");
+          const myWinMobEl = document.getElementById("mobile-my-wins");
+          let currentWins = parseInt(myWinEl.innerText) || 0;
+          myWinEl.innerText = currentWins + 1;
+          myWinMobEl.innerText = currentWins + 1;
 
-          if (typeof confetti === "function")
-            confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+          if (typeof confetti === "function") {
+            confetti({
+              particleCount: 150,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ["#538d4e", "#ffffff", "#2ecc71"],
+            });
+          }
         } else {
           playSound("audio-lose");
           document.getElementById("gameOverTitle").innerText = "MISSION FAILED";
@@ -1192,6 +1183,22 @@
             mbBox.appendChild(mbDiv);
             mbBox.scrollTop = mbBox.scrollHeight;
             notifyMobileChat();
+          }
+        }
+      });
+
+      socket.on("sync_stats", (data) => {
+        if (data.wins) {
+          const myRoomWins = data.wins[mySid] || 0;
+          document.getElementById("desktop-my-wins").innerText = myRoomWins;
+          document.getElementById("mobile-my-wins").innerText = myRoomWins;
+
+          // Update opponent wins display if possible
+          const oppCard = document.querySelector(".opp-card .player-stats");
+          for (const sid in data.wins) {
+            if (sid !== mySid) {
+              if (oppCard) oppCard.innerText = `Wins: ${data.wins[sid]}`;
+            }
           }
         }
       });
