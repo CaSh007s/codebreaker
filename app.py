@@ -276,7 +276,8 @@ def on_chat(data):
     msg = data['msg']
     username = session.get('username', 'Player')
     avatar = session.get('avatar', 'default')
-    emit('receive_chat', {'username': username, 'avatar': avatar, 'msg': msg}, room=room_code)
+    sid = session.get('sid')
+    emit('receive_chat', {'username': username, 'avatar': avatar, 'msg': msg, 'player_sid': sid}, room=room_code)
 
 @socketio.on('submit_guess')
 def on_submit_guess(data):
