@@ -7,6 +7,22 @@ import random
 import uuid
 import time
 import os
+import threading
+
+def cleanup_stale_rooms():
+    """Background task to remove rooms older than 15 minutes (900 seconds)."""
+    while True:
+        time.sleep(60) # check every minute
+        now = time.time()
+        for room_code in list(active_rooms.keys()):
+            room = active_rooms[room_code]
+            start = room.get('start_time') or room.get('created_at', now)
+            if now - start > 900: # 15 minutes limit
+                del active_rooms[room_code]
+
+# Start the background thread
+cleanup_thread = threading.Thread(target=cleanup_stale_rooms, daemon=True)
+cleanup_thread.start()
 
 app = Flask(__name__)
 app.secret_key = 'codebreaker_static_secret_key'
@@ -142,6 +158,11 @@ def multiplayer_setup():
 
 @app.route('/multiplayer/join/<room_code>')
 def join_multiplayer(room_code):
+    if room_code in active_rooms:
+        if len(active_rooms[room_code]['players']) >= 2:
+            # Check if this user is already in the room (reconnecting)
+            if session.get('sid') not in active_rooms[room_code]['players']:
+                return render_template('room_full.html')
     return render_template('multiplayer_setup.html', room_code=room_code)
 
 @app.route('/multiplayer/lobby', methods=['POST'])
@@ -175,6 +196,8 @@ def view_lobby():
         room_code = request.form.get('room_code')
         success, msg = multiplayer_logic.join_room(active_rooms, room_code, session['sid'], username, avatar)
         if not success:
+            if msg == "Room is full.":
+                return render_template('room_full.html')
             return msg, 400
             
         room = active_rooms[room_code]
@@ -198,12 +221,13 @@ def multiplayer_game(room_code):
         
     # Get opponent info
     opponent = None
+    my_data = room['players'][sid]
     for pid, pdata in room['players'].items():
         if pid != sid:
             opponent = pdata
             
     length = len(room['secret_code'])
-    return render_template('multiplayer_game.html', room_code=room_code, length=length, opponent=opponent, mode=room['mode'])
+    return render_template('multiplayer_game.html', room_code=room_code, length=length, opponent=opponent, mode=room['mode'], my_history=my_data.get('history', []))
 
 # --- SOCKET EVENTS ---
 
@@ -231,6 +255,20 @@ def on_join_lobby(data):
 def on_join_game(data):
     room_code = data['room']
     join_room(room_code)
+    
+    room = active_rooms.get(room_code)
+    if room and room['status'] == 'playing':
+        # Reconnection detected!
+        sid = session.get('sid')
+        player = room['players'].get(sid)
+        if player and player.get('disconnected'):
+            player['disconnected'] = False
+            emit('opponent_reconnected', {'username': player['username']}, room=room_code, include_self=False)
+            
+        # Optional: Sync their stats back up if missed
+        if player and 'stats' in data:
+            player['stats'] = data['stats']
+            emit('opponent_stats', {'sid': sid, 'stats': data['stats']}, room=room_code, include_self=False)
     
 @socketio.on('send_chat')
 def on_chat(data):
@@ -264,21 +302,32 @@ def on_submit_guess(data):
     result = game_logic.check_guess(secret, guess)
     player['attempts'] += 1
     
+    if 'history' not in player:
+        player['history'] = []
+    player['history'].append({'guess': guess, 'result': result})
+    
     is_win = (result['bulls'] == len(secret))
     
     # Send result back to the player
     emit('guess_result', {'valid': True, 'result': result, 'guess': guess})
     
     if is_win:
-        player['status'] = 'won'
+        room['status'] = 'finished'
+        player['status'] = 'finished'
         player['finish_time'] = time.time()
+        
+        # Increment internal win stat dynamically
+        if 'wins' not in player:
+            player['wins'] = 0
+        player['wins'] += 1
+        
         emit('game_over', {
             'winner': player['username'],
             'winner_sid': sid,
+            'loser': opponent['username'] if 'opponent' in locals() and opponent else 'Your Opponent',
             'secret_code': secret,
             'attempts': player['attempts']
         }, room=room_code)
-        room['status'] = 'finished'
     else:
         # Broadcast that opponent made a guess
         emit('opponent_guess', {
@@ -295,12 +344,43 @@ def on_disconnect():
         
     for room_code, room in list(active_rooms.items()):
         if sid in room['players']:
+            room['players'][sid]['disconnected'] = True
             if len(room['players']) > 1:
                 emit('opponent_disconnected', {'username': room['players'][sid]['username']}, room=room_code)
+
+@socketio.on('surrender_game')
+def on_surrender(data):
+    room_code = data['room']
+    if room_code not in active_rooms: return
+    room = active_rooms[room_code]
+    sid = session.get('sid')
+    if sid not in room['players']: return
+    
+    surrendering_player = room['players'][sid]
+    
+    # Find opponent
+    winner = None
+    winner_sid = None
+    for pid, pdata in room['players'].items():
+        if pid != sid:
+            winner = pdata
+            winner_sid = pid
             
-            # Clean up the room if a player disconnects
-            if room_code in active_rooms:
-                active_rooms[room_code]['status'] = 'finished'
+    if winner:
+        room['status'] = 'finished'
+        surrendering_player['status'] = 'finished'
+        winner['status'] = 'finished'
+        
+        if 'wins' not in winner: winner['wins'] = 0
+        winner['wins'] += 1
+        
+        emit('game_over', {
+            'winner': winner['username'],
+            'winner_sid': winner_sid,
+            'loser': surrendering_player['username'],
+            'secret_code': room['secret_code'],
+            'attempts': surrendering_player['attempts']
+        }, room=room_code)
 
 @socketio.on('request_rematch')
 def on_request_rematch(data):
@@ -333,6 +413,7 @@ def on_request_rematch(data):
             p['status'] = 'playing'
             p['finish_time'] = None
             p['rematch_requested'] = False
+            p['history'] = []
             
         emit('rematch_accepted', room=room_code)
 
@@ -422,6 +503,6 @@ def surrender():
 if __name__ == '__main__':
     print("\n" + "="*50)
     print("🚀 CODEBREAKER MULTIPLAYER IS LIVE!")
-    print("👉 Open your browser to: http://127.0.0.1:5000")
+    print("👉 Open your browser to: http://127.0.0.1:5001")
     print("="*50 + "\n")
-    socketio.run(app, debug=True)
+    socketio.run(app, debug=True, port=5001)

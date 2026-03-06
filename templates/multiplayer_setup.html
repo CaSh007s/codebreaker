@@ -121,6 +121,24 @@
         <div class="settings-box">
           <div style="text-align: center; margin-bottom: 20px">
             <img id="avatar-img" class="avatar-preview" src="" />
+            <div style="margin-bottom: 10px">
+              <select
+                id="avatar-style"
+                style="
+                  width: auto;
+                  display: inline-block;
+                  padding: 5px;
+                  font-size: 0.9rem;
+                "
+                onchange="randomizeAvatar(true)"
+              >
+                <option value="bottts">Robots (Bottts)</option>
+                <option value="adventurer">Adventurer (Humans)</option>
+                <option value="micah">Micah (Minimalist)</option>
+                <option value="notionists">Notionists (Sketches)</option>
+                <option value="thumbs">Thumbs (Geometric)</option>
+              </select>
+            </div>
             <button
               type="button"
               class="btn-rules"
@@ -183,11 +201,17 @@
     </div>
 
     <script>
-      function randomizeAvatar() {
-        const seed = Math.random().toString(36).substring(7);
-        document.getElementById("avatar_seed").value = seed;
-        document.getElementById("avatar-img").src =
-          `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}`;
+      let currentSeed = "";
+
+      function randomizeAvatar(keepSeed = false) {
+        if (!keepSeed || !currentSeed) {
+          currentSeed = Math.random().toString(36).substring(7);
+        }
+        const style = document.getElementById("avatar-style").value;
+        const fullUrl = `https://api.dicebear.com/7.x/${style}/svg?seed=${currentSeed}`;
+
+        document.getElementById("avatar_seed").value = fullUrl;
+        document.getElementById("avatar-img").src = fullUrl;
 
         let nameInput = document.getElementById("username");
         if (!nameInput.value || nameInput.value.startsWith("Agent_")) {

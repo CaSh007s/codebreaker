@@ -121,7 +121,7 @@
   </head>
   <body>
     <div class="container">
-      <h1>SECURE COMM</h1>
+      <h1 style="color: #538d4e">[ MODE: {{ mode_str|upper }} ]</h1>
       <p style="color: #818384">Awaiting second operative...</p>
 
       <div class="settings-box">
@@ -134,7 +134,7 @@
               font-size: 0.9rem;
             "
           >
-            Room Code: {{ mode_str }}
+            Room Code:
           </p>
           <div class="room-code-display">{{ room_code }}</div>
         </div>
@@ -157,7 +157,7 @@
           <!-- Host -->
           <div class="player-card">
             <img
-              src="https://api.dicebear.com/7.x/bottts/svg?seed={{ session.get('avatar', 'none') }}"
+              src="{{ session.get('avatar', 'https://api.dicebear.com/7.x/bottts/svg?seed=none') }}"
             />
             <div class="player-name">{{ session.get('username', 'You') }}</div>
             <div class="status-badge">Ready</div>
@@ -170,9 +170,7 @@
           <!-- Guest -->
           <div class="player-card opponent" id="opponent-container">
             {% if opponent %}
-            <img
-              src="https://api.dicebear.com/7.x/bottts/svg?seed={{ opponent.avatar }}"
-            />
+            <img src="{{ opponent.avatar }}" />
             <div class="player-name">{{ opponent.username }}</div>
             <div class="status-badge">Ready</div>
             {% else %}
@@ -201,7 +199,7 @@
       socket.on("player_joined", (data) => {
         const oppContainer = document.getElementById("opponent-container");
         oppContainer.innerHTML = `
-                <img src="https://api.dicebear.com/7.x/bottts/svg?seed=${data.avatar}">
+                <img src="${data.avatar}">
                 <div class="player-name">${data.username}</div>
                 <div class="status-badge">Ready</div>
             `;

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CodeBreaker | Room Full</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/style.css') }}"
+    />
+    <style>
+      .full-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 80vh;
+        text-align: center;
+      }
+      .full-container h1 {
+        color: #cf6679;
+        font-size: 3rem;
+        margin-bottom: 20px;
+        letter-spacing: 2px;
+      }
+      .full-container p {
+        color: #b0b3b8;
+        font-size: 1.2rem;
+        max-width: 400px;
+        margin-bottom: 40px;
+        line-height: 1.5;
+      }
+      .btn-group {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="full-container">
+      <h1>ACCESS DENIED</h1>
+      <p>
+        This secure communication channel is already operating at maximum
+        capacity (2 operators). The room is full.
+      </p>
+
+      <div class="btn-group">
+        <a href="/" class="btn-start" style="background-color: #3a3a3c">
+          RETURN TO BASE
+        </a>
+        <a href="/multiplayer/setup" class="btn-start"> NEW MISSION </a>
+      </div>
+    </div>
+  </body>
+</html>
