@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CodeBreaker | Multiplayer Setup</title>
+    <!-- We inline base styles for the setup pages to match index.html exactly -->
+    <style>
+      body {
+        margin: 0;
+        font-family: "Courier New", Courier, monospace;
+        background-color: #121213;
+        color: #ffffff;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        text-align: center;
+        flex-direction: column;
+      }
+      .container {
+        max-width: 600px;
+        padding: 20px;
+        width: 90%;
+      }
+      h1 {
+        font-size: 2.5rem;
+        letter-spacing: 5px;
+        margin-bottom: 0;
+        text-transform: uppercase;
+      }
+      p.subtitle {
+        color: #538d4e;
+        margin-top: 10px;
+        font-size: 1.2rem;
+      }
+
+      .settings-box {
+        background: #272729;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 30px 0;
+        text-align: left;
+      }
+      .setting-row {
+        margin-bottom: 20px;
+        display: flex;
+        flex-direction: column;
+      }
+      label {
+        font-weight: bold;
+        color: #b0b3b8;
+        margin-bottom: 5px;
+      }
+
+      input[type="text"],
+      select {
+        width: 100%;
+        padding: 10px;
+        background: #121213;
+        border: 1px solid #3a3a3c;
+        color: white;
+        border-radius: 5px;
+        font-family: inherit;
+        margin-top: 5px;
+        box-sizing: border-box;
+        font-size: 1.1rem;
+      }
+
+      .btn-start {
+        background-color: #538d4e;
+        color: white;
+        border: none;
+        padding: 15px 40px;
+        font-size: 1.5rem;
+        cursor: pointer;
+        border-radius: 50px;
+        font-weight: bold;
+        width: 100%;
+        transition: transform 0.2s;
+      }
+      .btn-start:hover {
+        transform: scale(1.05);
+      }
+      .btn-rules {
+        background: transparent;
+        color: #cf6679;
+        border: 1px solid #3a3a3c;
+        padding: 10px 20px;
+        margin-top: 15px;
+        cursor: pointer;
+        border-radius: 20px;
+        font-family: inherit;
+        text-decoration: none;
+        display: inline-block;
+      }
+      .btn-rules:hover {
+        color: white;
+        border-color: white;
+      }
+
+      .avatar-preview {
+        width: 100px;
+        height: 100px;
+        background: #121213;
+        border: 2px solid #538d4e;
+        border-radius: 50%;
+        display: block;
+        margin: 0 auto 10px auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Multiplayer</h1>
+      <p class="subtitle">
+        {% if room_code %}Join Game{% else %}Host a Game{% endif %}
+      </p>
+
+      <form action="/multiplayer/lobby" method="POST">
+        <div class="settings-box">
+          <div style="text-align: center; margin-bottom: 20px">
+            <img id="avatar-img" class="avatar-preview" src="" />
+            <button
+              type="button"
+              class="btn-rules"
+              style="margin-top: 0"
+              onclick="randomizeAvatar()"
+            >
+              🎲 Randomize
+            </button>
+            <input type="hidden" name="avatar_seed" id="avatar_seed" />
+          </div>
+
+          <div class="setting-row">
+            <label>Agent Name</label>
+            <input type="text" id="username" name="username" required />
+          </div>
+
+          <div class="setting-row" id="mode-group">
+            <label>Ruleset (Difficulty)</label>
+            <select name="mode" id="mode">
+              <option value="standard">Standard (4 Digits)</option>
+              <option value="rookie">Rookie (3 Digits)</option>
+              <option value="expert">Expert (5 Digits)</option>
+              <option value="master">Master (4 Digits + Repeats)</option>
+              <option value="insane">Insane (6 Digits + Repeats)</option>
+            </select>
+          </div>
+        </div>
+
+        <input type="hidden" name="action" id="action-type" value="create" />
+        <input
+          type="hidden"
+          name="room_code"
+          id="room_code"
+          value="{{ room_code }}"
+        />
+
+        {% if room_code %}
+        <button
+          type="submit"
+          class="btn-start"
+          onclick="document.getElementById('action-type').value = 'join'"
+        >
+          JOIN MISSION
+        </button>
+        {% else %}
+        <button
+          type="submit"
+          class="btn-start"
+          onclick="document.getElementById('action-type').value = 'create'"
+        >
+          CREATE LINK
+        </button>
+        {% endif %}
+
+        <br />
+        <a href="/" class="btn-rules" style="margin-top: 20px"
+          >RETURN TO BASE</a
+        >
+      </form>
+    </div>
+
+    <script>
+      function randomizeAvatar() {
+        const seed = Math.random().toString(36).substring(7);
+        document.getElementById("avatar_seed").value = seed;
+        document.getElementById("avatar-img").src =
+          `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}`;
+
+        let nameInput = document.getElementById("username");
+        if (!nameInput.value || nameInput.value.startsWith("Agent_")) {
+          nameInput.value = "Agent_" + Math.floor(Math.random() * 10000);
+        }
+      }
+
+      // Auto randomize on load
+      randomizeAvatar();
+
+      const roomCodeTpl = "{{ room_code }}";
+      if (roomCodeTpl && roomCodeTpl !== "None") {
+        document.getElementById("mode-group").style.display = "none";
+      }
+    </script>
+  </body>
+</html>

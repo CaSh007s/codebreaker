@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CodeBreaker | Game Lobby</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: "Courier New", Courier, monospace;
+        background-color: #121213;
+        color: #ffffff;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        text-align: center;
+        flex-direction: column;
+      }
+      .container {
+        max-width: 600px;
+        padding: 20px;
+        width: 90%;
+      }
+      h1 {
+        font-size: 2.5rem;
+        letter-spacing: 5px;
+        margin-bottom: 0px;
+        text-transform: uppercase;
+      }
+
+      .settings-box {
+        background: #272729;
+        padding: 30px;
+        border-radius: 10px;
+        margin: 30px 0;
+        border: 1px solid #3a3a3c;
+      }
+
+      .room-code-display {
+        font-size: 2.5rem;
+        color: #538d4e;
+        font-weight: bold;
+        letter-spacing: 5px;
+        margin: 10px 0;
+        background: #121213;
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px dashed #538d4e;
+      }
+
+      .share-link {
+        width: 100%;
+        padding: 10px;
+        background: #121213;
+        border: 1px solid #3a3a3c;
+        color: #818384;
+        border-radius: 5px;
+        font-family: inherit;
+        margin-top: 10px;
+        box-sizing: border-box;
+        text-align: center;
+        font-size: 0.9rem;
+      }
+
+      .vs-row {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        margin-top: 40px;
+      }
+
+      .player-card {
+        text-align: center;
+      }
+      .player-card img {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: #121213;
+        border: 2px solid #538d4e;
+      }
+      .player-card.opponent img {
+        border-color: #cf6679;
+      }
+      .player-card.waiting img {
+        border: 2px dashed #818384;
+        opacity: 0.5;
+      }
+      .player-name {
+        font-weight: bold;
+        margin-top: 10px;
+        font-size: 1.2rem;
+      }
+      .status-badge {
+        background: #538d4e;
+        color: white;
+        padding: 2px 10px;
+        border-radius: 10px;
+        font-size: 0.8rem;
+        margin-top: 5px;
+        display: inline-block;
+      }
+      .status-badge.waiting {
+        background: #cf6679;
+      }
+
+      .btn-copy {
+        background-color: #3a3a3c;
+        color: white;
+        border: none;
+        padding: 8px 15px;
+        cursor: pointer;
+        border-radius: 5px;
+        margin-top: 10px;
+      }
+      .btn-copy:hover {
+        background-color: #818384;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>SECURE COMM</h1>
+      <p style="color: #818384">Awaiting second operative...</p>
+
+      <div class="settings-box">
+        <div style="margin-bottom: 20px">
+          <p
+            style="
+              margin: 0;
+              color: #b0b3b8;
+              text-transform: uppercase;
+              font-size: 0.9rem;
+            "
+          >
+            Room Code: {{ mode_str }}
+          </p>
+          <div class="room-code-display">{{ room_code }}</div>
+        </div>
+
+        <div>
+          <p style="margin: 0; color: #b0b3b8; font-size: 0.9rem">
+            Share this link:
+          </p>
+          <input
+            type="text"
+            class="share-link"
+            id="share-link"
+            value="{{ request.url_root }}multiplayer/join/{{ room_code }}"
+            readonly
+          />
+          <button class="btn-copy" onclick="copyLink()">Copy Link</button>
+        </div>
+
+        <div class="vs-row">
+          <!-- Host -->
+          <div class="player-card">
+            <img
+              src="https://api.dicebear.com/7.x/bottts/svg?seed={{ session.get('avatar', 'none') }}"
+            />
+            <div class="player-name">{{ session.get('username', 'You') }}</div>
+            <div class="status-badge">Ready</div>
+          </div>
+
+          <div style="font-size: 2rem; color: #818384; font-weight: bold">
+            VS
+          </div>
+
+          <!-- Guest -->
+          <div class="player-card opponent" id="opponent-container">
+            {% if opponent %}
+            <img
+              src="https://api.dicebear.com/7.x/bottts/svg?seed={{ opponent.avatar }}"
+            />
+            <div class="player-name">{{ opponent.username }}</div>
+            <div class="status-badge">Ready</div>
+            {% else %}
+            <img
+              src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3C/svg%3E"
+              class="waiting"
+              style="border-radius: 50%; border: 2px dashed #818384"
+            />
+            <div class="player-name" style="color: #818384">Waiting...</div>
+            <div class="status-badge waiting">Pending</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+      const socket = io();
+      const roomCode = "{{ room_code }}";
+
+      socket.on("connect", () => {
+        socket.emit("join_lobby", { room: roomCode });
+      });
+
+      socket.on("player_joined", (data) => {
+        const oppContainer = document.getElementById("opponent-container");
+        oppContainer.innerHTML = `
+                <img src="https://api.dicebear.com/7.x/bottts/svg?seed=${data.avatar}">
+                <div class="player-name">${data.username}</div>
+                <div class="status-badge">Ready</div>
+            `;
+
+        setTimeout(() => {
+          window.location.href = `/multiplayer/game/${roomCode}`;
+        }, 2000);
+      });
+
+      socket.on("game_start", () => {
+        window.location.href = `/multiplayer/game/${roomCode}`;
+      });
+
+      function copyLink() {
+        var copyText = document.getElementById("share-link");
+        copyText.select();
+        copyText.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(copyText.value);
+
+        const btn = document.querySelector(".btn-copy");
+        btn.innerText = "Copied!";
+        setTimeout(() => (btn.innerText = "Copy Link"), 2000);
+      }
+    </script>
+  </body>
+</html>
