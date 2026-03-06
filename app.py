@@ -240,16 +240,32 @@ def on_join_lobby(data):
     if room_code in active_rooms:
         room = active_rooms[room_code]
         sid = session.get('sid')
+        # Mark as not ready initially
+        if sid in room['players']:
+            room['players'][sid]['lobby_ready'] = False
+            
         if len(room['players']) == 2:
             guest_data = room['players'][sid] if sid != room['host'] else None
             # If the current socket is the guest joining, notify the host
             if guest_data:
-                emit('player_joined', {'username': guest_data['username'], 'avatar': guest_data['avatar']}, room=room_code)
-                
-            # Both players are here, start game!
-            import multiplayer_logic
-            multiplayer_logic.start_game(active_rooms, room_code)
-            emit('game_start', room=room_code)
+                emit('player_joined', {'username': guest_data['username'], 'avatar': guest_data['avatar']}, room=room_code, include_self=False)
+
+@socketio.on('player_ready_lobby')
+def on_player_ready_lobby(data):
+    room_code = data['room']
+    sid = session.get('sid')
+    
+    if room_code in active_rooms:
+        room = active_rooms[room_code]
+        if sid in room['players']:
+            room['players'][sid]['lobby_ready'] = True
+            emit('lobby_player_ready', {'player_sid': sid}, room=room_code, include_self=False)
+            
+            # Check if both players are ready
+            if len(room['players']) == 2 and all(p.get('lobby_ready') for p in room['players'].values()):
+                import multiplayer_logic
+                multiplayer_logic.start_game(active_rooms, room_code)
+                emit('game_start', room=room_code)
 
 @socketio.on('join_game')
 def on_join_game(data):
@@ -258,9 +274,10 @@ def on_join_game(data):
     
     room = active_rooms.get(room_code)
     if room and room['status'] == 'playing':
-        # Reconnection detected!
         sid = session.get('sid')
         player = room['players'].get(sid)
+        
+        # Only notify "reconnected" if they actually disconnected previously
         if player and player.get('disconnected'):
             player['disconnected'] = False
             emit('opponent_reconnected', {'username': player['username']}, room=room_code, include_self=False)

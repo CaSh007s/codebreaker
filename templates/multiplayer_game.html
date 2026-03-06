@@ -478,6 +478,22 @@
       </h1>
       <div class="header-tools">
         <button
+          id="toggle-mute-btn"
+          class="tool-btn"
+          title="Mute/Unmute"
+          style="
+            font-size: 1.3rem;
+            background: #272729;
+            border-radius: 5px;
+            padding: 5px 10px;
+            border: 1px solid #3a3a3c;
+            margin-right: 8px;
+          "
+          onclick="toggleMute()"
+        >
+          🔊
+        </button>
+        <button
           id="giveup-btn"
           class="tool-btn"
           title="Surrender"
@@ -496,11 +512,7 @@
     </header>
 
     <!-- Audio Elements -->
-    <audio
-      id="audio-click"
-      src="{{ url_for('static', filename='audio/click.wav') }}"
-      preload="auto"
-    ></audio>
+
     <audio
       id="audio-bull"
       src="{{ url_for('static', filename='audio/bull.wav') }}"
@@ -540,9 +552,7 @@
             Me
           </div>
           <div class="mobile-vs-stats">
-            W:<span id="mobile-my-wins">0</span> | L:<span id="mobile-my-loss"
-              >0</span
-            >
+            Wins: <span id="mobile-my-wins">0</span>
           </div>
         </div>
 
@@ -570,8 +580,7 @@
           Agent
         </div>
         <div class="player-stats">
-          W: <span id="desktop-my-wins">0</span> | L:
-          <span id="desktop-my-loss">0</span>
+          Wins: <span id="desktop-my-wins">0</span>
         </div>
         <div style="font-size: 0.8rem; color: #818384; margin-bottom: 5px">
           YOUR STATUS
@@ -742,16 +751,27 @@
             "
           ></div>
         </div>
-        <div style="text-align: center; margin-top: 20px" id="modal-buttons">
+        <div
+          style="
+            text-align: center;
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+          "
+          id="modal-buttons"
+        >
           <button
             id="rematch-btn"
             class="btn-start"
             style="
               display: inline-block;
-              padding: 10px 20px;
+              padding: 12px 24px;
               font-size: 1rem;
-              margin-right: 10px;
               cursor: pointer;
+              width: 100%;
+              max-width: 350px;
             "
             onclick="requestRematch()"
           >
@@ -762,10 +782,12 @@
             class="btn-start"
             style="
               display: inline-block;
-              padding: 10px 20px;
+              padding: 12px 24px;
               font-size: 1rem;
               text-decoration: none;
               background-color: #3a3a3c;
+              width: 100%;
+              max-width: 350px;
             "
             >START OVER</a
           >
@@ -819,14 +841,12 @@
             const stats = JSON.parse(statsStr);
             document.getElementById("desktop-my-wins").innerText =
               stats.won || 0;
-            document.getElementById("desktop-my-loss").innerText =
-              (stats.played || 0) - (stats.won || 0);
             document.getElementById("mobile-my-wins").innerText =
               stats.won || 0;
-            document.getElementById("mobile-my-loss").innerText =
-              (stats.played || 0) - (stats.won || 0);
           } catch (e) {}
         }
+
+        updateMuteButton();
 
         createGrid();
 
@@ -906,7 +926,23 @@
       }
 
       // --- INPUT LOGIC ---
+      let isMuted = localStorage.getItem("codebreaker_muted") === "true";
+
+      function updateMuteButton() {
+        const btn = document.getElementById("toggle-mute-btn");
+        if (btn) {
+          btn.innerText = isMuted ? "🔇" : "🔊";
+        }
+      }
+
+      function toggleMute() {
+        isMuted = !isMuted;
+        localStorage.setItem("codebreaker_muted", isMuted);
+        updateMuteButton();
+      }
+
       function playSound(id) {
+        if (isMuted) return;
         const sound = document.getElementById(id);
         if (sound) {
           sound.currentTime = 0;
@@ -974,7 +1010,6 @@
 
           if (isLongPress) return;
 
-          playSound("audio-click");
           const val = btn.innerText.trim();
           if (val === "ENTER") submitGuess();
           else if (val === "DELETE") deleteNumber();
@@ -1107,11 +1142,7 @@
           myStats.played++;
           localStorage.setItem("codebreaker_stats", JSON.stringify(myStats));
           document.getElementById("desktop-my-wins").innerText = myStats.won;
-          document.getElementById("desktop-my-loss").innerText =
-            myStats.played - myStats.won;
           document.getElementById("mobile-my-wins").innerText = myStats.won;
-          document.getElementById("mobile-my-loss").innerText =
-            myStats.played - myStats.won;
 
           if (typeof confetti === "function")
             confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
@@ -1128,7 +1159,6 @@
           data.secret_code || "UNKNOWN";
 
         const rematchBtn = document.getElementById("rematch-btn");
-        if (rematchBtn) rematchBtn.style.display = "none";
 
         modal.classList.remove("hidden");
       });
@@ -1142,11 +1172,13 @@
           modal.classList.add("hidden");
           gameOver = false;
 
-          // Append to both chats
-          const msgHtml = `<div style="color: #538d4e; font-style: italic; font-size: 0.75rem;">System: ${data.username} has reconnected!</div>`;
+          // Append to both chats using system styling
+          const msgHtml = `<div class="msg-wrapper msg-system">SYSTEM: ${data.username} has reconnected!</div>`;
 
-          const dxBox = document.querySelector(".desktop-chat-box");
-          const mbBox = document.querySelector(".mobile-chat-box");
+          const dxBox = document.querySelector(".chat-messages");
+          const mbBox = document.querySelector(
+            ".mobile-chat-box .chat-messages",
+          );
 
           if (dxBox) {
             const dxDiv = document.createElement("div");
@@ -1170,8 +1202,7 @@
           const dxStats = document.querySelector(".opp-card .player-stats");
           if (dxStats) {
             const oppWins = data.stats.won || 0;
-            const oppLoss = (data.stats.played || 0) - oppWins;
-            dxStats.innerText = `W: ${oppWins} | L: ${oppLoss}`;
+            dxStats.innerText = `Wins: ${oppWins}`;
           }
         }
       });
@@ -1184,23 +1215,53 @@
         socket.emit("request_rematch", { room: roomCode });
       }
 
+      function appendSystemMessage(text) {
+        const msgHtml = `<div class="msg-wrapper msg-system">${text}</div>`;
+        const dxBox = document.querySelector(".chat-messages");
+        const mbBox = document.querySelector(".mobile-chat-box .chat-messages");
+
+        if (dxBox) {
+          const dxDiv = document.createElement("div");
+          dxDiv.innerHTML = msgHtml;
+          dxBox.appendChild(dxDiv);
+          dxBox.scrollTop = dxBox.scrollHeight;
+        }
+        if (mbBox) {
+          const mbDiv = document.createElement("div");
+          mbDiv.innerHTML = msgHtml;
+          mbBox.appendChild(mbDiv);
+          mbBox.scrollTop = mbBox.scrollHeight;
+          notifyMobileChat();
+        }
+      }
+
       socket.on("rematch_requested", (data) => {
         if (data.player_sid !== mySid) {
           const btn = document.getElementById("rematch-btn");
           if (btn && btn.innerText !== "WAITING...") {
             btn.innerText = "ACCEPT REMATCH";
-            btn.style.backgroundColor = "#cf6679";
+            btn.style.background = "#538d4e";
+            btn.disabled = false;
+            btn.style.opacity = "1";
+
+            // System message
+            appendSystemMessage(`${data.username} requested a rematch!`);
           }
         }
       });
 
       socket.on("rematch_accepted", () => {
+        // System message
+        appendSystemMessage(`Rematch accepted! Good luck...`);
+
         document.getElementById("gameOverModal").classList.add("hidden");
+        document.getElementById("btn-new-game").style.display = "none";
+
         const btn = document.getElementById("rematch-btn");
-        btn.innerText = "REQUEST REMATCH";
+        btn.innerText = "PLAY AGAIN";
         btn.disabled = false;
         btn.style.opacity = "1";
-        btn.style.backgroundColor = "#538d4e";
+        btn.style.background = "#538d4e";
 
         currentRow = 0;
         currentTile = 0;

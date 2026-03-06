@@ -113,9 +113,28 @@
         cursor: pointer;
         border-radius: 5px;
         margin-top: 10px;
+        font-family: inherit;
       }
       .btn-copy:hover {
         background-color: #818384;
+      }
+
+      .btn-ready {
+        background-color: #538d4e;
+        color: white;
+        border: none;
+        padding: 15px 20px;
+        font-size: 1.2rem;
+        font-family: inherit;
+        font-weight: bold;
+        cursor: pointer;
+        border-radius: 50px;
+        width: 100%;
+        margin-top: 30px;
+        transition: transform 0.2s;
+      }
+      .btn-ready:hover:not(:disabled) {
+        transform: scale(1.05);
       }
     </style>
   </head>
@@ -155,12 +174,12 @@
 
         <div class="vs-row">
           <!-- Host -->
-          <div class="player-card">
+          <div class="player-card" id="my-card">
             <img
               src="{{ session.get('avatar', 'https://api.dicebear.com/7.x/bottts/svg?seed=none') }}"
             />
             <div class="player-name">{{ session.get('username', 'You') }}</div>
-            <div class="status-badge">Ready</div>
+            <div id="my-status-badge" class="status-badge waiting">Waiting</div>
           </div>
 
           <div style="font-size: 2rem; color: #818384; font-weight: bold">
@@ -172,7 +191,9 @@
             {% if opponent %}
             <img src="{{ opponent.avatar }}" />
             <div class="player-name">{{ opponent.username }}</div>
-            <div class="status-badge">Ready</div>
+            <div id="opp-status-badge" class="status-badge waiting">
+              Waiting
+            </div>
             {% else %}
             <img
               src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3C/svg%3E"
@@ -180,10 +201,16 @@
               style="border-radius: 50%; border: 2px dashed #818384"
             />
             <div class="player-name" style="color: #818384">Waiting...</div>
-            <div class="status-badge waiting">Pending</div>
+            <div id="opp-status-badge" class="status-badge waiting">
+              Waiting
+            </div>
             {% endif %}
           </div>
         </div>
+
+        <button id="ready-btn" class="btn-ready" onclick="readyUp()">
+          I'M READY
+        </button>
       </div>
     </div>
 
@@ -201,12 +228,20 @@
         oppContainer.innerHTML = `
                 <img src="${data.avatar}">
                 <div class="player-name">${data.username}</div>
-                <div class="status-badge">Ready</div>
+                <div id="opp-status-badge" class="status-badge waiting">Waiting</div>
             `;
+      });
 
-        setTimeout(() => {
-          window.location.href = `/multiplayer/game/${roomCode}`;
-        }, 2000);
+      socket.on("lobby_player_ready", (data) => {
+        // If the opponent is the one who readied up
+        const oppContainer = document.getElementById("opponent-container");
+        if (oppContainer) {
+          const badge = oppContainer.querySelector(".status-badge");
+          if (badge) {
+            badge.innerText = "Ready";
+            badge.classList.remove("waiting");
+          }
+        }
       });
 
       socket.on("game_start", () => {
@@ -222,6 +257,21 @@
         const btn = document.querySelector(".btn-copy");
         btn.innerText = "Copied!";
         setTimeout(() => (btn.innerText = "Copy Link"), 2000);
+      }
+
+      function readyUp() {
+        const btn = document.getElementById("ready-btn");
+        btn.innerText = "WAITING FOR OPPONENT...";
+        btn.disabled = true;
+        btn.style.opacity = "0.5";
+
+        const myBadge = document.getElementById("my-status-badge");
+        if (myBadge) {
+          myBadge.innerText = "Ready";
+          myBadge.classList.remove("waiting");
+        }
+
+        socket.emit("player_ready_lobby", { room: roomCode });
       }
     </script>
   </body>
