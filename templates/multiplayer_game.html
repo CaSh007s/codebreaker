@@ -313,12 +313,85 @@
         height: 100%;
         background: rgba(0, 0, 0, 0.5);
         backdrop-filter: blur(15px); /* Stronger blur for focus */
-        -webkit-backdrop-filter: blur(15px);
-        z-index: 999;
       }
-      .chat-modal-mobile {
+
+      /* Rules Modal Glassmorphism */
+      .rules-modal {
         display: none;
-      } /* Used only on mobile via JS toggle */
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        justify-content: center;
+        align-items: center;
+        z-index: 2000;
+      }
+      .rules-modal-content {
+        background: rgba(27, 27, 29, 0.85);
+        backdrop-filter: blur(25px);
+        -webkit-backdrop-filter: blur(25px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 30px;
+        border-radius: 20px;
+        width: 90%;
+        max-width: 500px;
+        max-height: 80vh;
+        overflow-y: auto;
+        text-align: left;
+        position: relative;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+        color: white;
+      }
+      .rules-close-btn {
+        position: absolute;
+        top: 15px;
+        right: 20px;
+        font-size: 28px;
+        cursor: pointer;
+        color: #818384;
+      }
+      .rules-close-btn:hover {
+        color: white;
+      }
+      .rules-section-title {
+        color: #538d4e;
+        margin-top: 20px;
+        margin-bottom: 10px;
+        font-size: 1.1rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      .rules-dot-row {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin: 10px 0;
+      }
+      .rules-dot {
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        border: 2px solid #3a3a3c;
+        flex-shrink: 0;
+      }
+      .dot-green {
+        background: #538d4e;
+        border-color: #538d4e;
+        box-shadow: 0 0 5px #538d4e;
+      }
+      .dot-yellow {
+        background: #b59f3b;
+        border-color: #b59f3b;
+        box-shadow: 0 0 5px #b59f3b;
+      }
+      .dot-gray {
+        background: #3a3a3c;
+        border-color: #3a3a3c;
+      }
 
       @media (max-width: 800px) {
         .multiplayer-layout {
@@ -478,6 +551,22 @@
       </h1>
       <div class="header-tools">
         <button
+          id="help-btn"
+          class="tool-btn"
+          title="How to Play"
+          style="
+            font-size: 1.3rem;
+            background: #272729;
+            border-radius: 5px;
+            padding: 5px 10px;
+            border: 1px solid #3a3a3c;
+            margin-right: 8px;
+          "
+          onclick="toggleRulesModal(true)"
+        >
+          ❓
+        </button>
+        <button
           id="toggle-mute-btn"
           class="tool-btn"
           title="Mute/Unmute"
@@ -510,6 +599,130 @@
         </button>
       </div>
     </header>
+
+    <!-- Instructions Modal -->
+    <div id="rulesModal" class="rules-modal">
+      <div class="rules-modal-content">
+        <span class="rules-close-btn" onclick="toggleRulesModal(false)"
+          >&times;</span
+        >
+        <h2 style="margin-top: 0; text-align: center; color: #ffffff">
+          OPERATOR'S MANUAL
+        </h2>
+        <hr
+          style="
+            border: 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            margin: 15px 0;
+          "
+        />
+
+        <div class="rules-section-title">1. The Logic</div>
+        <div
+          style="
+            background: rgba(207, 102, 121, 0.1);
+            border: 1px solid #cf6679;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+          "
+        >
+          <p
+            style="
+              color: #cf6679;
+              font-size: 0.95rem;
+              font-weight: bold;
+              margin: 0;
+              text-align: center;
+              letter-spacing: 1px;
+            "
+          >
+            ⚠️ ORDER DOES NOT MATTER
+          </p>
+          <p
+            style="
+              color: rgba(255, 255, 255, 0.8);
+              font-size: 0.85rem;
+              margin: 5px 0 0 0;
+              text-align: center;
+              line-height: 1.4;
+            "
+          >
+            The feedback dots are shuffled. They do NOT correspond to the
+            position of the numbers in your guess.
+          </p>
+        </div>
+
+        <div class="rules-dot-row">
+          <span class="rules-dot dot-green"></span>
+          <span
+            ><strong>BULL:</strong> Correct Number in one of the given
+            Spots.</span
+          >
+        </div>
+        <div class="rules-dot-row">
+          <span class="rules-dot dot-yellow"></span>
+          <span
+            ><strong>COW:</strong> Correct Number, but in the Wrong Spot.</span
+          >
+        </div>
+        <div class="rules-dot-row">
+          <span class="rules-dot dot-gray"></span>
+          <span
+            ><strong>GRAY:</strong> This Number is NOT in the secret code.</span
+          >
+        </div>
+        <div class="rules-dot-row">
+          <span class="rules-dot" style="background: transparent"></span>
+          <span><strong>HOLLOW:</strong> Waiting for your next input.</span>
+        </div>
+
+        <div class="rules-section-title" style="color: #cf6679">
+          2. Multiplayer Mission
+        </div>
+        <ul
+          style="
+            padding-left: 20px;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+            margin: 0;
+          "
+        >
+          <li>
+            <strong>Race to Crack:</strong> Be the first to solve the code to
+            win.
+          </li>
+          <li>
+            <strong>Real-time Intel:</strong> Watch your opponent's attempt
+            count on their card.
+          </li>
+          <li>
+            <strong>Chat:</strong> Coordinate or distract using the secure
+            channel.
+          </li>
+          <li>
+            <strong>Surrender:</strong> Use the 🏳️ to admit defeat. Winner gets
+            the win!
+          </li>
+        </ul>
+
+        <div style="text-align: center; margin-top: 30px">
+          <button
+            class="btn-start"
+            style="
+              padding: 12px 30px;
+              font-size: 1rem;
+              border-radius: 10px;
+              width: auto;
+            "
+            onclick="toggleRulesModal(false)"
+          >
+            ACKNOWLEDGE
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Audio Elements -->
 
@@ -919,6 +1132,11 @@
 
       // --- INPUT LOGIC ---
       let isMuted = localStorage.getItem("codebreaker_muted") === "true";
+
+      function toggleRulesModal(show) {
+        const modal = document.getElementById("rulesModal");
+        if (modal) modal.style.display = show ? "flex" : "none";
+      }
 
       function updateMuteButton() {
         const btn = document.getElementById("toggle-mute-btn");

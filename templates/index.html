@@ -95,7 +95,7 @@
         border-color: white;
       }
 
-      /* MODAL STYLES */
+      /* MODAL STYLES with Glassmorphism */
       .modal {
         display: none;
         position: fixed;
@@ -103,27 +103,37 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0, 0, 0, 0.85);
+        background-color: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
         justify-content: center;
         align-items: center;
+        z-index: 2000;
       }
       .modal-content {
-        background-color: #121213;
-        border: 1px solid #3a3a3c;
-        padding: 20px;
-        border-radius: 10px;
+        background: rgba(27, 27, 29, 0.85);
+        backdrop-filter: blur(25px);
+        -webkit-backdrop-filter: blur(25px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 30px;
+        border-radius: 20px;
         width: 90%;
         max-width: 500px;
         text-align: left;
         position: relative;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
       }
       .close-btn {
         position: absolute;
-        top: 10px;
-        right: 15px;
-        font-size: 24px;
+        top: 15px;
+        right: 20px;
+        font-size: 28px;
         cursor: pointer;
         color: #818384;
+        transition: color 0.2s;
+      }
+      .close-btn:hover {
+        color: white;
       }
 
       /* NEW: VISUAL DOTS FOR RULES */
@@ -228,38 +238,61 @@
 
         <h3 style="color: #538d4e; margin-bottom: 5px">1. The Logic</h3>
 
-        <p
+        <div
           style="
-            color: #cf6679;
-            font-size: 0.9rem;
-            font-style: italic;
-            margin-top: 0;
-            text-align: center;
+            background: rgba(207, 102, 121, 0.1);
             border: 1px solid #cf6679;
-            padding: 5px;
-            border-radius: 5px;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 20px;
           "
         >
-          ⚠️ ORDER DOES NOT MATTER.<br />
-          The dots are shuffled. They do NOT correspond to the position of the
-          numbers.
-        </p>
+          <p
+            style="
+              color: #cf6679;
+              font-size: 0.95rem;
+              font-weight: bold;
+              margin: 0;
+              text-align: center;
+              letter-spacing: 1px;
+            "
+          >
+            ⚠️ ORDER DOES NOT MATTER
+          </p>
+          <p
+            style="
+              color: rgba(255, 255, 255, 0.8);
+              font-size: 0.85rem;
+              margin: 5px 0 0 0;
+              text-align: center;
+              line-height: 1.4;
+            "
+          >
+            The feedback dots are shuffled. They do NOT correspond to the
+            position of the numbers in your guess.
+          </p>
+        </div>
 
         <div class="example-row">
           <span class="dot bull"></span>
-          <span><strong>BULL:</strong> Correct Number, Correct Spot.</span>
+          <span
+            ><strong>BULL:</strong> Correct Number in one of the given
+            Spots.</span
+          >
         </div>
         <div class="example-row">
           <span class="dot cow"></span>
-          <span><strong>COW:</strong> Correct Number, Wrong Spot.</span>
+          <span
+            ><strong>COW:</strong> Correct Number, but in the Wrong Spot.</span
+          >
         </div>
         <div class="example-row">
           <span class="dot miss"></span>
-          <span><strong>GRAY:</strong> Wrong Number completely.</span>
+          <span><strong>GRAY:</strong> This Number is NOT in the code.</span>
         </div>
         <div class="example-row">
           <span class="dot ring"></span>
-          <span><strong>HOLLOW:</strong> Waiting for input.</span>
+          <span><strong>HOLLOW:</strong> Waiting for your next input.</span>
         </div>
 
         <h3 style="color: #b59f3b; margin-bottom: 10px">2. Tools</h3>
@@ -276,7 +309,32 @@
           <li><strong>🏳️ Surrender:</strong> Reveal code.</li>
         </ul>
 
-        <h3 style="color: #cf6679; margin-bottom: 10px">3. Special Modes</h3>
+        <h3 style="color: #cf6679; margin-bottom: 10px">
+          3. Multiplayer Mission
+        </h3>
+        <ul
+          style="
+            padding-left: 20px;
+            line-height: 1.4;
+            color: #d1d1d1;
+            font-size: 0.95rem;
+          "
+        >
+          <li>
+            <strong>Race to Crack:</strong> Be the first to solve the code.
+          </li>
+          <li>
+            <strong>Real-time Intel:</strong> Watch opponent attempts on their
+            card.
+          </li>
+          <li>
+            <strong>Chat:</strong> Coordinate or distract via the secure
+            channel.
+          </li>
+          <li><strong>Surrender:</strong> Use 🏳️ for a tactical forfeit.</li>
+        </ul>
+
+        <h3 style="color: #538d4e; margin-bottom: 10px">4. Special Modes</h3>
         <ul
           style="
             padding-left: 20px;
