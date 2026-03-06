@@ -8,6 +8,11 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='css/style.css') }}"
     />
+    <link
+      rel="icon"
+      type="image/png"
+      href="{{ url_for('static', filename='img/icon.png') }}"
+    />
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
       /* --- GLOBAL LAYOUT --- */
@@ -26,6 +31,28 @@
         height: calc(100vh - 80px); /* Constrain height to viewport */
         padding: 20px;
         box-sizing: border-box;
+      }
+
+      header {
+        display: grid;
+        grid-template-columns: 80px 1fr 80px; /* Balance left/right for center title */
+        align-items: center;
+        width: 100%;
+        padding: 10px 0;
+        border-bottom: 1px solid #3a3a3c;
+        flex-shrink: 0;
+      }
+      .header-left {
+        display: flex;
+        justify-content: flex-start;
+        padding-left: 15px;
+      }
+      .header-tools {
+        position: static; /* Remove absolute positioning to work with grid */
+        display: flex;
+        justify-content: flex-end;
+        padding-right: 15px;
+        gap: 8px;
       }
 
       /* --- PLAYER CARDS (Left & Right) --- */
@@ -426,7 +453,7 @@
           display: flex;
           flex-direction: column;
           align-items: center;
-          width: 40%;
+          width: 45%; /* Slightly wider to give names more room */
         }
         .mobile-vs-player img {
           width: 40px;
@@ -444,10 +471,9 @@
         .mobile-vs-name {
           font-weight: bold;
           font-size: 0.9rem;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          max-width: 100%;
+          margin-bottom: 2px;
+          word-break: break-word; /* Allow multi-line names */
+          text-align: center;
         }
         .mobile-vs-stats {
           font-size: 0.7rem;
@@ -513,9 +539,20 @@
 
         /* Empty out redudant multiplayer-layout class redeclaration */
 
+        header {
+          grid-template-columns: 50px 1fr 100px; /* Adjusted for mobile */
+          height: 60px;
+        }
         header h1 {
-          font-size: 1.2rem !important;
-          margin-top: 5px;
+          font-size: 1.1rem !important;
+          margin: 0 !important;
+        }
+        .header-left {
+          padding-left: 10px;
+        }
+        .header-tools {
+          padding-right: 10px;
+          gap: 5px;
         }
 
         .game-zone {
@@ -539,17 +576,7 @@
   </head>
   <body>
     <header>
-      <h1
-        style="
-          flex-grow: 1;
-          text-align: center;
-          color: #538d4e;
-          font-size: 1.8rem;
-        "
-      >
-        [ MODE: {{ mode|default('UNKNOWN')|upper }} ]
-      </h1>
-      <div class="header-tools">
+      <div class="header-left">
         <button
           id="help-btn"
           class="tool-btn"
@@ -560,12 +587,24 @@
             border-radius: 5px;
             padding: 5px 10px;
             border: 1px solid #3a3a3c;
-            margin-right: 8px;
           "
           onclick="toggleRulesModal(true)"
         >
           ❓
         </button>
+      </div>
+      <h1
+        style="
+          flex-grow: 1;
+          text-align: center;
+          color: #538d4e;
+          font-size: 1.8rem;
+          margin: 0;
+        "
+      >
+        [ MODE: {{ mode|default('UNKNOWN')|upper }} ]
+      </h1>
+      <div class="header-tools">
         <button
           id="toggle-mute-btn"
           class="tool-btn"
