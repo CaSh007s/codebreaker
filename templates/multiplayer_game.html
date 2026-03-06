@@ -126,6 +126,38 @@
       </div>
     </header>
 
+    <!-- Audio Elements -->
+    <audio
+      id="audio-click"
+      src="{{ url_for('static', filename='audio/click.wav') }}"
+      preload="auto"
+    ></audio>
+    <audio
+      id="audio-bull"
+      src="{{ url_for('static', filename='audio/bull.wav') }}"
+      preload="auto"
+    ></audio>
+    <audio
+      id="audio-miss"
+      src="{{ url_for('static', filename='audio/miss.wav') }}"
+      preload="auto"
+    ></audio>
+    <audio
+      id="audio-chat"
+      src="{{ url_for('static', filename='audio/chat.wav') }}"
+      preload="auto"
+    ></audio>
+    <audio
+      id="audio-win"
+      src="{{ url_for('static', filename='audio/game-win.mp3') }}"
+      preload="auto"
+    ></audio>
+    <audio
+      id="audio-lose"
+      src="{{ url_for('static', filename='audio/game-lose.mp3') }}"
+      preload="auto"
+    ></audio>
+
     <div id="opponent-status">
       <div>
         <img
@@ -229,15 +261,30 @@
             "
           ></div>
         </div>
-        <div style="text-align: center; margin-top: 20px">
+        <div style="text-align: center; margin-top: 20px" id="modal-buttons">
+          <button
+            id="rematch-btn"
+            class="btn-start"
+            style="
+              display: inline-block;
+              padding: 10px 20px;
+              font-size: 1rem;
+              margin-right: 10px;
+              cursor: pointer;
+            "
+            onclick="requestRematch()"
+          >
+            REQUEST REMATCH
+          </button>
           <a
             href="/"
             class="btn-start"
             style="
               display: inline-block;
-              padding: 10px 30px;
+              padding: 10px 20px;
               font-size: 1rem;
               text-decoration: none;
+              background-color: #3a3a3c;
             "
             >RETURN TO BASE</a
           >
@@ -300,6 +347,16 @@
       }
 
       // --- INPUT LOGIC ---
+      function playSound(id) {
+        const sound = document.getElementById(id);
+        if (sound) {
+          sound.currentTime = 0;
+          sound
+            .play()
+            .catch((err) => console.log("Audio play prevented:", err));
+        }
+      }
+
       function setupKeyboard() {
         const keyboard = document.getElementById("keyboard");
         keyboard.addEventListener("click", (e) => {
@@ -307,6 +364,7 @@
           if (!btn) return;
           e.preventDefault();
           btn.blur();
+          playSound("audio-click");
           const val = btn.innerText.trim();
           if (val === "ENTER") submitGuess();
           else if (val === "DELETE") deleteNumber();
@@ -370,6 +428,13 @@
 
         updateFeedback(data.result);
 
+        // Play success or miss sound based on bulls/cows
+        if (data.result.bulls > 0 || data.result.cows > 0) {
+          playSound("audio-bull");
+        } else {
+          playSound("audio-miss");
+        }
+
         currentRow++;
         currentTile = 0;
         currentGuess = "";
@@ -424,6 +489,7 @@
         const modal = document.getElementById("gameOverModal");
 
         if (data.winner_sid === mySid) {
+          playSound("audio-win");
           document.getElementById("gameOverTitle").innerText =
             "MISSION ACCOMPLISHED";
           document.getElementById("gameOverTitle").style.color = "#538d4e";
@@ -432,6 +498,7 @@
           if (typeof confetti === "function")
             confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
         } else {
+          playSound("audio-lose");
           document.getElementById("gameOverTitle").innerText = "MISSION FAILED";
           document.getElementById("gameOverTitle").style.color = "#cf6679";
           document.getElementById("winner-name").innerText =
@@ -441,6 +508,58 @@
 
         document.getElementById("final-code").innerText = data.secret_code;
         modal.classList.remove("hidden");
+      });
+
+      socket.on("opponent_disconnected", (data) => {
+        gameOver = true;
+        playSound("audio-lose");
+        const modal = document.getElementById("gameOverModal");
+        document.getElementById("gameOverTitle").innerText = "COMM LOST";
+        document.getElementById("gameOverTitle").style.color = "#cf6679";
+        document.getElementById("winner-name").innerText =
+          "Opponent Fled The Mission!";
+        document.getElementById("winner-name").style.color = "#cf6679";
+        document.getElementById("final-code").innerText = "ABORTED";
+
+        const rematchBtn = document.getElementById("rematch-btn");
+        if (rematchBtn) rematchBtn.style.display = "none";
+
+        modal.classList.remove("hidden");
+      });
+
+      function requestRematch() {
+        const btn = document.getElementById("rematch-btn");
+        btn.innerText = "WAITING...";
+        btn.disabled = true;
+        btn.style.opacity = "0.5";
+        socket.emit("request_rematch", { room: roomCode });
+      }
+
+      socket.on("rematch_requested", (data) => {
+        if (data.player_sid !== mySid) {
+          const btn = document.getElementById("rematch-btn");
+          if (btn && btn.innerText !== "WAITING...") {
+            btn.innerText = "ACCEPT REMATCH";
+            btn.style.backgroundColor = "#cf6679";
+          }
+        }
+      });
+
+      socket.on("rematch_accepted", () => {
+        document.getElementById("gameOverModal").classList.add("hidden");
+        const btn = document.getElementById("rematch-btn");
+        btn.innerText = "REQUEST REMATCH";
+        btn.disabled = false;
+        btn.style.opacity = "1";
+        btn.style.backgroundColor = "#538d4e";
+
+        currentRow = 0;
+        currentTile = 0;
+        currentGuess = "";
+        gameOver = false;
+        isSubmitting = false;
+        document.getElementById("opp-attempts").innerText = "0";
+        createGrid();
       });
 
       function giveUp() {
@@ -471,6 +590,7 @@
       }
 
       socket.on("receive_chat", (data) => {
+        playSound("audio-chat");
         const chatBox = document.getElementById("chat-messages");
         const msgDiv = document.createElement("div");
         msgDiv.style.marginBottom = "8px";
@@ -490,11 +610,18 @@
       document.addEventListener("keydown", (e) => {
         if (gameOver || document.activeElement.id === "chat-input") return;
         if (e.metaKey || e.ctrlKey) return;
+
         if (e.key === "Enter") {
           e.preventDefault();
+          playSound("audio-click");
           submitGuess();
-        } else if (e.key === "Backspace") deleteNumber();
-        else if (e.key >= "0" && e.key <= "9") handleInput(e.key);
+        } else if (e.key === "Backspace") {
+          playSound("audio-click");
+          deleteNumber();
+        } else if (e.key >= "0" && e.key <= "9") {
+          playSound("audio-click");
+          handleInput(e.key);
+        }
       });
     </script>
   </body>

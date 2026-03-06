@@ -1,12 +1,25 @@
 from flask import Flask, render_template, session, request, jsonify
 from flask_socketio import SocketIO, join_room, leave_room, emit, send
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import game_logic
 import random
 import uuid
 import time
+import os
 
 app = Flask(__name__)
 app.secret_key = 'codebreaker_static_secret_key'
+
+# Setup Rate Limiting with Redis
+redis_url = os.environ.get('REDIS_URL', 'memory://')
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    storage_uri=redis_url,
+    default_limits=["200 per day", "50 per hour"]
+)
+
 socketio = SocketIO(app, manage_session=False, cors_allowed_origins="*")
 
 # --- MULTIPLAYER STATE ---
@@ -132,6 +145,7 @@ def join_multiplayer(room_code):
     return render_template('multiplayer_setup.html', room_code=room_code)
 
 @app.route('/multiplayer/lobby', methods=['POST'])
+@limiter.limit("10 per minute")
 def view_lobby():
     action = request.form.get('action')
     username = request.form.get('username')
@@ -273,9 +287,59 @@ def on_submit_guess(data):
             'result': result
         }, room=room_code)
 
+@socketio.on('disconnect')
+def on_disconnect():
+    sid = session.get('sid')
+    if not sid:
+        return
+        
+    for room_code, room in list(active_rooms.items()):
+        if sid in room['players']:
+            if len(room['players']) > 1:
+                emit('opponent_disconnected', {'username': room['players'][sid]['username']}, room=room_code)
+            
+            # Clean up the room if a player disconnects
+            if room_code in active_rooms:
+                active_rooms[room_code]['status'] = 'finished'
+
+@socketio.on('request_rematch')
+def on_request_rematch(data):
+    room_code = data['room']
+    if room_code not in active_rooms: return
+    room = active_rooms[room_code]
+    sid = session.get('sid')
+    if sid not in room['players']: return
+    
+    player = room['players'][sid]
+    player['rematch_requested'] = True
+    emit('rematch_requested', {'player_sid': sid, 'username': player['username']}, room=room_code)
+    
+    # Check if both players requested a rematch
+    if len(room['players']) == 2 and all(p.get('rematch_requested') for p in room['players'].values()):
+        mode = room['mode']
+        length = 4
+        repeats = False
+        if mode == 'rookie': length = 3
+        elif mode == 'expert': length = 5
+        elif mode == 'master': length = 4; repeats = True
+        elif mode == 'insane': length = 6; repeats = True
+        
+        new_code = game_logic.generate_secret_code(length, repeats)
+        room['secret_code'] = new_code
+        room['status'] = 'playing'
+        
+        for p in room['players'].values():
+            p['attempts'] = 0
+            p['status'] = 'playing'
+            p['finish_time'] = None
+            p['rematch_requested'] = False
+            
+        emit('rematch_accepted', room=room_code)
+
 # --- API ENDPOINTS ---
 
 @app.route('/api/new_game', methods=['POST'])
+@limiter.limit("20 per minute")
 def new_game():
     data = request.json
     length = int(data.get('length', 4))
@@ -298,6 +362,7 @@ def new_game():
     return jsonify({'status': 'success'})
 
 @app.route('/api/guess', methods=['POST'])
+@limiter.limit("5 per second")
 def process_guess():
     if 'secret_code' not in session: return jsonify({'error': 'No active game'}), 400
     
