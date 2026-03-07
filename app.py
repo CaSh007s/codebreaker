@@ -9,27 +9,52 @@ import time
 import os
 import threading
 
+import redis
+import json
+
+# Setup Redis Client
+redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379')
+# Fallback for local dev if redis is not running
+try:
+    r = redis.Redis.from_url(redis_url, decode_responses=True)
+    r.ping()
+    use_redis = True
+except Exception as e:
+    print(f"⚠️ Redis connection failed: {e}. Falling back to in-memory state (not compatible with multiple workers).")
+    use_redis = False
+    class MockRedis:
+        def __init__(self): self.data = {}
+        def get(self, k): return self.data.get(k)
+        def set(self, k, v): self.data[k] = v
+        def setex(self, k, t, v): self.data[k] = v
+        def exists(self, k): return k in self.data
+        def delete(self, k): self.data.pop(k, None)
+        def keys(self, p): return [k for k in self.data.keys() if k.startswith(p.replace('*',''))]
+    r = MockRedis()
+
 def cleanup_stale_rooms():
-    """Background task to remove rooms that are empty or stale."""
+    """Background task to remove rooms that are empty or stale using Redis scanning."""
     while True:
         time.sleep(300) # check every 5 minutes
         now = time.time()
-        for room_code in list(active_rooms.keys()):
-            room = active_rooms[room_code]
+        room_keys = r.keys("room:*")
+        for key in room_keys:
+            data = r.get(key)
+            if not data: continue
+            room = json.loads(data)
             players = room.get('players', {})
             
             # 1. Dissolve if empty (0 players)
             if not players:
-                del active_rooms[room_code]
+                r.delete(key)
                 continue
                 
-            # 2. Dissolve if stale (e.g., created > 15 mins ago and no active/connected players)
-            # Use created_at or start_time for staleness
+            # 2. Dissolve if stale (e.g., created > 15 mins ago and all players are disconnected)
             start = room.get('start_time') or room.get('created_at', now)
             all_disconnected = all(p.get('disconnected', False) for p in players.values())
             
             if now - start > 900 and all_disconnected: # 15 minutes limit + all disconnected
-                del active_rooms[room_code]
+                r.delete(key)
 
 # Start the background thread
 cleanup_thread = threading.Thread(target=cleanup_stale_rooms, daemon=True)
@@ -38,20 +63,23 @@ cleanup_thread.start()
 app = Flask(__name__)
 app.secret_key = 'codebreaker_static_secret_key'
 
-# Setup Rate Limiting with Redis
-redis_url = os.environ.get('REDIS_URL', 'memory://')
+# Setup Rate Limiting
 limiter = Limiter(
     get_remote_address,
     app=app,
-    storage_uri=redis_url,
+    storage_uri=redis_url if use_redis else "memory://",
     default_limits=["200 per day", "50 per hour"]
 )
 
-socketio = SocketIO(app, manage_session=False, cors_allowed_origins="*")
+# SocketIO with Redis Message Queue for multi-worker support
+socketio_kwargs = {"manage_session": False, "cors_allowed_origins": "*"}
+if use_redis:
+    socketio_kwargs["message_queue"] = redis_url
+
+socketio = SocketIO(app, **socketio_kwargs)
 
 # --- MULTIPLAYER STATE ---
-# active_rooms maps room_code -> game_info dict
-active_rooms = {}
+# Now moved to Redis (r)
 
 @app.route('/')
 def index():
@@ -169,10 +197,12 @@ def multiplayer_setup():
 
 @app.route('/multiplayer/join/<room_code>')
 def join_multiplayer(room_code):
-    if room_code in active_rooms:
-        if len(active_rooms[room_code]['players']) >= 2:
+    import multiplayer_logic
+    room = multiplayer_logic.get_room(r, room_code)
+    if room:
+        if len(room['players']) >= 2:
             # Check if this user is already in the room (reconnecting)
-            if session.get('sid') not in active_rooms[room_code]['players']:
+            if session.get('sid') not in room['players']:
                 return render_template('room_full.html')
     return render_template('multiplayer_setup.html', room_code=room_code)
 
@@ -199,33 +229,31 @@ def view_lobby():
         elif mode == 'insane': length = 6; repeats = True
         
         secret_code = game_logic.generate_secret_code(length, repeats)
-        room_code = multiplayer_logic.create_room(active_rooms, session['sid'], username, avatar, mode, secret_code)
+        room_code = multiplayer_logic.create_room(r, session['sid'], username, avatar, mode, secret_code)
         
         return render_template('lobby.html', room_code=room_code, mode_str=mode.title(), opponent=None)
         
     elif action == 'join':
         room_code = request.form.get('room_code')
-        success, msg = multiplayer_logic.join_room(active_rooms, room_code, session['sid'], username, avatar)
+        success, msg = multiplayer_logic.join_room(r, room_code, session['sid'], username, avatar)
         if not success:
             if msg == "Room is full.":
                 return render_template('room_full.html')
             return msg, 400
             
-        room = active_rooms[room_code]
+        room = multiplayer_logic.get_room(r, room_code)
         host_sid = room['host']
         host = room['players'][host_sid]
-        
-        # We joined successfully, but emit goes via socket when they actually connect to the page.
-        # Wait, the page requires loading first, so the emit happens in the socket event below.
         
         return render_template('lobby.html', room_code=room_code, mode_str=room['mode'].title(), opponent=host)
 
 @app.route('/multiplayer/game/<room_code>')
 def multiplayer_game(room_code):
-    if room_code not in active_rooms:
+    import multiplayer_logic
+    room = multiplayer_logic.get_room(r, room_code)
+    if not room:
         return "Room not found", 404
         
-    room = active_rooms[room_code]
     sid = session.get('sid')
     if sid not in room['players']:
         return "Not part of this game", 403
@@ -247,13 +275,14 @@ def on_join_lobby(data):
     room_code = data['room']
     join_room(room_code)
     
-    # Check if this room has two players, if so, emit player_joined to the host
-    if room_code in active_rooms:
-        room = active_rooms[room_code]
+    import multiplayer_logic
+    room = multiplayer_logic.get_room(r, room_code)
+    if room:
         sid = session.get('sid')
         # Mark as not ready initially
         if sid in room['players']:
             room['players'][sid]['lobby_ready'] = False
+            multiplayer_logic.save_room(r, room_code, room)
             
         if len(room['players']) == 2:
             guest_data = room['players'][sid] if sid != room['host'] else None
@@ -266,24 +295,27 @@ def on_player_ready_lobby(data):
     room_code = data['room']
     sid = session.get('sid')
     
-    if room_code in active_rooms:
-        room = active_rooms[room_code]
+    import multiplayer_logic
+    room = multiplayer_logic.get_room(r, room_code)
+    if room:
         if sid in room['players']:
             room['players'][sid]['lobby_ready'] = True
-            emit('lobby_player_ready', {'player_sid': sid}, room=room_code, include_self=False)
             
             # Check if both players are ready
             if len(room['players']) == 2 and all(p.get('lobby_ready') for p in room['players'].values()):
-                import multiplayer_logic
-                multiplayer_logic.start_game(active_rooms, room_code)
+                multiplayer_logic.start_game(r, room_code)
                 emit('game_start', room=room_code)
+            else:
+                multiplayer_logic.save_room(r, room_code, room)
+                emit('lobby_player_ready', {'player_sid': sid}, room=room_code, include_self=False)
 
 @socketio.on('join_game')
 def on_join_game(data):
     room_code = data['room']
     join_room(room_code)
     
-    room = active_rooms.get(room_code)
+    import multiplayer_logic
+    room = multiplayer_logic.get_room(r, room_code)
     if room and room['status'] == 'playing':
         sid = session.get('sid')
         player = room['players'].get(sid)
@@ -295,20 +327,23 @@ def on_join_game(data):
         # Only notify "reconnected" if they actually disconnected previously
         if player and player.get('disconnected'):
             player['disconnected'] = False
+            multiplayer_logic.save_room(r, room_code, room)
             emit('opponent_reconnected', {'username': player['username']}, room=room_code, include_self=False)
 
 @socketio.on('leave_match')
 def on_leave_match(data):
     room_code = data.get('room')
     sid = session.get('sid')
-    if room_code in active_rooms:
-        room = active_rooms[room_code]
+    import multiplayer_logic
+    room = multiplayer_logic.get_room(r, room_code)
+    if room:
         if sid in room['players']:
             del room['players'][sid]
             # If no players left, or if game was finished and one leaves, we can cleanup
             if not room['players'] or room['status'] == 'finished':
-                if room_code in active_rooms:
-                    del active_rooms[room_code]
+                r.delete(f"room:{room_code}")
+            else:
+                multiplayer_logic.save_room(r, room_code, room)
         leave_room(room_code)
     
 @socketio.on('send_chat')
@@ -325,13 +360,12 @@ def on_submit_guess(data):
     room_code = data['room']
     guess = data['guess']
     
-    if room_code not in active_rooms:
-        return
+    import multiplayer_logic
+    room = multiplayer_logic.get_room(r, room_code)
+    if not room: return
         
-    room = active_rooms[room_code]
     sid = session.get('sid')
-    if sid not in room['players']:
-        return
+    if sid not in room['players']: return
         
     player = room['players'][sid]
     secret = room['secret_code']
@@ -363,14 +397,23 @@ def on_submit_guess(data):
             player['wins'] = 0
         player['wins'] += 1
         
+        # Find opponent for game_over emit
+        opponent_name = 'Your Opponent'
+        for pid, pdata in room['players'].items():
+            if pid != sid:
+                opponent_name = pdata['username']
+                break
+
+        multiplayer_logic.save_room(r, room_code, room)
         emit('game_over', {
             'winner': player['username'],
             'winner_sid': sid,
-            'loser': opponent['username'] if 'opponent' in locals() and opponent else 'Your Opponent',
+            'loser': opponent_name,
             'secret_code': secret,
             'attempts': player['attempts']
         }, room=room_code)
     else:
+        multiplayer_logic.save_room(r, room_code, room)
         # Broadcast that opponent made a guess
         emit('opponent_guess', {
             'player_sid': sid,
@@ -381,20 +424,25 @@ def on_submit_guess(data):
 @socketio.on('disconnect')
 def on_disconnect():
     sid = session.get('sid')
-    if not sid:
-        return
+    if not sid: return
         
-    for room_code, room in list(active_rooms.items()):
-        if sid in room['players']:
+    import multiplayer_logic
+    room_keys = r.keys("room:*")
+    for key in room_keys:
+        room_code = key.split(":")[-1]
+        room = multiplayer_logic.get_room(r, room_code)
+        if room and sid in room['players']:
             room['players'][sid]['disconnected'] = True
+            multiplayer_logic.save_room(r, room_code, room)
             if len(room['players']) > 1:
                 emit('opponent_disconnected', {'username': room['players'][sid]['username']}, room=room_code)
 
 @socketio.on('surrender_game')
 def on_surrender(data):
     room_code = data['room']
-    if room_code not in active_rooms: return
-    room = active_rooms[room_code]
+    import multiplayer_logic
+    room = multiplayer_logic.get_room(r, room_code)
+    if not room: return
     sid = session.get('sid')
     if sid not in room['players']: return
     
@@ -416,6 +464,7 @@ def on_surrender(data):
         if 'wins' not in winner: winner['wins'] = 0
         winner['wins'] += 1
         
+        multiplayer_logic.save_room(r, room_code, room)
         emit('game_over', {
             'winner': winner['username'],
             'winner_sid': winner_sid,
@@ -427,14 +476,14 @@ def on_surrender(data):
 @socketio.on('request_rematch')
 def on_request_rematch(data):
     room_code = data['room']
-    if room_code not in active_rooms: return
-    room = active_rooms[room_code]
+    import multiplayer_logic
+    room = multiplayer_logic.get_room(r, room_code)
+    if not room: return
     sid = session.get('sid')
     if sid not in room['players']: return
     
     player = room['players'][sid]
     player['rematch_requested'] = True
-    emit('rematch_requested', {'player_sid': sid, 'username': player['username']}, room=room_code)
     
     # Check if both players requested a rematch
     if len(room['players']) == 2 and all(p.get('rematch_requested') for p in room['players'].values()):
@@ -457,7 +506,11 @@ def on_request_rematch(data):
             p['rematch_requested'] = False
             p['history'] = []
             
+        multiplayer_logic.save_room(r, room_code, room)
         emit('rematch_accepted', room=room_code)
+    else:
+        multiplayer_logic.save_room(r, room_code, room)
+        emit('rematch_requested', {'player_sid': sid, 'username': player['username']}, room=room_code)
 
 # --- API ENDPOINTS ---
 
