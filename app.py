@@ -290,6 +290,7 @@ def on_request_lobby_sync(data):
             'players': room['players'],
             'host': room['host']
         })
+@socketio.on('join_lobby')
 def on_join_lobby(data):
     room_code = data['room']
     join_room(room_code)
@@ -306,7 +307,11 @@ def on_join_lobby(data):
             guest_data = room['players'][sid] if sid != room['host'] else None
             # If the current socket is the guest joining, notify the host
             if guest_data:
-                emit('player_joined', {'username': guest_data['username'], 'avatar': guest_data['avatar']}, room=room_code, include_self=False)
+                emit('player_joined', {
+                    'username': guest_data['username'], 
+                    'avatar': guest_data['avatar'],
+                    'lobby_ready': False
+                }, room=room_code, include_self=False)
 
 @socketio.on('player_ready_lobby')
 def on_player_ready_lobby(data):

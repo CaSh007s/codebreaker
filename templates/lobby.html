@@ -236,8 +236,8 @@
       });
 
       socket.on("lobby_sync_data", (data) => {
-        // Sync players visibility
-        const mySid = socket.id;
+        // Use the session SID passed from flask to identify "self"
+        const mySid = "{{ session.get('sid') }}";
         for (const sid in data.players) {
           if (sid !== mySid) {
             updateOpponentUI(data.players[sid]);
