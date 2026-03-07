@@ -8,9 +8,9 @@ import uuid
 import time
 import os
 import threading
-
 import redis
 import json
+import multiplayer_logic
 
 # Setup Redis Client
 redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379')
@@ -72,7 +72,13 @@ limiter = Limiter(
 )
 
 # SocketIO with Redis Message Queue for multi-worker support
-socketio_kwargs = {"manage_session": False, "cors_allowed_origins": "*"}
+socketio_kwargs = {
+    "manage_session": False, 
+    "cors_allowed_origins": "*",
+    "ping_timeout": 10,
+    "ping_interval": 5,
+    "async_mode": "gevent"
+}
 if use_redis:
     socketio_kwargs["message_queue"] = redis_url
 
@@ -204,7 +210,6 @@ def multiplayer_setup():
 
 @app.route('/multiplayer/join/<room_code>')
 def join_multiplayer(room_code):
-    import multiplayer_logic
     room = multiplayer_logic.get_room(r, room_code)
     if room:
         if len(room['players']) >= 2:
@@ -256,7 +261,6 @@ def view_lobby():
 
 @app.route('/multiplayer/game/<room_code>')
 def multiplayer_game(room_code):
-    import multiplayer_logic
     room = multiplayer_logic.get_room(r, room_code)
     if not room:
         return "Room not found", 404
@@ -277,12 +281,19 @@ def multiplayer_game(room_code):
 
 # --- SOCKET EVENTS ---
 
-@socketio.on('join_lobby')
+@socketio.on('request_lobby_sync')
+def on_request_lobby_sync(data):
+    room_code = data['room']
+    room = multiplayer_logic.get_room(r, room_code)
+    if room:
+        emit('lobby_sync_data', {
+            'players': room['players'],
+            'host': room['host']
+        })
 def on_join_lobby(data):
     room_code = data['room']
     join_room(room_code)
     
-    import multiplayer_logic
     room = multiplayer_logic.get_room(r, room_code)
     if room:
         sid = session.get('sid')
@@ -302,7 +313,6 @@ def on_player_ready_lobby(data):
     room_code = data['room']
     sid = session.get('sid')
     
-    import multiplayer_logic
     room = multiplayer_logic.get_room(r, room_code)
     if room:
         if sid in room['players']:
@@ -321,7 +331,6 @@ def on_join_game(data):
     room_code = data['room']
     join_room(room_code)
     
-    import multiplayer_logic
     room = multiplayer_logic.get_room(r, room_code)
     if room and room['status'] == 'playing':
         sid = session.get('sid')
@@ -341,7 +350,6 @@ def on_join_game(data):
 def on_leave_match(data):
     room_code = data.get('room')
     sid = session.get('sid')
-    import multiplayer_logic
     room = multiplayer_logic.get_room(r, room_code)
     if room:
         if sid in room['players']:
@@ -367,7 +375,6 @@ def on_submit_guess(data):
     room_code = data['room']
     guess = data['guess']
     
-    import multiplayer_logic
     room = multiplayer_logic.get_room(r, room_code)
     if not room: return
         
@@ -433,10 +440,8 @@ def on_disconnect():
     sid = session.get('sid')
     if not sid: return
         
-    import multiplayer_logic
-    room_keys = r.keys("room:*")
-    for key in room_keys:
-        room_code = key.split(":")[-1]
+    room_code = multiplayer_logic.get_room_code_by_sid(r, sid)
+    if room_code:
         room = multiplayer_logic.get_room(r, room_code)
         if room and sid in room['players']:
             room['players'][sid]['disconnected'] = True
@@ -447,7 +452,6 @@ def on_disconnect():
 @socketio.on('surrender_game')
 def on_surrender(data):
     room_code = data['room']
-    import multiplayer_logic
     room = multiplayer_logic.get_room(r, room_code)
     if not room: return
     sid = session.get('sid')
@@ -483,7 +487,6 @@ def on_surrender(data):
 @socketio.on('request_rematch')
 def on_request_rematch(data):
     room_code = data['room']
-    import multiplayer_logic
     room = multiplayer_logic.get_room(r, room_code)
     if not room: return
     sid = session.get('sid')

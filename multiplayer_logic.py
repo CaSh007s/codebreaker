@@ -20,8 +20,16 @@ def save_room(redis_client, room_code, room_data):
     """Internal helper to save room data to Redis with a 24-hour expiration."""
     redis_client.setex(f"room:{room_code}", 86400, json.dumps(room_data))
 
+def map_sid_to_room(redis_client, sid, room_code):
+    """Map a session SID to a specific room code for instant lookup."""
+    redis_client.setex(f"sid_to_room:{sid}", 86400, room_code)
+
+def get_room_code_by_sid(redis_client, sid):
+    """Retrieve the room code associated with a session SID."""
+    return redis_client.get(f"sid_to_room:{sid}")
+
 def create_room(redis_client, host_sid, username, avatar, mode, secret_code):
-    """Creates a new multiplayer room in Redis."""
+    """Creates a new multiplayer room in Redis and maps the host's SID."""
     room_code = generate_room_code()
     # Ensure uniqueness
     while redis_client.exists(f"room:{room_code}"):
@@ -45,10 +53,11 @@ def create_room(redis_client, host_sid, username, avatar, mode, secret_code):
         'created_at': time.time()
     }
     save_room(redis_client, room_code, room_data)
+    map_sid_to_room(redis_client, host_sid, room_code)
     return room_code
 
 def join_room(redis_client, room_code, guest_sid, username, avatar):
-    """Allows a guest to join an existing room in Redis."""
+    """Allows a guest to join an existing room in Redis and maps their SID."""
     room = get_room(redis_client, room_code)
     if not room:
         return False, "Room not found."
@@ -67,6 +76,7 @@ def join_room(redis_client, room_code, guest_sid, username, avatar):
         'finish_time': None
     }
     save_room(redis_client, room_code, room)
+    map_sid_to_room(redis_client, guest_sid, room_code)
     return True, "Joined"
 
 def start_game(redis_client, room_code):

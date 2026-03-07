@@ -221,24 +221,44 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <script>
-      const socket = io();
+      const socket = io({
+        transports: ["websocket", "polling"],
+        upgrade: true,
+        reconnection: true,
+        reconnectionAttempts: 10,
+      });
       const roomCode = "{{ room_code }}";
 
       socket.on("connect", () => {
         socket.emit("join_lobby", { room: roomCode });
+        // Handshake: Request full state immediately for reliability
+        socket.emit("request_lobby_sync", { room: roomCode });
+      });
+
+      socket.on("lobby_sync_data", (data) => {
+        // Sync players visibility
+        const mySid = socket.id;
+        for (const sid in data.players) {
+          if (sid !== mySid) {
+            updateOpponentUI(data.players[sid]);
+          }
+        }
       });
 
       socket.on("player_joined", (data) => {
+        updateOpponentUI(data);
+      });
+
+      function updateOpponentUI(data) {
         const oppContainer = document.getElementById("opponent-container");
         oppContainer.innerHTML = `
                 <img src="${data.avatar}">
                 <div class="player-name">${data.username}</div>
-                <div id="opp-status-badge" class="status-badge waiting">Waiting</div>
+                <div id="opp-status-badge" class="status-badge ${data.lobby_ready ? "" : "waiting"}">${data.lobby_ready ? "Ready" : "Waiting"}</div>
             `;
-      });
+      }
 
       socket.on("lobby_player_ready", (data) => {
-        // If the opponent is the one who readied up
         const oppContainer = document.getElementById("opponent-container");
         if (oppContainer) {
           const badge = oppContainer.querySelector(".status-badge");

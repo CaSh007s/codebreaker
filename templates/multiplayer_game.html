@@ -1054,7 +1054,12 @@
       {{ my_history | tojson | safe }}
     </script>
     <script>
-      const socket = io();
+      const socket = io({
+        transports: ["websocket", "polling"],
+        upgrade: true,
+        reconnection: true,
+        reconnectionAttempts: 10,
+      });
       const roomCode = "{{ room_code }}";
       const mySid = "{{ session.get('sid') }}";
       const gameLength = Number("{{ length|default(4) }}");
