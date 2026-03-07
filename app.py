@@ -81,6 +81,13 @@ socketio = SocketIO(app, **socketio_kwargs)
 # --- MULTIPLAYER STATE ---
 # Now moved to Redis (r)
 
+@app.after_request
+def add_header(response):
+    """Add Cache-Control headers for static assets."""
+    if request.path.startswith('/static/'):
+        response.headers['Cache-Control'] = 'public, max-age=31536000'
+    return response
+
 @app.route('/')
 def index():
     return render_template('index.html')
