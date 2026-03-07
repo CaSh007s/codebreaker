@@ -10,14 +10,25 @@ import os
 import threading
 
 def cleanup_stale_rooms():
-    """Background task to remove rooms older than 15 minutes (900 seconds)."""
+    """Background task to remove rooms that are empty or stale."""
     while True:
-        time.sleep(60) # check every minute
+        time.sleep(300) # check every 5 minutes
         now = time.time()
         for room_code in list(active_rooms.keys()):
             room = active_rooms[room_code]
+            players = room.get('players', {})
+            
+            # 1. Dissolve if empty (0 players)
+            if not players:
+                del active_rooms[room_code]
+                continue
+                
+            # 2. Dissolve if stale (e.g., created > 15 mins ago and no active/connected players)
+            # Use created_at or start_time for staleness
             start = room.get('start_time') or room.get('created_at', now)
-            if now - start > 900: # 15 minutes limit
+            all_disconnected = all(p.get('disconnected', False) for p in players.values())
+            
+            if now - start > 900 and all_disconnected: # 15 minutes limit + all disconnected
                 del active_rooms[room_code]
 
 # Start the background thread

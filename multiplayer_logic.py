@@ -28,7 +28,8 @@ def create_room(active_rooms, host_sid, username, avatar, mode, secret_code):
             }
         },
         'host': host_sid,
-        'start_time': None
+        'start_time': None,
+        'created_at': time.time()
     }
     return room_code
 
