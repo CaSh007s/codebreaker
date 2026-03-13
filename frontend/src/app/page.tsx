@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect } from "react";
+import { useRef, useEffect } from "react";
 import { useGameStore } from "@/store/useGameStore";
 
 export default function Home() {
@@ -97,12 +97,30 @@ export default function Home() {
 
 function Board() {
     const { guesses, currentGuess, codeLength, status } = useGameStore();
+    const scrollRef = useRef<HTMLDivElement>(null);
     
-    const maxRows = 8;
-    const rows = Array.from({ length: maxRows });
+    // Auto-scroll to bottom when a new guess is added
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTo({
+                top: scrollRef.current.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+    }, [guesses.length]);
+
+    // Render all existing guesses + 1 active row if game is active
+    const totalRows = status === 'active' ? guesses.length + 1 : guesses.length;
+    // Always show at least some empty rows for aesthetic if board is empty
+    const displayRows = Math.max(totalRows, 6);
+    const rows = Array.from({ length: displayRows });
 
     return (
-        <div className="flex flex-col gap-1.5 w-full">
+        <div 
+            ref={scrollRef}
+            className="flex flex-col gap-1.5 w-full overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#3a3a3c] scrollbar-track-transparent custom-scrollbar"
+            style={{ maxHeight: '100%' }}
+        >
             {rows.map((_, i) => {
                 const guessObj = guesses[i];
                 const isCurrent = i === guesses.length && status === 'active';
@@ -227,7 +245,7 @@ function Keyboard() {
             <div className="grid grid-cols-7 gap-1.5 mt-1">
                 <button 
                     onClick={removeDigit}
-                    className="col-span-2 h-10 sm:h-12 bg-[#818384] hover:bg-[#707273] active:bg-[#565758] text-white font-bold rounded uppercase text-[10px] tracking-widest transition-colors"
+                    className="col-span-2 h-10 sm:h-12 bg-[#22c55e] hover:bg-[#16a34a] active:bg-[#15803d] text-white font-bold rounded uppercase text-[10px] tracking-widest transition-colors shadow-lg shadow-green-900/20"
                 >
                     DEL
                 </button>
@@ -237,7 +255,7 @@ function Keyboard() {
                     className={`
                         col-span-5 h-10 sm:h-12 font-bold rounded uppercase text-xs tracking-widest transition-all
                         ${currentGuess.length === codeLength && status === 'active' && !isLoading
-                            ? 'bg-[#6ca965] hover:bg-[#5a8d54] text-white cursor-pointer' 
+                            ? 'bg-[#166534] hover:bg-[#14532d] text-white cursor-pointer shadow-lg shadow-green-900/30' 
                             : 'bg-[#565758] text-[#818384] cursor-not-allowed'}
                         ${isLoading ? 'animate-pulse' : ''}
                     `}

@@ -35,7 +35,7 @@ async def create_game(request: NewGameRequest):
         mode=request.mode,
         status=GameStatus.ACTIVE,
         attempts=0,
-        max_attempts=request.max_attempts,
+        max_attempts=request.max_attempts, # Defaults to None if not provided
         created_at=datetime.utcnow()
     )
     
@@ -45,7 +45,7 @@ async def create_game(request: NewGameRequest):
         game_id=game_id,
         code_length=request.code_length,
         mode=request.mode,
-        max_attempts=request.max_attempts
+        max_attempts=game.max_attempts
     )
 
 @app.post("/game/{game_id}/guess", response_model=GuessResponse)
