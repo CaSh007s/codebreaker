@@ -29,36 +29,34 @@ export default function Home() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-4 bg-slate-950 sm:p-24 overflow-hidden selection:bg-indigo-500/30">
-      <div className="z-10 w-full max-w-md flex flex-col items-center gap-6">
+    <main className="flex h-screen w-full flex-col items-center bg-[#121213] text-slate-100 overflow-hidden py-4 px-2 sm:py-8">
+      <div className="flex-none w-full max-w-md flex flex-col items-center mb-4 sm:mb-8">
         <motion.header 
-            initial={{ y: -20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             className="text-center"
         >
-          <h1 className="text-5xl font-bold tracking-tighter sm:text-7xl font-serif text-slate-100 mb-2 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">
+          <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl font-serif mb-1">
             CODEBREAKER
           </h1>
-          <div className="flex items-center justify-center gap-2">
-            <span className="h-px w-8 bg-slate-800" />
-            <p className="text-slate-500 font-mono text-[10px] uppercase tracking-[0.3em]">
-                LOGIC_RECON_v1.0
-            </p>
-            <span className="h-px w-8 bg-slate-800" />
-          </div>
+          <p className="text-[#565758] font-mono text-[8px] uppercase tracking-[0.3em]">
+              LOGIC_RECON_v1.0
+          </p>
         </motion.header>
+      </div>
 
-        <div className="w-full grow flex flex-col gap-2">
-            <Board />
-        </div>
+      <div className="grow w-full max-w-md flex flex-col justify-center overflow-hidden px-2">
+        <Board />
+      </div>
 
+      <div className="flex-none w-full max-w-md mt-4">
         <AnimatePresence>
             {error && (
                 <motion.div 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="text-red-400 font-mono text-xs uppercase bg-red-400/10 border border-red-400/20 px-4 py-2 rounded-full"
+                    className="text-red-400 font-mono text-[10px] uppercase bg-red-400/10 border border-red-400/20 px-3 py-1.5 rounded-full mx-auto w-fit mb-4"
                 >
                     ERROR: {error}
                 </motion.div>
@@ -70,17 +68,19 @@ export default function Home() {
                 <motion.div 
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    className="text-center p-6 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-2xl shadow-2xl z-20"
+                    className="absolute inset-0 flex items-center justify-center bg-[#121213]/80 backdrop-blur-sm z-50 p-6"
                 >
-                    <h2 className={`text-3xl font-bold mb-4 tracking-tight ${status === 'solved' ? 'text-emerald-400' : 'text-slate-300'}`}>
-                        {status === 'solved' ? 'SYSTEM CRACKED' : 'ACCESS DENIED'}
-                    </h2>
-                    <button 
-                        onClick={() => startNewGame()}
-                        className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all hover:scale-105 active:scale-95 shadow-lg shadow-indigo-600/20"
-                    >
-                        NEW SESSION
-                    </button>
+                    <div className="bg-[#121213] border border-[#3a3a3c] p-8 rounded-xl shadow-2xl text-center max-w-xs w-full">
+                        <h2 className={`text-2xl font-bold mb-6 tracking-tight ${status === 'solved' ? 'text-[#6ca965]' : 'text-[#787c7f]'}`}>
+                            {status === 'solved' ? 'SYSTEM CRACKED' : 'ACCESS DENIED'}
+                        </h2>
+                        <button 
+                            onClick={() => startNewGame()}
+                            className="w-full py-3 bg-[#6ca965] hover:bg-[#5a8d54] text-white font-bold rounded transition-all active:scale-95"
+                        >
+                            NEW SESSION
+                        </button>
+                    </div>
                 </motion.div>
             )}
         </AnimatePresence>
@@ -88,8 +88,8 @@ export default function Home() {
         <Keyboard />
       </div>
 
-      <footer className="mt-8 text-slate-700 font-mono text-[9px] uppercase tracking-[0.4em] opacity-50">
-        &copy; 2026 ANTIGRAVITY_LABS // SHADOW_ARCH
+      <footer className="flex-none mt-4 text-[#565758] font-mono text-[8px] uppercase tracking-[0.4em]">
+        &copy; 2026 CODEBREAKER // LOGIC_RECON
       </footer>
     </main>
   );
@@ -102,7 +102,7 @@ function Board() {
     const rows = Array.from({ length: maxRows });
 
     return (
-        <div className="flex flex-col gap-2 w-full">
+        <div className="flex flex-col gap-1.5 w-full">
             {rows.map((_, i) => {
                 const guessObj = guesses[i];
                 const isCurrent = i === guesses.length && status === 'active';
@@ -131,9 +131,9 @@ function GuessRow({ content, codeLength, feedback, isActive, isCompleted }: { co
     return (
         <motion.div 
             layout
-            className={`flex items-center gap-4 w-full p-1.5 rounded-xl transition-colors ${isActive ? 'bg-indigo-500/5 border border-indigo-500/10' : 'border border-transparent'}`}
+            className={`flex items-center gap-3 w-full p-1 rounded-lg transition-colors ${isActive ? 'bg-[#3a3a3c]/10 border border-[#3a3a3c]/30' : 'border border-transparent'}`}
         >
-            <div className="flex gap-2.5 grow justify-center">
+            <div className="flex gap-1.5 grow justify-center">
                 {placeholders.map((_, i) => (
                     <DigitTile 
                         key={i} 
@@ -158,10 +158,10 @@ function DigitTile({ digit, isActive, isCompleted, delay }: { digit: string, isA
             animate={isCompleted ? { rotateX: [0, 90, 0] } : {}}
             transition={{ duration: 0.5, delay }}
             className={`
-                w-12 h-14 sm:w-16 sm:h-20 flex items-center justify-center text-3xl sm:text-4xl font-mono font-bold border-2 transition-all duration-200 rounded-lg
-                ${digit ? 'border-slate-500 bg-slate-900 text-slate-100 shadow-inner' : 'border-slate-800/50 bg-slate-950 text-slate-800'}
-                ${isActive ? 'border-indigo-500/50 ring-4 ring-indigo-500/10' : ''}
-                ${isCompleted ? 'border-slate-700 bg-slate-900/40 opacity-80' : ''}
+                w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-xl sm:text-2xl font-mono font-bold border-2 transition-all duration-200 rounded
+                ${digit ? 'border-[#565758] bg-[#121213] text-white' : 'border-[#3a3a3c] bg-[#121213] text-[#3a3a3c]'}
+                ${isActive ? 'border-[#818384]' : ''}
+                ${isCompleted ? 'border-[#3a3a3c] opacity-100' : ''}
             `}
         >
             {digit}
@@ -184,11 +184,11 @@ function FeedbackDots({ feedback }: { feedback: string[] }) {
                     animate={{ scale: 1 }}
                     transition={{ delay: i * 0.1 + 0.5, type: "spring", stiffness: 300 }}
                     className={`
-                        w-3 h-3 rounded-full border
-                        ${type === 'bull' ? 'bg-emerald-500 border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.4)]' : ''}
-                        ${type === 'cow' ? 'bg-amber-400 border-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.4)]' : ''}
-                        ${type === 'gray' ? 'bg-slate-700 border-slate-600' : ''}
-                        ${type === 'hollow' ? 'bg-transparent border-slate-800/50' : ''}
+                        w-2.5 h-2.5 rounded-full border
+                        ${type === 'bull' ? 'bg-[#6ca965] border-[#6ca965]' : ''}
+                        ${type === 'cow' ? 'bg-[#c8b653] border-[#c8b653]' : ''}
+                        ${type === 'gray' ? 'bg-[#787c7f] border-[#787c7f]' : ''}
+                        ${type === 'hollow' ? 'bg-transparent border-[#3a3a3c]' : ''}
                     `}
                 />
             ))}
@@ -213,7 +213,7 @@ function Keyboard() {
     }, [addDigit, removeDigit, submitGuess, status]);
 
     return (
-        <div className="w-full max-w-sm flex flex-col gap-2 mt-auto">
+        <div className="w-full max-w-sm flex flex-col gap-1.5 mt-auto pb-4">
             <div className="grid grid-cols-5 gap-1.5">
                 {keys.slice(0, 5).map(k => (
                     <KeyButton key={k} label={k} onClick={() => addDigit(k)} />
@@ -227,7 +227,7 @@ function Keyboard() {
             <div className="grid grid-cols-7 gap-1.5 mt-1">
                 <button 
                     onClick={removeDigit}
-                    className="col-span-2 h-12 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-300 font-mono font-bold rounded uppercase text-xs tracking-tighter transition-colors"
+                    className="col-span-2 h-10 sm:h-12 bg-[#818384] hover:bg-[#707273] active:bg-[#565758] text-white font-bold rounded uppercase text-[10px] tracking-widest transition-colors"
                 >
                     DEL
                 </button>
@@ -235,14 +235,14 @@ function Keyboard() {
                     onClick={submitGuess}
                     disabled={currentGuess.length !== codeLength || status !== 'active' || isLoading}
                     className={`
-                        col-span-5 h-12 font-mono font-bold rounded uppercase text-sm tracking-widest transition-all
+                        col-span-5 h-10 sm:h-12 font-bold rounded uppercase text-xs tracking-widest transition-all
                         ${currentGuess.length === codeLength && status === 'active' && !isLoading
-                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)] cursor-pointer' 
-                            : 'bg-slate-900 text-slate-700 cursor-not-allowed border border-slate-800'}
+                            ? 'bg-[#6ca965] hover:bg-[#5a8d54] text-white cursor-pointer' 
+                            : 'bg-[#565758] text-[#818384] cursor-not-allowed'}
                         ${isLoading ? 'animate-pulse' : ''}
                     `}
                 >
-                    {isLoading ? 'PROCESSING...' : 'SUBMIT_GUESS'}
+                    {isLoading ? 'PROCESSING...' : 'SUBMIT'}
                 </button>
             </div>
         </div>
@@ -253,7 +253,7 @@ function KeyButton({ label, onClick }: { label: string, onClick: () => void }) {
     return (
         <button 
             onClick={onClick}
-            className="h-12 sm:h-14 bg-slate-900 border-b-2 border-slate-950 hover:bg-slate-800 active:translate-y-0.5 active:border-b-0 text-slate-200 text-xl font-mono font-bold rounded transition-all flex items-center justify-center"
+            className="h-10 sm:h-12 bg-[#818384] hover:bg-[#707273] active:bg-[#565758] text-white text-lg font-bold rounded transition-all flex items-center justify-center"
         >
             {label}
         </button>
