@@ -18,15 +18,18 @@ interface GameStore {
   error: string | null;
   view: 'landing' | 'game';
   isLoading: boolean;
+  username: string;
+  currentLevelLabel: string;
 
   // Actions
   setView: (view: 'landing' | 'game') => void;
-  startNewGame: (mode?: GameMode, length?: number, maxAttempts?: number, allowRepeats?: boolean) => Promise<void>;
+  startNewGame: (mode?: GameMode, length?: number, maxAttempts?: number, allowRepeats?: boolean, levelLabel?: string) => Promise<void>;
   addDigit: (digit: string) => void;
   removeDigit: () => void;
   submitGuess: () => Promise<void>;
   resetError: () => void;
   setTimer: (t: number) => void;
+  setUsername: (name: string) => void;
 }
 
 export const useGameStore = create<GameStore>()((set, get) => ({
@@ -41,11 +44,20 @@ export const useGameStore = create<GameStore>()((set, get) => ({
   error: null,
   view: "landing",
   isLoading: false,
+  username: "OPERATIVE_GHOST", // Initial placeholder
+  currentLevelLabel: "ROOKIE",
 
   setView: (view) => set({ view }),
 
-  startNewGame: async (mode = "classic", length = 4, maxAttempts = 20, allowRepeats = true) => {
-    set({ isLoading: true, error: null, view: "game" });
+  setUsername: (username) => {
+    set({ username });
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('codebreaker_operative', username);
+    }
+  },
+
+  startNewGame: async (mode = "classic", length = 4, maxAttempts = 20, allowRepeats = true, levelLabel = "ROOKIE") => {
+    set({ isLoading: true, error: null, view: "game", timer: 0, currentLevelLabel: levelLabel });
     try {
       const data = await api.createGame(mode, length, maxAttempts, allowRepeats);
       set({
@@ -97,3 +109,11 @@ export const useGameStore = create<GameStore>()((set, get) => ({
   resetError: () => set({ error: null }),
   setTimer: (timer: number) => set({ timer }),
 }));
+
+// Initialize username from localStorage if available
+if (typeof window !== 'undefined') {
+  const saved = localStorage.getItem('codebreaker_operative');
+  if (saved) {
+    useGameStore.getState().setUsername(saved);
+  }
+}

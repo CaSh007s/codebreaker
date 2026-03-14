@@ -20,6 +20,14 @@ export interface GuessResponse {
   status: GameStatus;
 }
 
+export interface LeaderboardEntry {
+  username: string;
+  level: string;
+  tries: number;
+  time_seconds: number;
+  timestamp: string;
+}
+
 export const api = {
   async createGame(mode: GameMode = "classic", length: number = 4, maxAttempts?: number, allowRepeats: boolean = true): Promise<NewGameResponse> {
     const response = await fetch(`${API_BASE_URL}/game/new`, {
@@ -54,6 +62,22 @@ export const api = {
       method: "POST",
     });
     if (!response.ok) throw new Error("Failed to surrender");
+    return response.json();
+  },
+
+  async getLeaderboard(): Promise<LeaderboardEntry[]> {
+    const response = await fetch(`${API_BASE_URL}/leaderboard`);
+    if (!response.ok) throw new Error("Failed to fetch leaderboard");
+    return response.json();
+  },
+
+  async postScore(score: Omit<LeaderboardEntry, "timestamp">): Promise<LeaderboardEntry> {
+    const response = await fetch(`${API_BASE_URL}/leaderboard`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(score),
+    });
+    if (!response.ok) throw new Error("Failed to post score");
     return response.json();
   }
 };

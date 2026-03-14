@@ -47,3 +47,16 @@ class GameState(BaseModel):
     max_attempts: Optional[int]
     created_at: datetime
     last_guess_at: Optional[datetime] = None
+
+class LeaderboardEntry(BaseModel):
+    username: str
+    level: str
+    tries: int
+    time_seconds: int
+    timestamp: datetime
+
+class LeaderboardRequest(BaseModel):
+    username: str
+    level: str
+    tries: int
+    time_seconds: int

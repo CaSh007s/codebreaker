@@ -3,10 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.models.game import (
     GameMode, GameStatus, GameState, 
     NewGameRequest, NewGameResponse, 
-    GuessRequest, GuessResponse
+    GuessRequest, GuessResponse,
+    LeaderboardEntry, LeaderboardRequest
 )
 from app.services.game_service import GameService
-from typing import Dict
+from typing import Dict, List
 from datetime import datetime
 import uuid
 
@@ -23,6 +24,7 @@ app.add_middleware(
 
 # In-memory store for demo/initial phase
 games: Dict[str, GameState] = {}
+leaderboard: List[LeaderboardEntry] = []
 
 @app.post("/game/new", response_model=NewGameResponse)
 async def create_game(request: NewGameRequest):
@@ -96,6 +98,24 @@ async def surrender_game(game_id: str):
     game.status = GameStatus.SURRENDERED
     
     return {"secret_code": game.secret_code}
+
+@app.get("/leaderboard", response_model=List[LeaderboardEntry])
+async def get_leaderboard():
+    # Sort by tries (ascending), then by time (ascending)
+    sorted_leaderboard = sorted(leaderboard, key=lambda x: (x.tries, x.time_seconds))
+    return sorted_leaderboard[:20]  # Top 20
+
+@app.post("/leaderboard", response_model=LeaderboardEntry)
+async def add_to_leaderboard(request: LeaderboardRequest):
+    entry = LeaderboardEntry(
+        username=request.username,
+        level=request.level,
+        tries=request.tries,
+        time_seconds=request.time_seconds,
+        timestamp=datetime.utcnow()
+    )
+    leaderboard.append(entry)
+    return entry
 
 @app.get("/health")
 async def health_check():
