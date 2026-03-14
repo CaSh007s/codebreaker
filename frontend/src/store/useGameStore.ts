@@ -22,6 +22,7 @@ interface GameStore {
   currentLevelLabel: string;
   timerLimit: number | null; // in seconds
   infiniteMode: boolean;
+  menuState: 'main' | 'single' | 'category';
 
   // Actions
   setView: (view: 'landing' | 'game') => void;
@@ -34,6 +35,7 @@ interface GameStore {
   setUsername: (name: string) => void;
   setTimerLimit: (limit: number | null) => void;
   setInfiniteMode: (active: boolean) => void;
+  setMenuState: (state: 'main' | 'single' | 'category') => void;
 }
 
 export const useGameStore = create<GameStore>()((set, get) => ({
@@ -52,6 +54,7 @@ export const useGameStore = create<GameStore>()((set, get) => ({
   currentLevelLabel: "ROOKIE",
   timerLimit: null,
   infiniteMode: false,
+  menuState: 'main',
 
   setView: (view) => set({ view }),
 
@@ -122,6 +125,7 @@ export const useGameStore = create<GameStore>()((set, get) => ({
   setTimer: (timer: number) => set({ timer }),
   setTimerLimit: (timerLimit: number | null) => set({ timerLimit }),
   setInfiniteMode: (infiniteMode: boolean) => set({ infiniteMode }),
+  setMenuState: (menuState: 'main' | 'single' | 'category') => set({ menuState }),
 }));
 
 // Initialize username from localStorage if available

@@ -58,8 +58,7 @@ function TopHeader() {
 
 
 function LandingView() {
-  const { startNewGame } = useGameStore();
-  const [menuState, setMenuState] = useState<"main" | "single" | "category">("main");
+  const { startNewGame, menuState, setMenuState } = useGameStore();
   const [category, setCategory] = useState<"standard" | "overdrive">("standard");
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
@@ -725,9 +724,13 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
 }
 
 function OperativeIdentity() {
-    const { username, setUsername } = useGameStore();
+    const { username, setUsername, view, menuState } = useGameStore();
     
+    // Only editable on the main landing page
+    const isEditable = view === "landing" && menuState === "main";
+
     const generateNewAlias = () => {
+        if (!isEditable) return;
         const prefixes = ["VOID", "CYPHER", "LOGIC", "GHOST", "SIGNAL", "DECODER", "PROXY"];
         const suffixes = ["WALKER", "KID", "STALKER", "BLADE", "REAPER", "PULSE", "BREAKER"];
         const randomNum = Math.floor(Math.random() * 900) + 100;
@@ -740,15 +743,17 @@ function OperativeIdentity() {
             <span className="text-[#565758] font-mono text-[7px] uppercase tracking-widest">OPERATIVE_ID</span>
             <div className="flex items-center gap-3">
                 <span className="text-[#538d4e] font-mono text-[11px] font-bold tracking-tight drop-shadow-[0_0_5px_rgba(83,141,78,0.3)]">{username}</span>
-                <button 
-                    onClick={generateNewAlias}
-                    className="p-1 hover:bg-[#538d4e]/10 rounded transition-colors group"
-                    title="Regenerate Alias"
-                >
-                    <svg className="w-3.5 h-3.5 text-[#565758] group-hover:text-[#538d4e] transition-all group-hover:rotate-180 duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                </button>
+                {isEditable && (
+                    <button 
+                        onClick={generateNewAlias}
+                        className="p-1 hover:bg-[#538d4e]/10 rounded transition-colors group"
+                        title="Regenerate Alias"
+                    >
+                        <svg className="w-3.5 h-3.5 text-[#565758] group-hover:text-[#538d4e] transition-all group-hover:rotate-180 duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
+                )}
             </div>
         </div>
     );
