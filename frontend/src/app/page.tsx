@@ -195,9 +195,9 @@ function LandingView() {
               />
               <button
                 onClick={() => setMenuState("main")}
-                className="w-full text-[#565758] hover:text-slate-300 font-mono text-[10px] uppercase tracking-widest pt-4"
+                className="w-full py-3 bg-[#cf6679] hover:bg-[#b15668] text-white font-mono text-xs font-bold rounded-lg transition-all active:scale-95 shadow-[0_0_15px_rgba(207,102,121,0.2)]"
               >
-                [BACK_TO_ROOT]
+                BACK_TO_ROOT
               </button>
             </motion.div>
           )}
@@ -254,9 +254,9 @@ function LandingView() {
 
               <button
                 onClick={() => setMenuState("single")}
-                className="w-full text-[#565758] hover:text-slate-300 font-mono text-[10px] uppercase tracking-widest pt-2"
+                className="w-full py-3 bg-[#cf6679] hover:bg-[#b15668] text-white font-mono text-xs font-bold rounded-lg transition-all active:scale-95 shadow-[0_0_15px_rgba(207,102,121,0.2)]"
               >
-                [RECONFIGURE_MODE]
+                RECONFIGURE_MODE
               </button>
             </motion.div>
           )}
@@ -421,26 +421,6 @@ function GameView() {
       className="flex h-full w-full flex-col items-center"
     >
       <div className="flex-none w-full max-w-md flex flex-col items-center mb-4 sm:mb-8">
-        <div className="flex w-full justify-between items-start mb-2">
-          <button
-            onClick={() => setView("landing")}
-            className="text-[#565758] hover:text-slate-300 transition-colors"
-          >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-              />
-            </svg>
-          </button>
-        </div>
         <motion.header
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -928,7 +908,7 @@ function Keyboard() {
       <div className="grid grid-cols-7 gap-1.5 mt-1">
         <button
           onClick={removeDigit}
-          className="col-span-2 h-10 sm:h-12 bg-[#22c55e] hover:bg-[#16a34a] active:bg-[#15803d] text-white font-bold rounded uppercase text-[10px] tracking-widest transition-all shadow-[0_0_15px_rgba(34,197,94,0.1)] active:scale-95"
+          className="col-span-2 h-10 sm:h-12 bg-[#cf6679] hover:bg-[#b15668] active:bg-[#934656] text-white font-bold rounded uppercase text-[10px] tracking-widest transition-all shadow-[0_0_15px_rgba(207,102,121,0.2)] active:scale-95"
         >
           DEL
         </button>
@@ -945,7 +925,7 @@ function Keyboard() {
                           currentGuess.length === codeLength &&
                           status === "active" &&
                           !isLoading
-                            ? "bg-[#166534] hover:bg-[#14532d] text-white cursor-pointer shadow-[0_0_20px_rgba(22,101,52,0.3)] hover:shadow-[0_0_30px_rgba(22,101,52,0.5)] active:scale-95"
+                            ? "bg-[#538d4e] hover:bg-[#58a352] text-black cursor-pointer shadow-[0_0_20px_rgba(83,141,78,0.3)] hover:shadow-[0_0_30px_rgba(83,141,78,0.5)] active:scale-95"
                             : "bg-[#3a3a3c] text-[#565758] cursor-not-allowed"
                         }
                         ${isLoading ? "animate-pulse" : ""}
