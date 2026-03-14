@@ -23,7 +23,9 @@ interface GameStore {
   timerLimit: number | null; // in seconds
   infiniteMode: boolean;
   menuState: 'main' | 'single' | 'category';
+  revealedCode: string | null;
   hintsRevealed: { position: number; digit: string }[];
+  hintsUsed: number;
   struckKeys: string[];
 
   // Actions
@@ -39,6 +41,7 @@ interface GameStore {
   setInfiniteMode: (active: boolean) => void;
   setMenuState: (state: 'main' | 'single' | 'category') => void;
   triggerHint: (position?: number) => Promise<void>;
+  calculateScore: () => number;
   toggleStruckKey: (key: string) => void;
   resignGame: () => Promise<void>;
 }
@@ -60,7 +63,9 @@ export const useGameStore = create<GameStore>()((set, get) => ({
   timerLimit: null,
   infiniteMode: false,
   menuState: 'main',
+  revealedCode: null,
   hintsRevealed: [],
+  hintsUsed: 0,
   struckKeys: [],
 
   setView: (view) => set({ view }),
@@ -80,7 +85,9 @@ export const useGameStore = create<GameStore>()((set, get) => ({
         view: "game", 
         timer: 0, 
         currentLevelLabel: levelLabel,
+        revealedCode: null,
         hintsRevealed: [],
+        hintsUsed: 0,
         struckKeys: []
     });
     try {
@@ -128,6 +135,7 @@ export const useGameStore = create<GameStore>()((set, get) => ({
         guesses: [...state.guesses, { guess: currentGuess, feedback: data.shuffled_feedback }],
         currentGuess: "",
         status: data.status,
+        revealedCode: data.secret_code || null,
         attemptsRemaining: data.attempts_remaining ?? null,
         isLoading: false,
       }));
@@ -164,6 +172,7 @@ export const useGameStore = create<GameStore>()((set, get) => ({
         const data = await api.getHint(gameId, revealedIndices, position);
         set((state: GameStore) => ({
             hintsRevealed: [...state.hintsRevealed, data],
+            hintsUsed: state.hintsUsed + 1,
             isLoading: false
         }));
     } catch (err) {
@@ -181,28 +190,67 @@ export const useGameStore = create<GameStore>()((set, get) => ({
   },
 
   resignGame: async () => {
-    const { gameId, status, isLoading, username, currentLevelLabel, guesses, timer } = get();
+    const { gameId, status, isLoading, username, currentLevelLabel, guesses, timer, timerLimit, infiniteMode } = get();
     if (!gameId || status !== "active" || isLoading) return;
 
     set({ isLoading: true, error: null });
     try {
-        await api.surrender(gameId);
+        const data = await api.surrender(gameId);
         // Post to leaderboard as resigned
         await api.postScore({
             username,
             level: currentLevelLabel,
             tries: guesses.length,
             time_seconds: timer,
-            status: "surrendered"
+            status: "surrendered",
+            score: 0,
+            timerMode: timerLimit !== null,
+            infiniteMode
         });
         
         set({ 
             status: "surrendered",
+            revealedCode: data.secret_code,
             isLoading: false
         });
     } catch (err) {
         set({ error: (err as Error).message, isLoading: false });
     }
+  },
+
+  calculateScore: () => {
+    const { status, guesses, hintsUsed, currentLevelLabel, timerLimit, infiniteMode } = get();
+    if (status !== "solved") return 0;
+
+    // Base points by difficulty
+    const baseScores: Record<string, number> = {
+        ROOKIE: 500,
+        EASY: 1000,
+        MEDIUM: 2000,
+        HARD: 3500,
+        ELITE: 5000,
+        MASTER: 10000
+    };
+    const base = baseScores[currentLevelLabel] || 1000;
+
+    // Efficiency: fewer guesses = higher multiplier (1st try = 2x, degrades)
+    const maxGuessesForLevel: Record<string, number> = {
+        ROOKIE: 25, EASY: 20, MEDIUM: 15, HARD: 10, ELITE: 15, MASTER: 10
+    };
+    const maxG = maxGuessesForLevel[currentLevelLabel] || 20;
+    const efficiencyRatio = Math.max(0.1, 1 - (guesses.length - 1) / maxG);
+
+    // Hint penalty: -150 per hint
+    const hintPenalty = hintsUsed * 150;
+
+    // Timer bonus: 1.5x multiplier if timer was active
+    const timerMultiplier = timerLimit ? 1.5 : 1.0;
+
+    // Unlimited tries penalty: 0.7x multiplier
+    const infiniteMultiplier = infiniteMode ? 0.7 : 1.0;
+
+    const raw = (base * efficiencyRatio - hintPenalty) * timerMultiplier * infiniteMultiplier;
+    return Math.max(50, Math.round(raw));
   },
 }));
 

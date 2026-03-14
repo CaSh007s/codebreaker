@@ -57,60 +57,68 @@ function TopHeader() {
 }
 
 
+interface MissionLevel {
+  label: string;
+  length: number;
+  tries: number;
+  repeats: boolean;
+  desc: string;
+}
+
+const MISSION_LEVELS: Record<string, MissionLevel[]> = {
+  standard: [
+    {
+      label: "ROOKIE",
+      length: 3,
+      tries: 25,
+      repeats: false,
+      desc: "Tactical Induction",
+    },
+    {
+      label: "EASY",
+      length: 4,
+      tries: 20,
+      repeats: false,
+      desc: "Standard Protocol",
+    },
+    {
+      label: "MEDIUM",
+      length: 5,
+      tries: 15,
+      repeats: false,
+      desc: "Advanced Recon",
+    },
+    {
+      label: "HARD",
+      length: 6,
+      tries: 10,
+      repeats: false,
+      desc: "Special Ops",
+    },
+  ],
+  overdrive: [
+    {
+      label: "ELITE",
+      length: 5,
+      tries: 15,
+      repeats: true,
+      desc: "Signal Noise Alert",
+    },
+    {
+      label: "MASTER",
+      length: 6,
+      tries: 10,
+      repeats: true,
+      desc: "Cryptographic Chaos",
+    },
+  ],
+};
+
 function LandingView() {
   const { startNewGame, menuState, setMenuState } = useGameStore();
   const [category, setCategory] = useState<"standard" | "overdrive">("standard");
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
-
-  const levels = {
-    standard: [
-      {
-        label: "ROOKIE",
-        length: 3,
-        tries: 25,
-        repeats: false,
-        desc: "Tactical Induction",
-      },
-      {
-        label: "EASY",
-        length: 4,
-        tries: 20,
-        repeats: false,
-        desc: "Standard Protocol",
-      },
-      {
-        label: "MEDIUM",
-        length: 5,
-        tries: 15,
-        repeats: false,
-        desc: "Advanced Recon",
-      },
-      {
-        label: "HARD",
-        length: 6,
-        tries: 10,
-        repeats: false,
-        desc: "Special Ops",
-      },
-    ],
-    overdrive: [
-      {
-        label: "ELITE",
-        length: 5,
-        tries: 15,
-        repeats: true,
-        desc: "Signal Noise Alert",
-      },
-      {
-        label: "MASTER",
-        length: 6,
-        tries: 10,
-        repeats: true,
-        desc: "Cryptographic Chaos",
-      },
-    ],
-  };
 
   const [selectedLevel, setSelectedLevel] = useState(0);
 
@@ -210,7 +218,7 @@ function LandingView() {
               className="w-full space-y-3"
             >
               <div className="flex flex-col gap-2 max-h-[30dvh] overflow-y-auto pr-1 custom-scrollbar">
-                {levels[category].map((level, i) => (
+                {MISSION_LEVELS[category].map((level, i) => (
                   <button
                     key={level.label}
                     onClick={() => setSelectedLevel(i)}
@@ -240,12 +248,12 @@ function LandingView() {
                   </button>
                 ))}
               </div>
-              
+
               <ModifierPanel />
 
               <button
                 onClick={() => {
-                  const l = levels[category][selectedLevel];
+                  const l = MISSION_LEVELS[category][selectedLevel];
                   startNewGame("classic", l.length, l.tries, l.repeats, l.label);
                 }}
                 className="w-full py-4 bg-[#538d4e] hover:bg-[#58a352] text-black text-lg font-bold rounded-lg transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(83,141,78,0.2)] hover:shadow-[0_0_25px_rgba(83,141,78,0.4)] mt-4"
@@ -444,7 +452,9 @@ function GameView() {
     currentLevelLabel, 
     guesses,
     timerLimit,
-    infiniteMode
+    infiniteMode,
+    calculateScore,
+    revealedCode
   } = useGameStore();
   const [isUploading, setIsUploading] = useState(false);
   const [hasUploaded, setHasUploaded] = useState(false);
@@ -489,7 +499,10 @@ function GameView() {
                 level: currentLevelLabel,
                 tries: guesses.length,
                 time_seconds: timer,
-                status: "solved"
+                status: "solved",
+                score: calculateScore(),
+                timerMode: timerLimit !== null,
+                infiniteMode: useGameStore.getState().infiniteMode
             });
             setHasUploaded(true);
         } catch (e) {
@@ -500,7 +513,7 @@ function GameView() {
       };
       upload();
     }
-  }, [status, hasUploaded, isUploading, username, currentLevelLabel, guesses.length, timer]);
+  }, [status, hasUploaded, isUploading, username, currentLevelLabel, guesses.length, timer, timerLimit, calculateScore]);
 
   return (
     <motion.div
@@ -585,37 +598,118 @@ function GameView() {
         <AnimatePresence>
           {status !== "active" && (
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="absolute inset-0 flex items-center justify-center bg-[#121213]/80 backdrop-blur-sm z-50 p-6"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="absolute inset-0 flex items-center justify-center bg-[#0a0a0b]/90 backdrop-blur-md z-50 p-4"
             >
-              <div className="bg-[#121213] border border-[#3a3a3c] p-8 rounded-xl shadow-2xl text-center max-w-xs w-full">
-                <h2
-                  className={`text-2xl font-bold mb-2 tracking-tight 
-                    ${status === "solved" ? "text-[#538d4e] drop-shadow-[0_0_10px_rgba(83,141,78,0.5)]" : "text-[#787c7f]"}
-                    ${isTimeUp ? "text-red-500" : ""}
-                  `}
-                >
-                  {status === "solved" ? "SYSTEM CRACKED" : (isTimeUp ? "TIME EXPIRED" : "ACCESS DENIED")}
-                </h2>
-                <p className="text-slate-400 font-mono text-xs mb-6 uppercase tracking-widest">
-                  {status === "solved"
-                    ? "Security bypass successful. Entry recorded."
-                    : (isTimeUp ? "Mission window closed. Uplink lost." : "Maximum attempts exceeded. Module locked.")}
-                </p>
-                <button
-                  onClick={() => startNewGame()}
-                  className="w-full py-3 bg-[#538d4e] hover:bg-[#58a352] text-black font-bold rounded transition-all active:scale-95 shadow-[0_0_15px_rgba(83,141,78,0.3)]"
-                >
-                  NEW SESSION
-                </button>
-                <button
-                  onClick={() => setView("landing")}
-                  className="w-full mt-3 py-2 text-[#565758] hover:text-slate-300 font-mono text-[10px] uppercase tracking-widest"
-                >
-                  RETURN_TO_MENU
-                </button>
-              </div>
+              <motion.div
+                initial={{ scale: 0.9, y: 20, opacity: 0 }}
+                animate={{ scale: 1, y: 0, opacity: 1 }}
+                className="bg-[#121213] border border-[#3a3a3c] p-6 sm:p-10 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,1)] border-t-[#565758]/50 text-center max-w-sm w-full space-y-8"
+              >
+                <div className="space-y-2">
+                  <div
+                    className={`flex flex-col items-center leading-none uppercase font-serif font-bold tracking-tighter
+                      ${status === "solved" ? "text-[#538d4e] drop-shadow-[0_0_15px_rgba(83,141,78,0.5)]" : "text-red-500"}
+                    `}
+                  >
+                    {status === "solved" ? (
+                      <>
+                        <span className="text-xl sm:text-2xl opacity-80">MISSION</span>
+                        <span className="text-3xl sm:text-4xl">ACCOMPLISHED</span>
+                      </>
+                    ) : (
+                      <span className="text-3xl sm:text-4xl">
+                        {isTimeUp ? "TIME_EXPIRED" : "MISSION_FAILED"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[#565758] font-mono text-[9px] uppercase tracking-[0.3em]">
+                    {status === "solved" ? "Target Cipher Compromised" : "System Lockdown Initialized"}
+                  </p>
+                </div>
+
+                {revealedCode && (
+                  <div className="py-4 border-y border-[#3a3a3c]/50">
+                    <span className="block text-[#565758] font-mono text-[8px] uppercase tracking-widest mb-2">Target Cipher</span>
+                    <div className="flex justify-center gap-2">
+                      {revealedCode.split('').map((digit, i) => (
+                        <div key={i} className="w-10 h-10 border border-[#538d4e]/30 bg-[#538d4e]/5 flex items-center justify-center text-[#538d4e] font-mono font-bold text-xl rounded">
+                          {digit}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white/5 p-3 rounded-lg border border-white/5">
+                    <span className="block text-[#565758] font-mono text-[7px] uppercase mb-1">Attempts</span>
+                    <span className="text-xl font-bold text-slate-100">{guesses.length}</span>
+                  </div>
+                  <div className="bg-white/5 p-3 rounded-lg border border-white/5">
+                    <span className="block text-[#565758] font-mono text-[7px] uppercase mb-1">Duration</span>
+                    <span className="text-xl font-bold text-slate-100">{formatTime(timer)}</span>
+                  </div>
+                  <div className="bg-white/5 p-3 rounded-lg border border-white/5">
+                    <span className="block text-[#565758] font-mono text-[7px] uppercase mb-1">Hints Used</span>
+                    <span className="text-xl font-bold text-slate-100">{useGameStore.getState().hintsUsed}</span>
+                  </div>
+                  <div className="bg-white/5 p-3 rounded-lg border border-[#538d4e]/20">
+                    <span className="block text-[#538d4e] font-mono text-[7px] uppercase mb-1">Operative Score</span>
+                    <span className="text-xl font-bold text-[#538d4e]">{status === 'solved' ? calculateScore() : '000'}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => {
+                        const levelData = MISSION_LEVELS.standard.find(l => l.label === currentLevelLabel) || MISSION_LEVELS.overdrive.find(l => l.label === currentLevelLabel);
+                        if (levelData) {
+                          startNewGame("classic", levelData.length, levelData.tries, levelData.repeats, levelData.label);
+                        }
+                      }}
+                      className="w-full py-4 bg-white/10 hover:bg-white/20 text-slate-100 font-bold rounded-xl transition-all active:scale-95 border border-white/10 uppercase tracking-widest text-xs"
+                    >
+                      Replay Level
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Find current list and index
+                        const isStandard = MISSION_LEVELS.standard.some(l => l.label === currentLevelLabel);
+                        const list = isStandard ? MISSION_LEVELS.standard : MISSION_LEVELS.overdrive;
+                        const currentIndex = list.findIndex(l => l.label === currentLevelLabel);
+                        const nextIndex = currentIndex + 1;
+                        
+                        if (nextIndex < list.length) {
+                            const nextLevel = list[nextIndex];
+                            startNewGame("classic", nextLevel.length, nextLevel.tries, nextLevel.repeats, nextLevel.label);
+                        } else {
+                            // If end of standard, go to overdrive, or stay at MASTER?
+                            // User said "proceed beyond hard", so let's handle transition if possible
+                            if (isStandard) {
+                                const nextLevel = MISSION_LEVELS.overdrive[0];
+                                startNewGame("classic", nextLevel.length, nextLevel.tries, nextLevel.repeats, nextLevel.label);
+                            } else {
+                                // Already at MASTER
+                                startNewGame("classic", list[currentIndex].length, list[currentIndex].tries, list[currentIndex].repeats, list[currentIndex].label);
+                            }
+                        }
+                      }}
+                      className="w-full py-4 bg-[#538d4e] hover:bg-[#58a352] text-black font-bold rounded-xl transition-all active:scale-95 shadow-[0_0_20px_rgba(83,141,78,0.3)] uppercase tracking-widest text-xs"
+                    >
+                      Next Mission
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => setView("landing")}
+                    className="w-full py-3 bg-[#cf6679] hover:bg-[#b15668] text-white font-bold font-mono text-[10px] rounded-xl uppercase tracking-widest transition-all active:scale-95"
+                  >
+                    EXIT MISSION
+                  </button>
+                </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -654,14 +748,14 @@ function BinaryBackground() {
         <motion.span
           key={i}
           animate={{
-            opacity: [0.2, 1, 0.2],
-            color: ["#565758", "#6ca965", "#565758"],
+            opacity: [0.1, 0.5, 0.1],
           }}
           transition={{
             duration: p.duration,
             repeat: Infinity,
             delay: p.delay,
           }}
+          className="text-[#565758]"
         >
           {p.value}
         </motion.span>
@@ -774,63 +868,111 @@ function LeaderboardModal({ onClose }: { onClose: () => void }) {
 
     useEffect(() => {
         api.getLeaderboard().then((data: LeaderboardEntry[]) => {
-            setEntries(data);
+            const local = api.getLocalLeaderboard();
+            const merged = [...data, ...local];
+            const unique = merged.filter((entry, index, self) => 
+                index === self.findIndex(e => e.timestamp === entry.timestamp && e.username === entry.username)
+            );
+            const statusPriority: Record<string, number> = { solved: 0, surrendered: 1, failed: 2, active: 3 };
+            unique.sort((a, b) => {
+                const sp = (statusPriority[a.status] ?? 99) - (statusPriority[b.status] ?? 99);
+                if (sp !== 0) return sp;
+                return b.score - a.score;
+            });
+            setEntries(unique);
             setLoading(false);
-        }).catch(() => setLoading(false));
+        }).catch(() => {
+            setEntries(api.getLocalLeaderboard());
+            setLoading(false);
+        });
     }, []);
+
+    const handlePurge = () => {
+        api.clearLeaderboard();
+        setEntries([]);
+    };
 
     return (
         <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl"
+            onClick={onClose}
+            className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl cursor-pointer"
         >
             <motion.div 
                 initial={{ scale: 0.95, y: 10, opacity: 0 }}
                 animate={{ scale: 1, y: 0, opacity: 1 }}
-                className="bg-[#0f0f10] border border-[#3a3a3c] p-6 sm:p-8 rounded-2xl max-w-lg w-full shadow-[0_0_50px_rgba(0,0,0,1)] border-t-[#565758]/50 space-y-6"
+                onClick={(e) => e.stopPropagation()}
+                className="bg-[#0f0f10] border border-[#3a3a3c] p-6 sm:p-10 rounded-2xl max-w-4xl w-full shadow-[0_0_50px_rgba(0,0,0,1)] border-t-[#565758]/50 flex flex-col max-h-[80dvh] cursor-default"
             >
-                <div className="flex justify-between items-center border-b border-[#3a3a3c] pb-4">
-                    <h3 className="text-xl font-bold tracking-tight font-serif uppercase text-[#538d4e] drop-shadow-[0_0_10px_rgba(83,141,78,0.3)]">CENTRAL_REGISTRY.reg</h3>
-                    <button onClick={onClose} className="text-[#565758] hover:text-white transition-colors uppercase font-mono text-[10px] bg-white/5 px-2 py-1 rounded">
-                        [CLOSE]
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#3a3a3c] pb-6 shrink-0">
+                    <h3 className="text-xl sm:text-2xl font-bold tracking-tighter font-serif uppercase text-[#538d4e] drop-shadow-[0_0_15px_rgba(83,141,78,0.4)]">CENTRAL_REGISTRY.reg</h3>
+                    <button 
+                        onClick={onClose} 
+                        className="text-[#565758] hover:text-white transition-colors uppercase font-mono text-[10px] sm:text-xs bg-white/5 px-3 py-1.5 rounded border border-white/10 hover:border-white/20 flex items-center gap-2 group"
+                    >
+                        <span className="hidden sm:inline">[CLOSE_TERMINAL]</span>
+                        <span className="sm:hidden">[X]</span>
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500/50 group-hover:bg-red-500 animate-pulse" />
                     </button>
                 </div>
                 
-                <div className="overflow-x-auto">
-                    <table className="w-full font-mono text-[9px] sm:text-[10px] text-left uppercase">
-                        <thead className="text-[#565758] border-b border-[#3a3a3c]/30">
+                <div className="overflow-y-auto overflow-x-auto min-h-0 flex-1 mt-6 no-scrollbar">
+                    <table className="w-full font-mono text-[10px] sm:text-xs text-left uppercase">
+                        <thead className="text-[#565758] border-b border-[#3a3a3c]/30 sticky top-0 bg-[#0f0f10] z-10">
                             <tr>
-                                <th className="pb-2 px-1">RK</th>
-                                <th className="pb-2 px-1">OPERATIVE</th>
-                                <th className="pb-2 px-1">MISSION</th>
-                                <th className="pb-2 px-1">EFF.</th>
-                                <th className="pb-2 px-1">TIME</th>
+                                <th className="pb-3 px-2">RANK</th>
+                                <th className="pb-3 px-2">OPERATIVE_ID</th>
+                                <th className="pb-3 px-2">MISSION_LEVEL</th>
+                                <th className="pb-3 px-2">EFFICIENCY</th>
+                                <th className="pb-3 px-2">DURATION</th>
+                                <th className="pb-3 px-2">MODIFIERS</th>
+                                <th className="pb-3 px-2 text-right">SCORE</th>
                             </tr>
                         </thead>
                         <tbody className="text-slate-300">
                             {loading ? (
-                                <tr><td colSpan={5} className="py-8 text-center animate-pulse text-[#538d4e]">ACCESSING_DECRYPTED_RECORDS...</td></tr>
+                                <tr><td colSpan={7} className="py-12 text-center animate-pulse text-[#538d4e] text-sm">ACCESSING_DECRYPTED_RECORDS...</td></tr>
                             ) : entries.length === 0 ? (
-                                <tr><td colSpan={5} className="py-8 text-center text-[#565758]">NO_SUCCESSFUL_BREACHES_DETECTED</td></tr>
+                                <tr><td colSpan={7} className="py-12 text-center text-[#565758] text-sm">NO_BREACHES_DETECTED_IN_DATABASE</td></tr>
                             ) : entries.map((e, i) => (
                                 <tr key={i} className="border-b border-[#3a3a3c]/10 hover:bg-white/5 transition-colors group">
-                                    <td className="py-3 px-1 text-[#565758]">{(i + 1).toString().padStart(2, '0')}</td>
-                                    <td className="py-3 px-1 text-slate-100 font-bold group-hover:text-[#538d4e] transition-colors">{e.username}</td>
-                                    <td className="py-3 px-1 text-[#c8b653] font-black">{e.level}</td>
-                                    <td className={`py-3 px-1 font-mono text-[8px] ${e.status === 'solved' ? 'text-[#538d4e]' : 'text-red-400 opacity-70'}`}>
-                                        {e.status === 'solved' ? `${e.tries}T` : 'RESIGNED'}
+                                    <td className="py-4 px-2 text-[#565758]">{(i + 1).toString().padStart(2, '0')}</td>
+                                    <td className="py-4 px-2 text-slate-100 font-bold group-hover:text-[#538d4e] transition-colors">{e.username}</td>
+                                    <td className="py-4 px-2 text-[#c8b653] font-black">{e.level}</td>
+                                    <td className={`py-4 px-2 font-mono ${e.status === 'solved' ? 'text-[#538d4e]' : 'text-red-400 opacity-70'}`}>
+                                        {e.status === 'solved' ? `${e.tries} TRIES` : 'RESIGNED'}
                                     </td>
-                                    <td className="py-3 px-1 text-slate-100">{e.status === 'solved' ? `${e.time_seconds}S` : '--'}</td>
+                                    <td className="py-4 px-2 text-slate-100">{e.status === 'solved' ? `${e.time_seconds}s` : '--'}</td>
+                                    <td className="py-4 px-2">
+                                        <div className="flex gap-1.5">
+                                            {e.timerMode && <span className="text-[8px] bg-[#c8b653]/10 text-[#c8b653] border border-[#c8b653]/20 px-2 py-0.5 rounded">TIMER</span>}
+                                            {e.infiniteMode && <span className="text-[8px] bg-[#cf6679]/10 text-[#cf6679] border border-[#cf6679]/20 px-2 py-0.5 rounded">INFINITE</span>}
+                                            {!e.timerMode && !e.infiniteMode && <span className="text-[8px] text-[#565758] border border-white/5 px-2 py-0.5 rounded">STANDARD</span>}
+                                        </div>
+                                    </td>
+                                    <td className={`py-4 px-2 font-bold text-right text-sm ${e.status === 'solved' ? 'text-[#538d4e]' : 'text-[#565758]'}`}>
+                                        {e.status === 'solved' ? e.score.toLocaleString() : '--'}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
 
-                <div className="text-[8px] text-[#565758] font-mono uppercase tracking-[0.3em] text-center italic opacity-80">
-                    High-efficiency breaches synchronized via encrypted uplink.
+                <div className="flex justify-between items-center border-t border-[#3a3a3c] pt-6 mt-6 shrink-0">
+                    <div className="text-[9px] text-[#565758] font-mono uppercase tracking-[0.3em] italic">
+                        Encrypted secure uplink active • {entries.length} records found
+                    </div>
+                    {entries.length > 0 && (
+                        <button 
+                            onClick={handlePurge}
+                            className="text-[#cf6679] hover:bg-[#cf6679]/10 font-mono text-[10px] uppercase font-bold tracking-widest px-4 py-2 rounded border border-[#cf6679]/30 transition-all active:scale-95 shadow-[0_0_15px_rgba(207,102,121,0.1)]"
+                        >
+                            PURGE_REGISTRY_LOGS
+                        </button>
+                    )}
                 </div>
             </motion.div>
         </motion.div>
@@ -864,27 +1006,27 @@ function Board() {
     >
       <div className="flex flex-col gap-1.5 py-2">
         {rows.map((_, i) => {
-        const guessObj = guesses[i];
-        const isCurrent = i === guesses.length && status === "active";
-        const content = guessObj
-          ? guessObj.guess
-          : isCurrent
-            ? currentGuess
-            : "";
-        const feedback = guessObj ? guessObj.feedback : [];
+          const guessObj = guesses[i];
+          const isCurrent = i === guesses.length && status === "active";
+          const content = guessObj
+            ? guessObj.guess
+            : isCurrent
+              ? currentGuess
+              : "";
+          const feedback = guessObj ? guessObj.feedback : [];
 
-        return (
-          <GuessRow
-            key={i}
-            content={content}
-            codeLength={codeLength}
-            feedback={feedback}
-            isActive={isCurrent}
-            isCompleted={!!guessObj}
-            hints={isCurrent ? hintsRevealed : []}
-          />
-        );
-      })}
+          return (
+            <GuessRow
+              key={i}
+              content={content}
+              codeLength={codeLength}
+              feedback={feedback}
+              isActive={isCurrent}
+              isCompleted={!!guessObj}
+              hints={isCurrent ? hintsRevealed : []}
+            />
+          );
+        })}
       </div>
     </div>
   );

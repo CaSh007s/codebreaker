@@ -18,6 +18,7 @@ export interface GuessResponse {
   solved: boolean;
   attempts_remaining?: number;
   status: GameStatus;
+  secret_code?: string;
 }
 
 export interface LeaderboardEntry {
@@ -26,6 +27,9 @@ export interface LeaderboardEntry {
   tries: number;
   time_seconds: number;
   status: GameStatus;
+  score: number;
+  timerMode: boolean;
+  infiniteMode: boolean;
   timestamp: string;
 }
 
@@ -95,6 +99,30 @@ export const api = {
       body: JSON.stringify(score),
     });
     if (!response.ok) throw new Error("Failed to post score");
-    return response.json();
+    const entry = await response.json();
+    // Also persist to localStorage
+    const stored = JSON.parse(localStorage.getItem('codebreaker_leaderboard') || '[]');
+    stored.push(entry);
+    localStorage.setItem('codebreaker_leaderboard', JSON.stringify(stored));
+    return entry;
+  },
+
+  getLocalLeaderboard(): LeaderboardEntry[] {
+    if (typeof window === 'undefined') return [];
+    const stored = localStorage.getItem('codebreaker_leaderboard');
+    if (!stored) return [];
+    const entries: LeaderboardEntry[] = JSON.parse(stored);
+    const statusPriority: Record<string, number> = { solved: 0, surrendered: 1, failed: 2, active: 3 };
+    return entries.sort((a, b) => {
+      const sp = (statusPriority[a.status] ?? 99) - (statusPriority[b.status] ?? 99);
+      if (sp !== 0) return sp;
+      return b.score - a.score;
+    });
+  },
+
+  clearLeaderboard(): void {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('codebreaker_leaderboard');
+    }
   }
 };

@@ -37,6 +37,7 @@ class GuessResponse(BaseModel):
     solved: bool
     attempts_remaining: Optional[int]
     status: GameStatus
+    secret_code: Optional[str] = None
 
 class GameState(BaseModel):
     id: str
@@ -63,6 +64,9 @@ class LeaderboardEntry(BaseModel):
     time_seconds: int
     timestamp: datetime
     status: GameStatus = GameStatus.SOLVED
+    score: int = 0
+    timer_mode: bool = False
+    infinite_mode: bool = False
 
 class LeaderboardRequest(BaseModel):
     username: str
@@ -70,3 +74,6 @@ class LeaderboardRequest(BaseModel):
     tries: int
     time_seconds: int
     status: GameStatus = GameStatus.SOLVED
+    score: int = 0
+    timer_mode: bool = False
+    infinite_mode: bool = False

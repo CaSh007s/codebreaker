@@ -87,7 +87,8 @@ async def submit_guess(game_id: str, request: GuessRequest):
         shuffled_feedback=shuffled_feedback,
         solved=solved,
         attempts_remaining=attempts_remaining,
-        status=game.status
+        status=game.status,
+        secret_code=game.secret_code if game.status != GameStatus.ACTIVE else None
     )
 
 @app.post("/game/{game_id}/surrender")
@@ -142,7 +143,12 @@ async def get_leaderboard():
     }
     sorted_leaderboard = sorted(
         leaderboard, 
-        key=lambda x: (status_priority.get(x.status, 99), x.tries, x.time_seconds)
+        key=lambda x: (
+            status_priority.get(x.status, 99), 
+            -x.score,  # Higher score is better
+            x.tries, 
+            x.time_seconds
+        )
     )
     return sorted_leaderboard[:20]
 
@@ -154,6 +160,9 @@ async def add_to_leaderboard(request: LeaderboardRequest):
         tries=request.tries,
         time_seconds=request.time_seconds,
         status=request.status,
+        score=request.score,
+        timer_mode=request.timer_mode,
+        infinite_mode=request.infinite_mode,
         timestamp=datetime.utcnow()
     )
     leaderboard.append(entry)
