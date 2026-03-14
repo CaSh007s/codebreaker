@@ -55,3 +55,47 @@ class GameService:
                     [FeedbackType.GRAY] * grays)
         random.shuffle(feedback)
         return feedback
+
+    @staticmethod
+    def generate_feedback_map(length: int) -> List[int]:
+        """Generates a fixed permutation of indices [0..length-1].
+        This map stays constant for the entire game, so each feedback 
+        dot position always refers to the same digit slot."""
+        indices = list(range(length))
+        random.shuffle(indices)
+        return indices
+
+    @staticmethod
+    def evaluate_positional(secret: str, guess: str, feedback_map: List[int]) -> List[str]:
+        """Produces per-digit feedback (bull/cow/gray) for each position,
+        then permutes the results through the fixed feedback_map.
+        
+        feedback_map[i] tells us: "output dot i shows the result for digit slot feedback_map[i]"
+        """
+        from collections import Counter
+        length = len(secret)
+        
+        # Step 1: Determine per-position result
+        positional = ["gray"] * length
+        secret_counts = Counter(secret)
+        
+        # First pass: mark bulls
+        remaining_secret = Counter(secret)
+        for idx in range(length):
+            if guess[idx] == secret[idx]:
+                positional[idx] = "bull"
+                remaining_secret[guess[idx]] -= 1
+        
+        # Second pass: mark cows (digits present but wrong position)
+        for idx in range(length):
+            if positional[idx] == "bull":
+                continue
+            if remaining_secret[guess[idx]] > 0:
+                positional[idx] = "cow"
+                remaining_secret[guess[idx]] -= 1
+            # else stays "gray"
+        
+        # Step 2: Permute through the fixed map
+        # output[i] = positional[feedback_map[i]]
+        output = [positional[feedback_map[i]] for i in range(length)]
+        return output

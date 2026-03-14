@@ -31,6 +31,7 @@ leaderboard: List[LeaderboardEntry] = []
 async def create_game(request: NewGameRequest):
     game_id = str(uuid.uuid4())
     secret_code = GameService.generate_secret_code(request.code_length, request.allow_repeats)
+    feedback_map = GameService.generate_feedback_map(request.code_length)
     
     game = GameState(
         id=game_id,
@@ -38,7 +39,8 @@ async def create_game(request: NewGameRequest):
         mode=request.mode,
         status=GameStatus.ACTIVE,
         attempts=0,
-        max_attempts=request.max_attempts, # Defaults to None if not provided
+        max_attempts=request.max_attempts,
+        feedback_map=feedback_map,
         created_at=datetime.utcnow()
     )
     
@@ -68,7 +70,8 @@ async def submit_guess(game_id: str, request: GuessRequest):
     game.last_guess_at = datetime.utcnow()
     
     bulls, cows, gray = GameService.evaluate_guess(game.secret_code, request.guess)
-    shuffled_feedback = [f.value for f in GameService.shuffle_feedback(bulls, cows, gray)]
+    # Static Scramble Protocol: use fixed feedback_map for positional feedback
+    shuffled_feedback = GameService.evaluate_positional(game.secret_code, request.guess, game.feedback_map)
     
     solved = bulls == len(game.secret_code)
     if solved:

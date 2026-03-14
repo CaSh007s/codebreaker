@@ -46,6 +46,7 @@ class GameState(BaseModel):
     status: GameStatus
     attempts: int
     max_attempts: Optional[int]
+    feedback_map: List[int]
     created_at: datetime
     last_guess_at: Optional[datetime] = None
 
