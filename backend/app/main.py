@@ -4,7 +4,8 @@ from app.models.game import (
     GameMode, GameStatus, GameState, 
     NewGameRequest, NewGameResponse, 
     GuessRequest, GuessResponse,
-    LeaderboardEntry, LeaderboardRequest
+    LeaderboardEntry, LeaderboardRequest,
+    HintRequest, HintResponse
 )
 from app.services.game_service import GameService
 from typing import Dict, List
@@ -99,11 +100,51 @@ async def surrender_game(game_id: str):
     
     return {"secret_code": game.secret_code}
 
+@app.post("/game/{game_id}/hint", response_model=HintResponse)
+async def get_hint(game_id: str, request: HintRequest):
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    game = games[game_id]
+    if game.status != GameStatus.ACTIVE:
+        raise HTTPException(status_code=400, detail="Game is no longer active")
+    
+    code_len = len(game.secret_code)
+    all_indices = set(range(code_len))
+    available_indices = list(all_indices - set(request.revealed_indices))
+    
+    if not available_indices:
+        raise HTTPException(status_code=400, detail="No more hints available")
+    
+    if request.target_index is not None:
+        if request.target_index >= code_len or request.target_index < 0:
+            raise HTTPException(status_code=400, detail="Invalid target index")
+        if request.target_index in request.revealed_indices:
+            raise HTTPException(status_code=400, detail="Index already revealed")
+        target_idx = request.target_index
+    else:
+        import random
+        target_idx = random.choice(available_indices)
+    
+    return HintResponse(
+        position=target_idx,
+        digit=game.secret_code[target_idx]
+    )
+
 @app.get("/leaderboard", response_model=List[LeaderboardEntry])
 async def get_leaderboard():
-    # Sort by tries (ascending), then by time (ascending)
-    sorted_leaderboard = sorted(leaderboard, key=lambda x: (x.tries, x.time_seconds))
-    return sorted_leaderboard[:20]  # Top 20
+    # Priority: SOLVED > SURRENDERED > FAILED
+    status_priority = {
+        GameStatus.SOLVED: 0,
+        GameStatus.SURRENDERED: 1,
+        GameStatus.FAILED: 2,
+        GameStatus.ACTIVE: 3
+    }
+    sorted_leaderboard = sorted(
+        leaderboard, 
+        key=lambda x: (status_priority.get(x.status, 99), x.tries, x.time_seconds)
+    )
+    return sorted_leaderboard[:20]
 
 @app.post("/leaderboard", response_model=LeaderboardEntry)
 async def add_to_leaderboard(request: LeaderboardRequest):
@@ -112,6 +153,7 @@ async def add_to_leaderboard(request: LeaderboardRequest):
         level=request.level,
         tries=request.tries,
         time_seconds=request.time_seconds,
+        status=request.status,
         timestamp=datetime.utcnow()
     )
     leaderboard.append(entry)

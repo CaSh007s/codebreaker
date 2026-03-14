@@ -488,7 +488,8 @@ function GameView() {
                 username,
                 level: currentLevelLabel,
                 tries: guesses.length,
-                time_seconds: timer
+                time_seconds: timer,
+                status: "solved"
             });
             setHasUploaded(true);
         } catch (e) {
@@ -543,14 +544,22 @@ function GameView() {
               </span>
             </div>
             
-            {timerLimit && (
-               <div className="flex flex-col items-center px-4 py-1 border border-[#3a3a3c] rounded-md">
-                 <span className="text-[#565758] font-mono text-[8px] uppercase tracking-widest">Attempts</span>
-                 <span className="text-xl font-bold font-mono text-slate-100">
-                    {infiniteMode ? guesses.length : (attemptsRemaining ?? "∞")}
-                 </span>
-               </div>
-            )}
+            <div className="flex flex-col gap-2">
+                <button 
+                  onClick={() => useGameStore.getState().triggerHint()}
+                  disabled={status !== "active" || guesses.length < 1}
+                  className="px-3 py-1 border border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/10 text-[#538d4e] font-mono text-[8px] uppercase tracking-widest rounded transition-all disabled:opacity-30"
+                >
+                    [GET_HINT]
+                </button>
+                <button 
+                  onClick={() => useGameStore.getState().resignGame()}
+                  disabled={status !== "active"}
+                  className="px-3 py-1 border border-red-500/30 bg-red-500/5 hover:bg-red-500/10 text-red-400 font-mono text-[8px] uppercase tracking-widest rounded transition-all disabled:opacity-30"
+                >
+                    [SURRENDER]
+                </button>
+            </div>
           </div>
         </motion.header>
       </div>
@@ -810,8 +819,10 @@ function LeaderboardModal({ onClose }: { onClose: () => void }) {
                                     <td className="py-3 px-1 text-[#565758]">{(i + 1).toString().padStart(2, '0')}</td>
                                     <td className="py-3 px-1 text-slate-100 font-bold group-hover:text-[#538d4e] transition-colors">{e.username}</td>
                                     <td className="py-3 px-1 text-[#c8b653] font-black">{e.level}</td>
-                                    <td className="py-3 px-1">{e.tries}T</td>
-                                    <td className="py-3 px-1 text-slate-100">{e.time_seconds}S</td>
+                                    <td className={`py-3 px-1 font-mono text-[8px] ${e.status === 'solved' ? 'text-[#538d4e]' : 'text-red-400 opacity-70'}`}>
+                                        {e.status === 'solved' ? `${e.tries}T` : 'RESIGNED'}
+                                    </td>
+                                    <td className="py-3 px-1 text-slate-100">{e.status === 'solved' ? `${e.time_seconds}S` : '--'}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -827,7 +838,7 @@ function LeaderboardModal({ onClose }: { onClose: () => void }) {
 }
 
 function Board() {
-  const { guesses, currentGuess, codeLength, status } = useGameStore();
+  const { guesses, currentGuess, codeLength, status, hintsRevealed } = useGameStore();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when a new guess is added
@@ -849,7 +860,7 @@ function Board() {
   return (
     <div
       ref={scrollRef}
-      className="flex flex-col gap-1.5 w-full overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#3a3a3c] scrollbar-track-transparent custom-scrollbar"
+      className="flex flex-col gap-1.5 w-full overflow-y-auto pr-2 custom-scrollbar no-scrollbar"
       style={{ maxHeight: "100%" }}
     >
       {rows.map((_, i) => {
@@ -870,6 +881,7 @@ function Board() {
             feedback={feedback}
             isActive={isCurrent}
             isCompleted={!!guessObj}
+            hints={isCurrent ? hintsRevealed : []}
           />
         );
       })}
@@ -883,13 +895,16 @@ function GuessRow({
   feedback,
   isActive,
   isCompleted,
+  hints = []
 }: {
   content: string;
   codeLength: number;
   feedback: string[];
   isActive: boolean;
   isCompleted: boolean;
+  hints?: { position: number; digit: string }[];
 }) {
+  const { triggerHint } = useGameStore();
   const digits = content.split("");
   const placeholders = Array.from({ length: codeLength });
 
@@ -899,15 +914,20 @@ function GuessRow({
       className={`flex items-center gap-3 w-full p-1 rounded-lg transition-colors ${isActive ? "bg-[#3a3a3c]/10 border border-[#3a3a3c]/30" : "border border-transparent"}`}
     >
       <div className="flex gap-1.5 grow justify-center">
-        {placeholders.map((_, i) => (
-          <DigitTile
-            key={i}
-            digit={digits[i] || ""}
-            isActive={isActive && i === digits.length}
-            isCompleted={isCompleted}
-            delay={i * 0.1}
-          />
-        ))}
+        {placeholders.map((_, i) => {
+          const hint = hints.find(h => h.position === i);
+          return (
+            <DigitTile
+                key={i}
+                digit={hint ? hint.digit : (digits[i] || "")}
+                isActive={isActive && i === digits.length}
+                isCompleted={isCompleted}
+                isHint={!!hint}
+                delay={i * 0.1}
+                onClick={isActive && !hint ? () => triggerHint(i) : undefined}
+            />
+          );
+        })}
       </div>
       <div className="flex flex-wrap gap-1.5 w-16 justify-center">
         <FeedbackDots feedback={feedback} codeLength={codeLength} />
@@ -920,23 +940,30 @@ function DigitTile({
   digit,
   isActive,
   isCompleted,
+  isHint,
   delay,
+  onClick,
 }: {
   digit: string;
   isActive: boolean;
   isCompleted: boolean;
+  isHint?: boolean;
   delay: number;
+  onClick?: () => void;
 }) {
   return (
     <motion.div
       initial={isCompleted ? { rotateX: 0 } : false}
       animate={isCompleted ? { rotateX: [0, 90, 0] } : {}}
       transition={{ duration: 0.5, delay }}
+      onClick={onClick}
       className={`
                 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-xl sm:text-2xl font-mono font-bold border-2 transition-all duration-200 rounded
-                ${digit ? "border-[#565758] bg-[#121213] text-white" : "border-[#3a3a3c] bg-[#121213] text-[#3a3a3c]"}
+                ${isHint ? "border-[#538d4e]/50 bg-[#538d4e]/10 text-[#538d4e] shadow-[0_0_10px_rgba(83,141,78,0.2)] cursor-default" : 
+                  digit ? "border-[#565758] bg-[#121213] text-white" : "border-[#3a3a3c] bg-[#121213] text-[#3a3a3c]"}
                 ${isActive ? "border-[#818384]" : ""}
                 ${isCompleted ? "border-[#3a3a3c] opacity-100" : ""}
+                ${onClick ? "hover:border-[#538d4e]/50 cursor-pointer" : ""}
             `}
     >
       {digit}
@@ -1054,12 +1081,51 @@ function Keyboard() {
 }
 
 function KeyButton({ label, onClick }: { label: string; onClick: () => void }) {
+  const { struckKeys, toggleStruckKey } = useGameStore();
+  const isStruck = struckKeys.includes(label);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startLongPress = () => {
+    timerRef.current = setTimeout(() => {
+        toggleStruckKey(label);
+    }, 600);
+  };
+
+  const endLongPress = () => {
+    if (timerRef.current) {
+        clearTimeout(timerRef.current);
+    }
+  };
+
   return (
     <button
       onClick={onClick}
-      className="h-10 sm:h-12 bg-[#565758] hover:bg-slate-500 active:bg-slate-600 text-white text-lg font-bold rounded transition-all flex items-center justify-center hover:scale-[1.05] active:scale-95 shadow-md"
+      onContextMenu={(e) => {
+        e.preventDefault();
+        toggleStruckKey(label);
+      }}
+      onTouchStart={startLongPress}
+      onTouchEnd={endLongPress}
+      onMouseDown={startLongPress}
+      onMouseUp={endLongPress}
+      className={`
+        relative h-10 sm:h-12 flex items-center justify-center font-bold font-mono text-lg rounded transition-all active:scale-90 select-none
+        ${isStruck 
+            ? "bg-[#3a3a3c]/20 text-[#565758] border border-[#3a3a3c]/30" 
+            : "bg-[#3a3a3c] hover:bg-[#4a4a4c] text-slate-100 shadow-lg"}
+      `}
     >
       {label}
+      {isStruck && (
+        <motion.div 
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+        >
+            <div className="w-full h-0.5 bg-red-500/50 rotate-45 absolute" />
+            <div className="w-full h-0.5 bg-red-500/50 -rotate-45 absolute" />
+        </motion.div>
+      )}
     </button>
   );
 }

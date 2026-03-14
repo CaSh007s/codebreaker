@@ -25,6 +25,7 @@ export interface LeaderboardEntry {
   level: string;
   tries: number;
   time_seconds: number;
+  status: GameStatus;
   timestamp: string;
 }
 
@@ -62,6 +63,22 @@ export const api = {
       method: "POST",
     });
     if (!response.ok) throw new Error("Failed to surrender");
+    return response.json();
+  },
+
+  async getHint(gameId: string, revealedIndices: number[], targetIndex?: number): Promise<{ position: number; digit: string }> {
+    const response = await fetch(`${API_BASE_URL}/game/${gameId}/hint`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        revealed_indices: revealedIndices,
+        target_index: targetIndex
+      }),
+    });
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || "Failed to get hint");
+    }
     return response.json();
   },
 

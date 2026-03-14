@@ -48,15 +48,25 @@ class GameState(BaseModel):
     created_at: datetime
     last_guess_at: Optional[datetime] = None
 
+class HintRequest(BaseModel):
+    revealed_indices: List[int]
+    target_index: Optional[int] = None
+
+class HintResponse(BaseModel):
+    position: int
+    digit: str
+
 class LeaderboardEntry(BaseModel):
     username: str
     level: str
     tries: int
     time_seconds: int
     timestamp: datetime
+    status: GameStatus = GameStatus.SOLVED
 
 class LeaderboardRequest(BaseModel):
     username: str
     level: str
     tries: int
     time_seconds: int
+    status: GameStatus = GameStatus.SOLVED
