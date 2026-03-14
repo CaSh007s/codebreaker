@@ -12,7 +12,7 @@ export default function Home() {
     <main className="relative flex h-dvh w-full flex-col bg-[#0a0a0b] text-slate-100 overflow-hidden selection:bg-[#538d4e]/30">
       <TopHeader />
       
-      <div className="flex-1 w-full flex flex-col items-center justify-center relative z-10 px-4">
+      <div className={`flex-1 w-full flex flex-col items-center relative z-10 px-4 min-h-0 overflow-hidden ${view === 'landing' ? 'justify-center' : ''}`}>
         <AnimatePresence mode="wait">
           {view === "landing" ? (
             <LandingView key="landing" />
@@ -507,9 +507,9 @@ function GameView() {
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="flex h-full w-full flex-col items-center"
+      className="flex h-full w-full flex-col items-center min-h-0 overflow-hidden"
     >
-      <div className="flex-none w-full max-w-md flex flex-col items-center mb-4 sm:mb-8">
+      <div className="shrink-0 w-full max-w-md flex flex-col items-center mb-2 sm:mb-4">
         <motion.header
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -564,11 +564,11 @@ function GameView() {
         </motion.header>
       </div>
 
-      <div className="grow w-full max-w-md flex flex-col justify-center overflow-hidden px-2">
+      <div className="flex-1 w-full max-w-md flex flex-col min-h-0 overflow-hidden px-2">
         <Board />
       </div>
 
-      <div className="flex-none w-full max-w-md mt-4">
+      <div className="shrink-0 w-full max-w-md mt-4 pb-6">
         <AnimatePresence>
           {error && (
             <motion.div
@@ -860,10 +860,10 @@ function Board() {
   return (
     <div
       ref={scrollRef}
-      className="flex flex-col gap-1.5 w-full overflow-y-auto pr-2 custom-scrollbar no-scrollbar"
-      style={{ maxHeight: "100%" }}
+      className="flex-1 min-h-0 w-full overflow-y-auto no-scrollbar scroll-smooth"
     >
-      {rows.map((_, i) => {
+      <div className="flex flex-col gap-1.5 py-2">
+        {rows.map((_, i) => {
         const guessObj = guesses[i];
         const isCurrent = i === guesses.length && status === "active";
         const content = guessObj
@@ -885,6 +885,7 @@ function Board() {
           />
         );
       })}
+      </div>
     </div>
   );
 }
