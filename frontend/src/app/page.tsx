@@ -28,8 +28,17 @@ export default function Home() {
 }
 
 function TopHeader() {
-  const { view, setView } = useGameStore();
+  const { view, setView, status } = useGameStore();
+  const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
   
+  const handleBack = () => {
+    if (status === "active") {
+        setShowAbandonConfirm(true);
+    } else {
+        setView("landing");
+    }
+  };
+
   return (
     <header className="w-full h-20 flex items-center justify-between px-6 sm:px-10 z-50 shrink-0">
       <AnimatePresence mode="wait">
@@ -39,7 +48,7 @@ function TopHeader() {
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -10 }}
-            onClick={() => setView("landing")}
+            onClick={handleBack}
             className="text-[#565758] hover:text-[#538d4e] transition-colors p-2 rounded-full hover:bg-[#538d4e]/5"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -48,6 +57,18 @@ function TopHeader() {
           </motion.button>
         ) : (
           <div key="spacer" className="w-10" />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showAbandonConfirm && (
+            <AbandonMissionModal 
+                onClose={() => setShowAbandonConfirm(false)} 
+                onConfirm={() => {
+                    setShowAbandonConfirm(false);
+                    useGameStore.getState().resignGame();
+                }}
+            />
         )}
       </AnimatePresence>
 
@@ -1020,6 +1041,54 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
       </motion.div>
     </motion.div>
   );
+}
+
+function AbandonMissionModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: () => void }) {
+    return (
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-200 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl"
+        >
+            <motion.div
+                initial={{ scale: 0.95, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                className="bg-[#0f0f10] border border-red-500/20 p-8 rounded-2xl max-w-sm w-full shadow-[0_0_50px_rgba(239,68,68,0.1)] border-t-red-500/30 text-center space-y-8"
+            >
+                <div className="space-y-4">
+                    <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto border border-red-500/20">
+                        <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <div className="space-y-2">
+                        <h3 className="text-xl font-bold tracking-tighter font-serif uppercase text-red-500">
+                            DESERTION_DETECTED
+                        </h3>
+                        <p className="text-[#565758] font-mono text-[10px] uppercase leading-relaxed tracking-wider">
+                            Operative is attempting to leave an active mission area without official clearance. This will result in an immediate resignation and failed evaluation.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                    <button
+                        onClick={onConfirm}
+                        className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold font-mono text-xs rounded transition-all active:scale-95 shadow-[0_0_20px_rgba(220,38,38,0.2)] uppercase"
+                    >
+                        CONFIRM_RESIGNATION
+                    </button>
+                    <button
+                        onClick={onClose}
+                        className="w-full py-3 border border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/10 text-[#538d4e] font-bold font-mono text-xs rounded transition-all active:scale-95 shadow-[0_0_15px_rgba(83,141,78,0.1)] uppercase"
+                    >
+                        [RETURN_TO_STATION]
+                    </button>
+                </div>
+            </motion.div>
+        </motion.div>
+    );
 }
 
 function OperativeIdentity() {
