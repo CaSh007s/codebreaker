@@ -5,7 +5,7 @@ import { useRef, useEffect } from "react";
 import { useGameStore } from "@/store/useGameStore";
 
 export default function Home() {
-  const { startNewGame, isLoading, gameId, status, error } = useGameStore();
+  const { startNewGame, isLoading, gameId, status, error, attemptsRemaining } = useGameStore();
 
   useEffect(() => {
     if (!gameId) {
@@ -39,9 +39,17 @@ export default function Home() {
           <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl font-serif mb-1">
             CODEBREAKER
           </h1>
-          <p className="text-[#565758] font-mono text-[8px] uppercase tracking-[0.3em]">
+          <p className="text-[#565758] font-mono text-[8px] uppercase tracking-[0.3em] mb-4">
               LOGIC_RECON_v1.0
           </p>
+          <div className="flex items-center justify-center gap-4">
+            <div className={`flex flex-col items-center px-4 py-1 border border-[#3a3a3c] rounded-md transition-colors ${attemptsRemaining !== null && attemptsRemaining <= 5 ? 'border-red-500/50 bg-red-500/5' : ''}`}>
+                <span className="text-[#565758] font-mono text-[8px] uppercase tracking-widest">Attempts Rem.</span>
+                <span className={`text-xl font-bold font-mono ${attemptsRemaining !== null && attemptsRemaining <= 5 ? 'text-red-400' : 'text-slate-100'}`}>
+                    {attemptsRemaining ?? '∞'}
+                </span>
+            </div>
+          </div>
         </motion.header>
       </div>
 

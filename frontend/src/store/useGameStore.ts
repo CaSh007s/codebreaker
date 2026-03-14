@@ -39,7 +39,7 @@ export const useGameStore = create<GameStore>()((set, get) => ({
   error: null,
   isLoading: false,
 
-  startNewGame: async (mode = "classic", length = 4, maxAttempts) => {
+  startNewGame: async (mode = "classic", length = 4, maxAttempts = 20) => {
     set({ isLoading: true, error: null });
     try {
       const data = await api.createGame(mode, length, maxAttempts);
