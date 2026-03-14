@@ -22,21 +22,67 @@ export default function Home() {
 
 function LandingView() {
   const { startNewGame } = useGameStore();
-  const difficulty = [
-    { label: "EASY", length: 4, tries: 20 },
-    { label: "MEDIUM", length: 5, tries: 15 },
-    { label: "HARD", length: 6, tries: 10 },
-  ];
+  const [menuState, setMenuState] = useState<"main" | "single" | "category">("main");
+  const [category, setCategory] = useState<"standard" | "overdrive">("standard");
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
+
+  const levels = {
+    standard: [
+      {
+        label: "ROOKIE",
+        length: 3,
+        tries: 25,
+        repeats: false,
+        desc: "Tactical Induction",
+      },
+      {
+        label: "EASY",
+        length: 4,
+        tries: 20,
+        repeats: false,
+        desc: "Standard Protocol",
+      },
+      {
+        label: "MEDIUM",
+        length: 5,
+        tries: 15,
+        repeats: false,
+        desc: "Advanced Recon",
+      },
+      {
+        label: "HARD",
+        length: 6,
+        tries: 10,
+        repeats: false,
+        desc: "Special Ops",
+      },
+    ],
+    overdrive: [
+      {
+        label: "ELITE",
+        length: 5,
+        tries: 15,
+        repeats: true,
+        desc: "Signal Noise Alert",
+      },
+      {
+        label: "MASTER",
+        length: 6,
+        tries: 10,
+        repeats: true,
+        desc: "Cryptographic Chaos",
+      },
+    ],
+  };
 
   const [selectedLevel, setSelectedLevel] = useState(0);
-  const [showHowToPlay, setShowHowToPlay] = useState(false);
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="relative flex flex-col items-center justify-center p-6 w-full max-w-md h-full gap-12 z-10"
+      className="relative flex flex-col items-center justify-center p-6 w-full max-w-md h-full gap-8 z-10"
     >
       <BinaryBackground />
 
@@ -46,91 +92,240 @@ function LandingView() {
         )}
       </AnimatePresence>
 
-      <div className="text-center space-y-4 pointer-events-none">
-        <motion.h1
-          initial={{ y: 20 }}
-          animate={{ y: 0 }}
-          className="text-5xl font-bold tracking-[0.2em] sm:text-6xl font-serif drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]"
-        >
-          CODEBREAKER
-        </motion.h1>
-        <p className="text-[#565758] font-mono text-xs uppercase tracking-[0.5em] animate-pulse">
-          SELECT_DIFFICULTY_TO_PROCEED
+      <div className="text-center space-y-4 mb-4">
+        <AnimatedHeading text="CODEBREAKER" />
+        <p className="text-[#565758] font-mono text-[10px] uppercase tracking-[0.5em] animate-pulse pointer-events-none">
+          {menuState === "main"
+            ? "INITIATING_CONNECTION..."
+            : "SELECT_MISSION_PARAMETERS"}
         </p>
       </div>
 
-      <div className="w-full flex flex-col gap-4">
-        {difficulty.map((level, i) => (
-          <button
-            key={level.label}
-            onClick={() => setSelectedLevel(i)}
-            className={`
-                            group relative p-4 rounded-lg border-2 transition-all flex items-center justify-between
-                            ${selectedLevel === i ? "border-[#6ca965] bg-[#6ca965]/5 shadow-[0_0_20px_rgba(108,169,101,0.1)]" : "border-[#3a3a3c] hover:border-[#565758]"}
-                        `}
-          >
-            <div className="flex flex-col items-start translate-x-0 group-hover:translate-x-1 transition-transform">
-              <span
-                className={`font-mono text-lg font-bold ${selectedLevel === i ? "text-[#6ca965]" : "text-slate-300"}`}
+      <div className="w-full relative min-h-75 flex items-center">
+        <AnimatePresence mode="wait">
+          {menuState === "main" && (
+            <motion.div
+              key="main"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.05 }}
+              className="w-full space-y-4"
+            >
+              <MenuButton
+                label="SINGLE_PLAYER"
+                desc="Local Decryption Environment"
+                onClick={() => setMenuState("single")}
+                primary
+              />
+              <MenuButton
+                label="MULTIPLAYER"
+                desc="Remote Uplink Pending..."
+                onClick={() => {}}
+                disabled
+              />
+            </motion.div>
+          )}
+
+          {menuState === "single" && (
+            <motion.div
+              key="single"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="w-full space-y-4"
+            >
+              <MenuButton
+                label="STANDARD_LEVELS"
+                desc="Unique Digit Ciphers"
+                onClick={() => {
+                  setCategory("standard");
+                  setMenuState("category");
+                  setSelectedLevel(0);
+                }}
+              />
+              <MenuButton
+                label="OVERDRIVE_MODES"
+                desc="Repeating Digit Anomalies"
+                onClick={() => {
+                  setCategory("overdrive");
+                  setMenuState("category");
+                  setSelectedLevel(0);
+                }}
+              />
+              <button
+                onClick={() => setMenuState("main")}
+                className="w-full text-[#565758] hover:text-slate-300 font-mono text-[10px] uppercase tracking-widest pt-4"
               >
-                {level.label}
-              </span>
-              <span className="text-[#565758] font-mono text-[10px] uppercase">
-                {level.length} DIGITS // {level.tries} TRIES
-              </span>
-            </div>
-            {selectedLevel === i && (
-              <motion.div layoutId="level-indicator" className="text-[#6ca965]">
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </motion.div>
-            )}
-          </button>
-        ))}
+                [BACK_TO_ROOT]
+              </button>
+            </motion.div>
+          )}
+
+          {menuState === "category" && (
+            <motion.div
+              key="category"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="w-full space-y-3"
+            >
+              <div className="flex flex-col gap-2 max-h-87.5 overflow-y-auto pr-1">
+                {levels[category].map((level, i) => (
+                  <button
+                    key={level.label}
+                    onClick={() => setSelectedLevel(i)}
+                    className={`
+                                            group relative p-4 rounded-lg border-2 transition-all flex items-center justify-between text-left
+                                            ${selectedLevel === i ? "border-[#6ca965] bg-[#6ca965]/5 shadow-[0_0_20px_rgba(108,169,101,0.1)]" : "border-[#3a3a3c] hover:border-[#565758]"}
+                                        `}
+                  >
+                    <div className="flex flex-col translate-x-0 group-hover:translate-x-1 transition-transform">
+                      <span
+                        className={`font-mono text-sm font-bold ${selectedLevel === i ? "text-[#6ca965]" : "text-slate-300"}`}
+                      >
+                        {level.label}
+                      </span>
+                      <span className="text-[#565758] font-mono text-[9px] uppercase">
+                        {`${level.desc} // ${level.length}D // ${level.tries}T`}
+                      </span>
+                    </div>
+                    {selectedLevel === i && (
+                      <motion.div
+                        layoutId="level-indicator"
+                        className="text-[#6ca965]"
+                      >
+                        <div className="w-2 h-2 rounded-full bg-[#6ca965] animate-ping" />
+                      </motion.div>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => {
+                  const l = levels[category][selectedLevel];
+                  startNewGame("classic", l.length, l.tries, l.repeats);
+                }}
+                className="w-full py-4 bg-[#6ca965] hover:bg-[#5a8d54] text-[#121213] text-lg font-bold rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-green-900/20 mt-4"
+              >
+                DEPLOY_MODULE
+              </button>
+
+              <button
+                onClick={() => setMenuState("single")}
+                className="w-full text-[#565758] hover:text-slate-300 font-mono text-[10px] uppercase tracking-widest pt-2"
+              >
+                [RECONFIGURE_MODE]
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      <div className="w-full space-y-3">
+      <div className="w-full flex justify-between gap-4 pt-4 px-2">
         <button
-          onClick={() =>
-            startNewGame(
-              "classic",
-              difficulty[selectedLevel].length,
-              difficulty[selectedLevel].tries,
-              false,
-            )
-          }
-          className="w-full py-4 bg-[#6ca965] hover:bg-[#5a8d54] text-[#121213] text-lg font-bold rounded-lg transition-all active:scale-[0.98] shadow-lg shadow-green-900/20"
+          onClick={() => setShowHowToPlay(true)}
+          className="flex-1 py-2 px-3 border border-[#3a3a3c] rounded text-[#565758] hover:text-[#6ca965] hover:border-[#6ca965]/50 font-mono text-[9px] transition-all tracking-tighter uppercase text-center"
         >
-          START_SESSION
+          HOW_TO_PLAY.txt
         </button>
-        <div className="flex justify-between px-2">
-          <button
-            onClick={() => setShowHowToPlay(true)}
-            className="text-[#565758] hover:text-slate-300 font-mono text-[10px] transition-colors tracking-tighter uppercase"
-          >
-            HOW_TO_PLAY.txt
-          </button>
-          <button className="text-[#565758] hover:text-slate-300 font-mono text-[10px] transition-colors tracking-tighter uppercase">
-            GLOBAL_STATS.reg
-          </button>
-        </div>
+        <button className="flex-1 py-2 px-3 border border-[#3a3a3c] rounded text-[#565758] hover:text-slate-300 font-mono text-[9px] transition-all tracking-tighter uppercase text-center cursor-not-allowed">
+          GLOBAL_STATS.reg
+        </button>
       </div>
 
       <footer className="mt-auto text-[#565758] font-mono text-[8px] uppercase tracking-[0.4em]">
-        &copy; 2026 CODEBREAKER // LOGIC_RECON
+        {`© 2026 CODEBREAKER`}
       </footer>
     </motion.div>
+  );
+}
+
+function AnimatedHeading({ text }: { text: string }) {
+  return (
+    <h1 className="text-5xl font-bold tracking-[0.2em] sm:text-6xl font-serif flex justify-center">
+      {text.split("").map((char, i) => (
+        <motion.span
+          key={i}
+          whileHover={{
+            scale: 1.2,
+            color: "#6ca965",
+            textShadow: "0 0 15px rgba(108,169,101,0.5)",
+            y: -5,
+          }}
+          transition={{ type: "spring", stiffness: 300 }}
+          className="inline-block cursor-default"
+        >
+          {char}
+        </motion.span>
+      ))}
+    </h1>
+  );
+}
+
+function MenuButton({
+  label,
+  desc,
+  onClick,
+  disabled,
+  primary,
+}: {
+  label: string;
+  desc: string;
+  onClick: () => void;
+  disabled?: boolean;
+  primary?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`
+                w-full group relative p-6 rounded-lg border-2 transition-all text-left overflow-hidden
+                ${
+                  disabled
+                    ? "opacity-40 cursor-not-allowed border-slate-800"
+                    : primary
+                      ? "border-[#6ca965] bg-[#6ca965]/5 hover:bg-[#6ca965]/10 shadow-lg"
+                      : "border-[#3a3a3c] hover:border-[#565758] bg-white/5 hover:bg-white/10"
+                }
+            `}
+    >
+      <div className="relative z-10 flex flex-col translate-x-0 group-hover:translate-x-2 transition-transform">
+        <span
+          className={`font-mono text-xl font-black tracking-tighter ${primary ? "text-[#6ca965]" : "text-slate-100"}`}
+        >
+          {label}
+        </span>
+        <span className="text-[#565758] font-mono text-[9px] uppercase tracking-widest mt-1">
+          {desc}
+        </span>
+      </div>
+      {!disabled && (
+        <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
+          <svg
+            className={`w-6 h-6 ${primary ? "text-[#6ca965]" : "text-slate-500"}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M14 5l7 7m0 0l-7 7m7-7H3"
+            />
+          </svg>
+        </div>
+      )}
+      {primary && !disabled && (
+        <motion.div
+          className="absolute inset-0 bg-[#6ca965]/5"
+          animate={{ opacity: [0.1, 0.3, 0.1] }}
+          transition={{ duration: 2, repeat: Infinity }}
+        />
+      )}
+    </button>
   );
 }
 
@@ -246,7 +441,7 @@ function GameView() {
       </div>
 
       <footer className="flex-none mt-4 text-[#565758] font-mono text-[8px] uppercase tracking-[0.4em]">
-        &copy; 2026 CODEBREAKER // LOGIC_RECON
+        {`© 2026 CODEBREAKER`}
       </footer>
     </motion.div>
   );
