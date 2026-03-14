@@ -16,10 +16,12 @@ interface GameStore {
   attemptsRemaining: number | null;
   timer: number;
   error: string | null;
+  view: 'landing' | 'game';
   isLoading: boolean;
 
   // Actions
-  startNewGame: (mode?: GameMode, length?: number, maxAttempts?: number) => Promise<void>;
+  setView: (view: 'landing' | 'game') => void;
+  startNewGame: (mode?: GameMode, length?: number, maxAttempts?: number, allowRepeats?: boolean) => Promise<void>;
   addDigit: (digit: string) => void;
   removeDigit: () => void;
   submitGuess: () => Promise<void>;
@@ -37,12 +39,15 @@ export const useGameStore = create<GameStore>()((set, get) => ({
   attemptsRemaining: null,
   timer: 0,
   error: null,
+  view: "landing",
   isLoading: false,
 
-  startNewGame: async (mode = "classic", length = 4, maxAttempts = 20) => {
-    set({ isLoading: true, error: null });
+  setView: (view) => set({ view }),
+
+  startNewGame: async (mode = "classic", length = 4, maxAttempts = 20, allowRepeats = true) => {
+    set({ isLoading: true, error: null, view: "game" });
     try {
-      const data = await api.createGame(mode, length, maxAttempts);
+      const data = await api.createGame(mode, length, maxAttempts, allowRepeats);
       set({
         gameId: data.game_id,
         codeLength: data.code_length,

@@ -9,9 +9,17 @@ class FeedbackType(Enum):
 
 class GameService:
     @staticmethod
-    def generate_secret_code(length: int = 4) -> str:
+    def generate_secret_code(length: int = 4, allow_repeats: bool = True) -> str:
         """Generates a secret numeric code of the given length."""
-        return "".join(str(random.randint(0, 9)) for _ in range(length))
+        if allow_repeats:
+            return "".join(str(random.randint(0, 9)) for _ in range(length))
+        else:
+            # For non-repeating digits, we sample from '0123456789'
+            # Note: length must be <= 10
+            digits = "0123456789"
+            if length > 10:
+                raise ValueError("Cannot generate non-repeating code longer than 10 digits")
+            return "".join(random.sample(digits, length))
 
     @staticmethod
     def evaluate_guess(secret: str, guess: str) -> Tuple[int, int, int]:

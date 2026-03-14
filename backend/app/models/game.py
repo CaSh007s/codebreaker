@@ -18,6 +18,7 @@ class NewGameRequest(BaseModel):
     mode: GameMode = GameMode.CLASSIC
     code_length: int = 4
     max_attempts: Optional[int] = None
+    allow_repeats: bool = True
 
 class NewGameResponse(BaseModel):
     game_id: str

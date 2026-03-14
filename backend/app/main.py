@@ -27,7 +27,7 @@ games: Dict[str, GameState] = {}
 @app.post("/game/new", response_model=NewGameResponse)
 async def create_game(request: NewGameRequest):
     game_id = str(uuid.uuid4())
-    secret_code = GameService.generate_secret_code(request.code_length)
+    secret_code = GameService.generate_secret_code(request.code_length, request.allow_repeats)
     
     game = GameState(
         id=game_id,

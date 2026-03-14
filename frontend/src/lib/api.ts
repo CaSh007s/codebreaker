@@ -21,11 +21,16 @@ export interface GuessResponse {
 }
 
 export const api = {
-  async createGame(mode: GameMode = "classic", length: number = 4, maxAttempts?: number): Promise<NewGameResponse> {
+  async createGame(mode: GameMode = "classic", length: number = 4, maxAttempts?: number, allowRepeats: boolean = true): Promise<NewGameResponse> {
     const response = await fetch(`${API_BASE_URL}/game/new`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode, code_length: length, max_attempts: maxAttempts }),
+      body: JSON.stringify({ 
+        mode, 
+        code_length: length, 
+        max_attempts: maxAttempts,
+        allow_repeats: allowRepeats
+      }),
     });
     if (!response.ok) throw new Error("Failed to create game");
     return response.json();
