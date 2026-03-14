@@ -20,6 +20,8 @@ interface GameStore {
   isLoading: boolean;
   username: string;
   currentLevelLabel: string;
+  timerLimit: number | null; // in seconds
+  infiniteMode: boolean;
 
   // Actions
   setView: (view: 'landing' | 'game') => void;
@@ -30,6 +32,8 @@ interface GameStore {
   resetError: () => void;
   setTimer: (t: number) => void;
   setUsername: (name: string) => void;
+  setTimerLimit: (limit: number | null) => void;
+  setInfiniteMode: (active: boolean) => void;
 }
 
 export const useGameStore = create<GameStore>()((set, get) => ({
@@ -44,8 +48,10 @@ export const useGameStore = create<GameStore>()((set, get) => ({
   error: null,
   view: "landing",
   isLoading: false,
-  username: "OPERATIVE_GHOST", // Initial placeholder
+  username: "OPERATIVE_GHOST",
   currentLevelLabel: "ROOKIE",
+  timerLimit: null,
+  infiniteMode: false,
 
   setView: (view) => set({ view }),
 
@@ -57,9 +63,15 @@ export const useGameStore = create<GameStore>()((set, get) => ({
   },
 
   startNewGame: async (mode = "classic", length = 4, maxAttempts = 20, allowRepeats = true, levelLabel = "ROOKIE") => {
+    const { infiniteMode } = get();
     set({ isLoading: true, error: null, view: "game", timer: 0, currentLevelLabel: levelLabel });
     try {
-      const data = await api.createGame(mode, length, maxAttempts, allowRepeats);
+      const data = await api.createGame(
+        mode, 
+        length, 
+        infiniteMode ? undefined : maxAttempts, 
+        allowRepeats
+      );
       set({
         gameId: data.game_id,
         codeLength: data.code_length,
@@ -108,6 +120,8 @@ export const useGameStore = create<GameStore>()((set, get) => ({
 
   resetError: () => set({ error: null }),
   setTimer: (timer: number) => set({ timer }),
+  setTimerLimit: (timerLimit: number | null) => set({ timerLimit }),
+  setInfiniteMode: (infiniteMode: boolean) => set({ infiniteMode }),
 }));
 
 // Initialize username from localStorage if available

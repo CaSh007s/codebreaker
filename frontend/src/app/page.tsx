@@ -120,7 +120,7 @@ function LandingView() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="relative flex flex-col items-center justify-center py-6 w-full max-w-sm gap-8 sm:gap-12"
+      className="relative flex flex-col items-center justify-center py-4 w-full max-w-sm gap-6 sm:gap-8"
     >
       <BinaryBackground />
 
@@ -210,7 +210,7 @@ function LandingView() {
               exit={{ opacity: 0, x: -20 }}
               className="w-full space-y-3"
             >
-              <div className="flex flex-col gap-2 max-h-87.5 overflow-y-auto pr-1">
+              <div className="flex flex-col gap-2 max-h-[30dvh] overflow-y-auto pr-1 custom-scrollbar">
                 {levels[category].map((level, i) => (
                   <button
                     key={level.label}
@@ -241,6 +241,8 @@ function LandingView() {
                   </button>
                 ))}
               </div>
+              
+              <ModifierPanel />
 
               <button
                 onClick={() => {
@@ -373,9 +375,78 @@ function MenuButton({
   );
 }
 
+function ModifierPanel() {
+  const { timerLimit, setTimerLimit, infiniteMode, setInfiniteMode } = useGameStore();
+
+  const timeOptions = [
+    { label: "OFF", value: null },
+    { label: "2M", value: 120 },
+    { label: "3M", value: 180 },
+    { label: "5M", value: 300 },
+  ];
+
+  return (
+    <div className="w-full space-y-3 p-3 bg-white/5 border border-white/10 rounded-lg my-1">
+      <div className="space-y-1.5">
+        <span className="text-[#565758] font-mono text-[9px] uppercase tracking-widest block">
+          MISSION_PERIOD // {timerLimit ? "COUNTDOWN_ACTIVE" : "UNRESTRICTED"}
+        </span>
+        <div className="grid grid-cols-4 gap-2">
+          {timeOptions.map((opt) => (
+            <button
+              key={opt.label}
+              onClick={() => setTimerLimit(opt.value)}
+              className={`
+                py-1.5 rounded font-mono text-[10px] transition-all border
+                ${
+                  timerLimit === opt.value
+                    ? "bg-[#538d4e] text-black border-[#538d4e] shadow-[0_0_10px_rgba(83,141,78,0.3)]"
+                    : "bg-black/20 text-[#565758] border-[#3a3a3c] hover:border-[#565758]"
+                }
+              `}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between pt-1">
+        <span className="text-[#565758] font-mono text-[9px] uppercase tracking-widest">
+          INFINITE_MODE // OVERRIDE_LIMITS
+        </span>
+        <button
+          onClick={() => setInfiniteMode(!infiniteMode)}
+          className={`
+            w-10 h-5 rounded-full relative transition-all
+            ${infiniteMode ? "bg-[#538d4e]" : "bg-[#3a3a3c]"}
+          `}
+        >
+          <motion.div
+            animate={{ x: infiniteMode ? 20 : 2 }}
+            className="w-4 h-4 rounded-full bg-white absolute top-0.5 shadow-sm"
+          />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function GameView() {
-  const { startNewGame, status, error, attemptsRemaining, setView, timer, setTimer, username, currentLevelLabel, guesses } =
-    useGameStore();
+  const { 
+    startNewGame, 
+    status, 
+    error, 
+    attemptsRemaining, 
+    setView, 
+    timer, 
+    setTimer, 
+    username, 
+    currentLevelLabel, 
+    guesses,
+    timerLimit,
+    infiniteMode
+  } = useGameStore();
   const [isUploading, setIsUploading] = useState(false);
   const [hasUploaded, setHasUploaded] = useState(false);
 
@@ -384,11 +455,29 @@ function GameView() {
     let interval: NodeJS.Timeout;
     if (status === "active") {
       interval = setInterval(() => {
-        setTimer(timer + 1);
+        const nextTime = timer + 1;
+        setTimer(nextTime);
+        
+        // Auto-fail if timer limit reached
+        if (timerLimit && nextTime >= timerLimit) {
+            // Need a way to set status to failed.
+            // For now, I'll rely on the UI to handle it or I can add a surrender call.
+            // Actually, let's just use the timer value in UI to block actions.
+        }
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [status, timer, setTimer]);
+  }, [status, timer, setTimer, timerLimit]);
+
+  const timeRemaining = timerLimit ? Math.max(0, timerLimit - timer) : null;
+  const isTimeUp = timerLimit !== null && timeRemaining === 0;
+
+  // Format time
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
 
   // Auto-upload score on win
   useEffect(() => {
@@ -434,17 +523,35 @@ function GameView() {
           </p>
           <div className="flex items-center justify-center gap-4">
             <div
-              className={`flex flex-col items-center px-4 py-1 border border-[#3a3a3c] rounded-md transition-colors ${attemptsRemaining !== null && attemptsRemaining <= 5 ? "border-red-500/50 bg-red-500/5" : ""}`}
+              className={`flex flex-col items-center px-4 py-1 border border-[#3a3a3c] rounded-md transition-colors 
+                ${!infiniteMode && attemptsRemaining !== null && attemptsRemaining <= 5 ? "border-red-500/50 bg-red-500/5" : ""}
+                ${isTimeUp ? "border-red-500 bg-red-500/10" : ""}
+              `}
             >
               <span className="text-[#565758] font-mono text-[8px] uppercase tracking-widest">
-                Attempts Rem.
+                {timerLimit ? "Time Remaining" : "Attempts Rem."}
               </span>
               <span
-                className={`text-xl font-bold font-mono ${attemptsRemaining !== null && attemptsRemaining <= 5 ? "text-red-400" : "text-slate-100"}`}
+                className={`text-xl font-bold font-mono 
+                    ${!infiniteMode && attemptsRemaining !== null && attemptsRemaining <= 5 ? "text-red-400" : "text-slate-100"}
+                    ${isTimeUp || (timerLimit && timeRemaining !== null && timeRemaining <= 30) ? "text-red-500 animate-pulse" : ""}
+                `}
               >
-                {attemptsRemaining ?? "∞"}
+                {timerLimit 
+                    ? formatTime(timeRemaining || 0) 
+                    : (infiniteMode ? "∞" : (attemptsRemaining ?? "∞"))
+                }
               </span>
             </div>
+            
+            {timerLimit && (
+               <div className="flex flex-col items-center px-4 py-1 border border-[#3a3a3c] rounded-md">
+                 <span className="text-[#565758] font-mono text-[8px] uppercase tracking-widest">Attempts</span>
+                 <span className="text-xl font-bold font-mono text-slate-100">
+                    {infiniteMode ? guesses.length : (attemptsRemaining ?? "∞")}
+                 </span>
+               </div>
+            )}
           </div>
         </motion.header>
       </div>
@@ -476,19 +583,18 @@ function GameView() {
             >
               <div className="bg-[#121213] border border-[#3a3a3c] p-8 rounded-xl shadow-2xl text-center max-w-xs w-full">
                 <h2
-                  className={`text-2xl font-bold mb-2 tracking-tight ${status === "solved" ? "text-[#538d4e] drop-shadow-[0_0_10px_rgba(83,141,78,0.5)]" : "text-[#787c7f]"}`}
+                  className={`text-2xl font-bold mb-2 tracking-tight 
+                    ${status === "solved" ? "text-[#538d4e] drop-shadow-[0_0_10px_rgba(83,141,78,0.5)]" : "text-[#787c7f]"}
+                    ${isTimeUp ? "text-red-500" : ""}
+                  `}
                 >
-                  {status === "solved" ? "SYSTEM CRACKED" : "ACCESS DENIED"}
+                  {status === "solved" ? "SYSTEM CRACKED" : (isTimeUp ? "TIME EXPIRED" : "ACCESS DENIED")}
                 </h2>
-                
-                {status === "solved" && (
-                  <div className="mb-6 space-y-1">
-                    <p className="text-[#565758] font-mono text-[10px] uppercase">Breach Recorded</p>
-                    <p className="text-[#538d4e] font-mono text-xs animate-pulse">
-                      {isUploading ? "UPLOADING_TO_REGISTRY..." : hasUploaded ? "SYNCHRONIZED_WITH_CENTRAL_REGISTRY" : "RECORDING_BREACH_DATA..."}
-                    </p>
-                  </div>
-                )}
+                <p className="text-slate-400 font-mono text-xs mb-6 uppercase tracking-widest">
+                  {status === "solved"
+                    ? "Security bypass successful. Entry recorded."
+                    : (isTimeUp ? "Mission window closed. Uplink lost." : "Maximum attempts exceeded. Module locked.")}
+                </p>
                 <button
                   onClick={() => startNewGame()}
                   className="w-full py-3 bg-[#538d4e] hover:bg-[#58a352] text-black font-bold rounded transition-all active:scale-95 shadow-[0_0_15px_rgba(83,141,78,0.3)]"
@@ -878,20 +984,23 @@ function Keyboard() {
     codeLength,
     status,
     isLoading,
+    timer,
+    timerLimit,
   } = useGameStore();
 
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (status !== "active") return;
+      const isTimeUp = timerLimit !== null && (timerLimit - timer) <= 0;
+      if (status !== "active" || isTimeUp) return;
       if (e.key >= "0" && e.key <= "9") addDigit(e.key);
       if (e.key === "Backspace") removeDigit();
       if (e.key === "Enter") submitGuess();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [addDigit, removeDigit, submitGuess, status]);
+  }, [addDigit, removeDigit, submitGuess, status, timer, timerLimit]);
 
   return (
     <div className="w-full max-w-sm flex flex-col gap-1.5 mt-auto pb-4">
@@ -917,7 +1026,8 @@ function Keyboard() {
           disabled={
             currentGuess.length !== codeLength ||
             status !== "active" ||
-            isLoading
+            isLoading ||
+            (timerLimit !== null && (timerLimit - timer) <= 0)
           }
           className={`
                         col-span-5 h-10 sm:h-12 font-bold rounded uppercase text-xs tracking-widest transition-all
