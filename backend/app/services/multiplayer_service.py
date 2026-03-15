@@ -99,9 +99,19 @@ class MultiplayerService:
             room["status"] = "playing"
             room["started_at"] = datetime.utcnow().isoformat()
             
-            # Reset player progress
+            # Reset player progress but keep hints_used and points tracking
             for sid in room["players"]:
-                room["players"][sid]["progress"] = {"bulls": 0, "cows": 0, "attempts": 0, "guesses": []}
+                # Initialize hints_used if missing
+                hints = room["players"][sid]["progress"].get("hints_used", 0)
+                room["players"][sid]["progress"] = {
+                    "bulls": 0, 
+                    "cows": 0, 
+                    "attempts": 0, 
+                    "guesses": [], 
+                    "hints_used": 0, # Reset hints for new game
+                    "last_points_earned": 0
+                }
+                # room["players"][sid]["is_ready"] = False # Optional: reset ready status?
                 
             self.save_room(room_id, room)
             return room
