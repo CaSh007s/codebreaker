@@ -56,7 +56,8 @@ class MultiplayerService:
             "username": player_info.get("username", "Anonymous"),
             "avatar": player_info.get("avatar", ""),
             "is_ready": False,
-            "progress": {"bulls": 0, "cows": 0, "attempts": 0, "guesses": []}
+            "progress": {"bulls": 0, "cows": 0, "attempts": 0, "guesses": [], "hints_used": 0, "last_points_earned": 0},
+            "points": 0
         }
         self.save_room(room_id, room)
         return room
@@ -93,7 +94,7 @@ class MultiplayerService:
             digits = room["config"].get("level", 4)
             if digits < 3: digits = 4 # Default to 4 if not set or too small
             
-            target = "".join(random.sample("0123456789", digits))
+            target = "".join(random.choices("0123456789", k=digits))
             room["target"] = target
             room["status"] = "playing"
             room["started_at"] = datetime.utcnow().isoformat()
@@ -136,6 +137,25 @@ class MultiplayerService:
             room["winner_sid"] = sid
             room["finished_at"] = datetime.utcnow().isoformat()
             
+            # Calculate points for the winner
+            # Use the ROOKIE base since multiplayer level is generic for now, 
+            # or map room config to level labels.
+            base = 1000 # Default to 1000
+            max_attempts = 20
+            attempts = room["players"][sid]["progress"]["attempts"]
+            efficiency_ratio = max(0.1, 1 - (attempts - 1) / max_attempts)
+            
+            hints_used = room["players"][sid]["progress"].get("hints_used", 0)
+            hint_penalty = hints_used * 150
+            
+            # Multiplayer points calculation
+            raw_points = (base * efficiency_ratio - hint_penalty)
+            earned = max(50, round(raw_points))
+            
+            # Add to accumulated points
+            room["players"][sid]["points"] += earned
+            room["players"][sid]["progress"]["last_points_earned"] = earned
+            
         self.save_room(room_id, room)
         return room
 
@@ -149,15 +169,49 @@ class MultiplayerService:
             return None
             
         code_len = len(target)
+        max_hints = code_len // 2
+        hints_used = room["players"][sid]["progress"].get("hints_used", 0)
+        
+        if hints_used >= max_hints:
+            return {"error": f"MAXIMUM_HINTS_REACHED: ONLY {max_hints} HINTS ALLOWED"}
+            
         available_indices = list(set(range(code_len)) - set(revealed_indices))
         
         if not available_indices:
             return {"error": "No more hints available"}
             
         target_idx = random.choice(available_indices)
+        
+        # Increment hints used
+        room["players"][sid]["progress"]["hints_used"] = hints_used + 1
+        self.save_room(room_id, room)
+        
         return {
             "position": target_idx,
             "digit": target[target_idx]
         }
+
+    def surrender(self, room_id: str, sid: str) -> Optional[Dict[str, Any]]:
+        room = self.get_room(room_id)
+        if not room or room["status"] != "playing":
+            return None
+            
+        room["status"] = "finished"
+        room["resigned_sid"] = sid
+        # The other player is the winner
+        winner = [s for s in room["players"] if s != sid]
+        if winner:
+            winner_sid = winner[0]
+            room["winner_sid"] = winner_sid
+            # Award points for winner
+            earned = 500
+            room["players"][winner_sid]["points"] += earned
+            room["players"][winner_sid]["progress"]["last_points_earned"] = earned
+            
+        room["finished_at"] = datetime.utcnow().isoformat()
+        room["end_reason"] = "resignation"
+        
+        self.save_room(room_id, room)
+        return room
 
 multiplayer_service = MultiplayerService()

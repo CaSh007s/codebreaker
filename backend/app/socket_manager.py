@@ -111,6 +111,15 @@ async def submit_guess(sid, data):
                 await sio.emit('game_over', room, room=room_id)
 
 @sio.event
+async def surrender(sid, data):
+    room_id = data.get('room_id')
+    if room_id:
+        room = multiplayer_service.surrender(room_id, sid)
+        if room:
+            await sio.emit('room_update', room, room=room_id)
+            await sio.emit('game_over', room, room=room_id)
+
+@sio.event
 async def chat_message(sid, data):
     room = data.get('room')
     message = data.get('message')

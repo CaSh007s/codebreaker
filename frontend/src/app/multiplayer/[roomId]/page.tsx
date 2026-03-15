@@ -24,7 +24,10 @@ interface Player {
     attempts: number;
     last_feedback?: string[];
     guesses: { guess: string; feedback: string[] }[];
+    hints_used: number;
+    last_points_earned: number;
   };
+  points: number;
 }
 
 interface Hint {
@@ -41,6 +44,8 @@ interface RoomData {
   };
   status: string;
   winner_sid?: string;
+  resigned_sid?: string;
+  end_reason?: "solved" | "resignation";
   target?: string;
 }
 
@@ -151,7 +156,9 @@ export default function MultiplayerRoom() {
   };
 
   const handleGetHint = () => {
-    if (hintsRevealed.length >= 1) return; // Mission Policy: Only one hint permitted
+    const targetLength = roomData?.config.level || 4;
+    const maxHints = Math.floor(targetLength / 2);
+    if (hintsRevealed.length >= maxHints) return;
     emitEvent("get_hint", { 
       room_id: roomId, 
       revealed_indices: hintsRevealed.map(h => h.position) 
@@ -183,7 +190,7 @@ export default function MultiplayerRoom() {
             onClose={() => setShowAbandonConfirm(false)}
             onConfirm={() => {
               setShowAbandonConfirm(false);
-              router.push("/multiplayer");
+              emitEvent("surrender", { room_id: roomId });
             }}
           />
         )}
@@ -239,10 +246,10 @@ export default function MultiplayerRoom() {
               <div className="hidden sm:flex items-center gap-6 mt-1 pb-1">
                 <button
                   onClick={handleGetHint}
-                  disabled={hintsRevealed.length >= 1}
-                  className={`px-4 py-2 font-mono text-xs border rounded-lg transition-all uppercase tracking-widest shadow-[0_0_15px_rgba(83,141,78,0.1)] hover:scale-105 active:scale-95 ${hintsRevealed.length >= 1 ? "opacity-30 border-white/10 text-white/30 cursor-not-allowed" : "text-[#538d4e] border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/20"}`}
+                  disabled={hintsRevealed.length >= Math.floor(level / 2)}
+                  className={`px-4 py-2 font-mono text-xs border rounded-lg transition-all uppercase tracking-widest shadow-[0_0_15px_rgba(83,141,78,0.1)] hover:scale-105 active:scale-95 ${hintsRevealed.length >= Math.floor(level / 2) ? "opacity-30 border-white/10 text-white/30 cursor-not-allowed" : "text-[#538d4e] border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/20"}`}
                 >
-                  {hintsRevealed.length >= 1 ? "[HINT_EXPENDED]" : "[GET_HINT]"}
+                  {hintsRevealed.length >= Math.floor(level / 2) ? "[HINT_LIMIT_REACHED]" : `[GET_HINT] (${hintsRevealed.length}/${Math.floor(level / 2)})`}
                 </button>
                 <button
                   onClick={() => setShowHowToPlay(true)}
@@ -295,76 +302,96 @@ export default function MultiplayerRoom() {
               transition={{ delay: 0.2, duration: 0.5, ease: "easeOut" }}
               className="bg-[#121213]/50 border border-white/10 p-6 sm:p-12 rounded-[2.5rem] text-center space-y-10 max-w-2xl w-full shadow-[0_0_50px_rgba(0,0,0,0.5)] border-t-white/20"
             >
-              <div className="space-y-4">
-                <h2
-                  className={`text-[clamp(1.1rem,4.5vw,2.25rem)] font-serif font-black tracking-tighter uppercase leading-none whitespace-nowrap px-2 ${
-                    roomData.winner_sid === socket?.id
-                      ? "text-[#538d4e] drop-shadow-[0_0_25px_rgba(83,141,78,0.5)]"
-                      : "text-[#cf6679] drop-shadow-[0_0_25px_rgba(207,102,121,0.5)]"
-                  }`}
-                >
-                  {roomData.winner_sid === socket?.id ? "DECRYPTION_SUCCESS" : "INTERCEPTED_BY_ENEMY"}
-                </h2>
-                <p className="text-[#565758] font-mono text-xs sm:text-sm uppercase tracking-[0.4em] opacity-80">
-                  {roomData.winner_sid === socket?.id
-                    ? "Remote Node Compromised"
-                    : "Uplink Terminated by Hostile"}
-                </p>
-              </div>
-
-              <div className="py-10 border-y border-white/5 relative">
-                <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-white/10 to-transparent" />
-                <div className="absolute inset-x-0 bottom-0 h-px bg-linear-to-r from-transparent via-white/10 to-transparent" />
-                
-                <span className="block text-[#565758] font-mono text-[10px] uppercase tracking-widest mb-6 opacity-60">
-                  Final Target Cipher
-                </span>
-                <div className="flex justify-center gap-3 sm:gap-4">
-                  {roomData.target?.split("").map((digit, i) => (
-                    <div
-                      key={i}
-                      className="w-12 h-12 sm:w-16 sm:h-16 border border-[#538d4e]/30 bg-[#538d4e]/10 flex items-center justify-center text-[#538d4e] font-mono font-black text-2xl sm:text-3xl rounded-2xl shadow-[0_0_20px_rgba(83,141,78,0.15)] ring-1 ring-white/5"
-                    >
-                      {digit}
+              {(() => {
+                const isWinner = roomData.winner_sid === socket?.id;
+                const me = roomData.players[socket?.id || ""];
+                return (
+                  <div className="space-y-10">
+                    <div className="space-y-4">
+                      <h2
+                        className={`text-[clamp(1.1rem,4.5vw,2.25rem)] font-serif font-black tracking-tighter uppercase leading-none whitespace-nowrap px-2 ${
+                          roomData.end_reason === "resignation"
+                            ? (roomData.resigned_sid === socket?.id ? "text-orange-500 drop-shadow-[0_0_25px_rgba(249,115,22,0.5)]" : "text-[#538d4e] drop-shadow-[0_0_25px_rgba(83,141,78,0.5)]")
+                            : (isWinner
+                                ? "text-[#538d4e] drop-shadow-[0_0_25px_rgba(83,141,78,0.5)]"
+                                : "text-[#cf6679] drop-shadow-[0_0_25px_rgba(207,102,121,0.5)]")
+                        }`}
+                      >
+                        {roomData.end_reason === "resignation"
+                          ? (roomData.resigned_sid === socket?.id ? "MISSION_ABANDONED" : "UPLINK_SECURED_BY_FORFEIT")
+                          : (isWinner ? "ENCRYPTION_SUCCESS" : "INTERCEPTED_BY_ENEMY")}
+                      </h2>
+                      <div className="flex flex-col items-center gap-1">
+                        <p className="text-[#565758] font-mono text-xs sm:text-sm uppercase tracking-[0.4em] opacity-80">
+                          {roomData.end_reason === "resignation"
+                            ? (roomData.resigned_sid === socket?.id ? "Desertion_Logged_To_Base" : "Hostile_Operative_Fled")
+                            : (isWinner ? "Mission_Complete" : "Operative_Down")}
+                        </p>
+                        <div className="flex gap-4 mt-2">
+                          <div className="text-center">
+                            <p className="text-[8px] text-[#565758] uppercase font-mono tracking-widest">Points_Earned</p>
+                            <p className="text-[#c8b653] font-mono text-lg font-black">+{me?.progress.last_points_earned || 0}</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-6 sm:gap-8">
-                <div className="bg-white/5 p-4 sm:p-6 rounded-3xl border border-white/5 backdrop-blur-md">
-                  <span className="block text-[#565758] font-mono text-[10px] uppercase mb-2 tracking-widest">
-                    Operative Tries
-                  </span>
-                  <span className="text-3xl sm:text-4xl font-black text-slate-100 font-mono">
-                    {roomData.players[socket?.id || ""]?.progress.attempts || 0}
-                  </span>
-                </div>
-                <div className="bg-white/5 p-4 sm:p-6 rounded-3xl border border-white/5 backdrop-blur-md">
-                  <span className="block text-[#565758] font-mono text-[10px] uppercase mb-2 tracking-widest">
-                    Hostile Tries
-                  </span>
-                  <span className="text-3xl sm:text-4xl font-black text-slate-100 font-mono">
-                    {Object.values(roomData.players).find(p => p.sid !== socket?.id)?.progress.attempts || 0}
-                  </span>
-                </div>
-              </div>
+                    <div className="py-10 border-y border-white/5 relative">
+                      <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-white/10 to-transparent" />
+                      <div className="absolute inset-x-0 bottom-0 h-px bg-linear-to-r from-transparent via-white/10 to-transparent" />
+                      
+                      <span className="block text-[#565758] font-mono text-[10px] uppercase tracking-widest mb-6 opacity-60">
+                        Final Target Cipher
+                      </span>
+                      <div className="flex justify-center gap-3 sm:gap-4">
+                        {roomData.target?.split("").map((digit, i) => (
+                          <div
+                            key={i}
+                            className="w-12 h-12 sm:w-16 sm:h-16 border border-[#538d4e]/30 bg-[#538d4e]/10 flex items-center justify-center text-[#538d4e] font-mono font-black text-2xl sm:text-3xl rounded-2xl shadow-[0_0_20px_rgba(83,141,78,0.15)] ring-1 ring-white/5"
+                          >
+                            {digit}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                <button
-                  onClick={() => {/* TODO: Implement Replay Request */}}
-                  className="py-5 bg-[#538d4e]/10 hover:bg-[#538d4e]/20 border border-[#538d4e]/30 rounded-2xl font-mono text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] transition-all active:scale-[0.98] text-[#538d4e] shadow-[0_0_20px_rgba(83,141,78,0.1)] group"
-                >
-                  <span className="group-hover:tracking-[0.3em] transition-all duration-300">REQUEST_REPLAY</span>
-                  <span className="block text-[8px] opacity-40 mt-1 font-normal tracking-normal">[UNAVAILABLE]</span>
-                </button>
-                <button
-                  onClick={() => router.push("/multiplayer")}
-                  className="py-5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-mono text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] transition-all active:scale-[0.98] text-slate-300 group"
-                >
-                  <span className="group-hover:tracking-[0.3em] transition-all duration-300">Return_To_Base</span>
-                </button>
-              </div>
+                    <div className="grid grid-cols-2 gap-6 sm:gap-8">
+                      <div className="bg-white/5 p-4 sm:p-6 rounded-3xl border border-white/5 backdrop-blur-md">
+                        <span className="block text-[#565758] font-mono text-[10px] uppercase mb-2 tracking-widest">
+                          Operative Tries
+                        </span>
+                        <span className="text-3xl sm:text-4xl font-black text-slate-100 font-mono">
+                          {me?.progress.attempts || 0}
+                        </span>
+                      </div>
+                      <div className="bg-white/5 p-4 sm:p-6 rounded-3xl border border-white/5 backdrop-blur-md">
+                        <span className="block text-[#565758] font-mono text-[10px] uppercase mb-2 tracking-widest">
+                          Hostile Tries
+                        </span>
+                        <span className="text-3xl sm:text-4xl font-black text-slate-100 font-mono">
+                          {Object.values(roomData.players).find(p => p.sid !== socket?.id)?.progress.attempts || 0}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                      <button
+                        onClick={() => {/* TODO: Implement Replay Request */}}
+                        className="py-5 bg-[#538d4e]/10 hover:bg-[#538d4e]/20 border border-[#538d4e]/30 rounded-2xl font-mono text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] transition-all active:scale-[0.98] text-[#538d4e] shadow-[0_0_20px_rgba(83,141,78,0.1)] group"
+                      >
+                        <span className="group-hover:tracking-[0.3em] transition-all duration-300">REQUEST_REPLAY</span>
+                        <span className="block text-[8px] opacity-40 mt-1 font-normal tracking-normal">[UNAVAILABLE]</span>
+                      </button>
+                      <button
+                        onClick={() => router.push("/multiplayer")}
+                        className="py-5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-mono text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] transition-all active:scale-[0.98] text-slate-300 group"
+                      >
+                        <span className="group-hover:tracking-[0.3em] transition-all duration-300">Return_To_Base</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
             </motion.div>
           </motion.div>
         )}
@@ -618,7 +645,7 @@ function GameView({
 
   const handleKeyPress = (num: string) => {
     if (isGameOver) return;
-    if (currentGuess.length < targetLength && !currentGuess.includes(num)) {
+    if (currentGuess.length < targetLength) {
       setCurrentGuess((prev) => prev + num);
     }
   };
@@ -652,10 +679,10 @@ function GameView({
           <div className="flex items-center gap-4">
             <button
               onClick={onHint}
-              disabled={hintsRevealed.length >= 1}
-              className={`px-3 py-1.5 font-mono text-[10px] border rounded transition-all uppercase tracking-tighter ${hintsRevealed.length >= 1 ? "opacity-30 border-white/10 text-white/30" : "text-[#538d4e] border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/20"}`}
+              disabled={hintsRevealed.length >= Math.floor(targetLength / 2)}
+              className={`px-3 py-1.5 font-mono text-[10px] border rounded transition-all uppercase tracking-tighter ${hintsRevealed.length >= Math.floor(targetLength / 2) ? "opacity-30 border-white/10 text-white/30" : "text-[#538d4e] border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/20"}`}
             >
-              {hintsRevealed.length >= 1 ? "[HINT_USED]" : "[GET_HINT]"}
+              {hintsRevealed.length >= Math.floor(targetLength / 2) ? "[HINT_LIMIT_REACHED]" : `[GET_HINT] (${hintsRevealed.length}/${Math.floor(targetLength / 2)})`}
             </button>
             <button
               onClick={onShowHelp}
@@ -740,13 +767,23 @@ function GameView({
                     codeLength={targetLength}
                   />
                 </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-mono text-[#565758] uppercase">
-                    Tries
-                  </p>
-                  <p className="text-slate-200 font-mono text-sm font-black tracking-tighter">
-                    {p.progress.attempts.toString().padStart(2, "0")}
-                  </p>
+                <div className="text-right flex flex-col gap-1">
+                  <div>
+                    <p className="text-[10px] font-mono text-[#565758] uppercase">
+                      Tries
+                    </p>
+                    <p className="text-slate-200 font-mono text-sm font-black tracking-tighter leading-none">
+                      {p.progress.attempts.toString().padStart(2, "0")}
+                    </p>
+                  </div>
+                  <div className="mt-1">
+                    <p className="text-[9px] font-mono text-[#565758] uppercase">
+                      XRP
+                    </p>
+                    <p className="text-[#c8b653] font-mono text-[11px] font-black leading-none">
+                      {p.points || 0}
+                    </p>
+                  </div>
                 </div>
               </div>
             </motion.div>
