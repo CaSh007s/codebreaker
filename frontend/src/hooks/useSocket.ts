@@ -9,6 +9,8 @@ export const useSocket = (room?: string) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<Record<string, unknown> | null>(null);
+  const [lastRoomData, setLastRoomData] = useState<Record<string, unknown> | null>(null);
+  const [lastError, setLastError] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     // Initialize socket connection
@@ -36,11 +38,26 @@ export const useSocket = (room?: string) => {
     });
 
     socket.on("message", (data) => {
-      setLastMessage(data);
+      requestAnimationFrame(() => {
+        setLastMessage(data);
+      });
+    });
+
+    socket.on("room_update", (data) => {
+      requestAnimationFrame(() => {
+        setLastRoomData(data);
+      });
     });
 
     socket.on("status", (data) => {
       console.log("Status update:", data);
+    });
+
+    socket.on("error", (err) => {
+      console.error("Socket error:", err);
+      requestAnimationFrame(() => {
+        setLastError(err);
+      });
     });
 
     return () => {
@@ -67,6 +84,8 @@ export const useSocket = (room?: string) => {
     socket,
     isConnected,
     lastMessage,
+    lastRoomData,
+    lastError,
     sendMessage,
     emitEvent,
   };
