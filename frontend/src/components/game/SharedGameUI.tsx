@@ -397,6 +397,7 @@ export function AnimatedHeading({ text }: { text: string }) {
         onClick={(e) => e.stopPropagation()}
         className="bg-[#0f0f10] border border-[#3a3a3c] rounded-2xl max-w-2xl w-full shadow-[0_0_60px_rgba(0,0,0,1)] border-t-[#565758]/50 flex flex-col max-h-[85dvh] cursor-default overflow-hidden"
       >
+        {/* Terminal Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-6 border-b border-[#3a3a3c] shrink-0 bg-white/2 gap-4">
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-[#538d4e] animate-pulse" />
@@ -414,6 +415,7 @@ export function AnimatedHeading({ text }: { text: string }) {
           </button>
         </div>
 
+        {/* Sidebar Navigation */}
         <div className="flex flex-col sm:flex-row flex-1 min-h-0">
           <div className="w-full sm:w-48 border-b sm:border-b-0 sm:border-r border-[#3a3a3c] p-2 bg-black/20 overflow-x-auto sm:overflow-x-visible no-scrollbar">
             <div className="flex sm:flex-col gap-1 min-w-max sm:min-w-0">
@@ -434,6 +436,7 @@ export function AnimatedHeading({ text }: { text: string }) {
             </div>
           </div>
 
+          {/* Content Area */}
           <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
             <AnimatePresence mode="wait">
               {activeSection === 'basics' && (
@@ -457,37 +460,151 @@ export function AnimatedHeading({ text }: { text: string }) {
                   <div className="space-y-4">
                     <h4 className="text-slate-300 font-mono text-xs font-bold uppercase tracking-widest">Feedback_Protocols</h4>
                     <div className="space-y-3">
-                        <div className="flex items-start gap-4">
-                             <div className="w-6 h-6 rounded bg-[#6ca965] shrink-0 flex items-center justify-center text-black font-bold text-xs">B</div>
+                        <div className="flex items-start gap-4 group">
+                             <div className="w-6 h-6 rounded bg-[#6ca965] shrink-0 shadow-[0_0_10px_rgba(108,169,101,0.3)] flex items-center justify-center text-black font-bold text-xs">B</div>
                              <div className="flex flex-col">
                                 <span className="text-[#6ca965] font-bold font-mono text-[11px] uppercase">[BULL] - Fixed_Point_Match</span>
-                                <span className="text-slate-500 font-mono text-[10px] uppercase">Exact position match.</span>
+                                <span className="text-slate-500 font-mono text-[10px] uppercase">A correct digit is placed in its <span className="text-[#6ca965] font-bold">exact target position</span>.</span>
                              </div>
                         </div>
-                        <div className="flex items-start gap-4">
-                             <div className="w-6 h-6 rounded bg-[#c8b653] shrink-0 flex items-center justify-center text-black font-bold text-xs">C</div>
+
+                        <div className="flex items-start gap-4 group">
+                             <div className="w-6 h-6 rounded bg-[#c8b653] shrink-0 shadow-[0_0_10px_rgba(200,182,83,0.3)] flex items-center justify-center text-black font-bold text-xs">C</div>
                              <div className="flex flex-col">
                                 <span className="text-[#c8b653] font-bold font-mono text-[11px] uppercase">[COW] - Positional_Shift</span>
-                                <span className="text-slate-500 font-mono text-[10px] uppercase">Correct digit, wrong position.</span>
+                                <span className="text-slate-500 font-mono text-[10px] uppercase">A correct digit exists in the code, but is in a <span className="text-[#c8b653] font-bold">different position</span>.</span>
                              </div>
+                        </div>
+
+                        <div className="flex items-start gap-4 group">
+                             <div className="w-6 h-6 rounded bg-[#3a3a3c] shrink-0 flex items-center justify-center text-slate-500 font-bold text-xs">G</div>
+                             <div className="flex flex-col">
+                                <span className="text-slate-400 font-bold font-mono text-[11px] uppercase">[GRAY] - Data_Void</span>
+                                <span className="text-slate-500 font-mono text-[10px] uppercase">Digit does not exist in the target sequence.</span>
+                             </div>
+                        </div>
+                    </div>
+                  </div>
+
+                  <div className="relative p-4 bg-amber-900/10 border border-amber-500/20 rounded-xl overflow-hidden group">
+                      <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-40 transition-opacity">
+                        <svg className="w-8 h-8 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <h5 className="text-amber-400 font-mono text-[11px] font-black uppercase mb-2 tracking-widest">SIGNAL_MAPPING_PROTOCOL:</h5>
+                      <p className="text-amber-300 font-mono text-[10px] leading-relaxed uppercase pr-8">
+                        Each feedback dot is <span className="underline decoration-amber-500 font-bold">permanently assigned</span> to a specific digit slot for the entire mission. The mapping is <span className="font-black italic">ENCODED</span> — operatives must analyze patterns across multiple guesses to calibrate the signal.
+                      </p>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeSection === 'modes' && (
+                <motion.div
+                  key="modes"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="space-y-6"
+                >
+                  <div className="space-y-4">
+                    <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-2">
+                        <div className="flex items-center gap-2 text-[#538d4e]">
+                            <span className="font-mono text-xs font-bold">[STANDARD_CIPHERS]</span>
+                        </div>
+                        <p className="text-slate-400 font-mono text-[10px] uppercase leading-relaxed">
+                            Unique numeric sequences where no digit is repeated (e.g., 5-3-1-9). Ideal for classic logical deduction.
+                        </p>
+                    </div>
+
+                    <div className="p-4 border border-[#c8b653]/30 bg-[#c8b653]/5 rounded-xl space-y-2">
+                        <div className="flex items-center gap-2 text-[#c8b653]">
+                            <span className="font-mono text-xs font-bold">[ELITE_OVERDRIVE]</span>
+                        </div>
+                        <p className="text-slate-400 font-mono text-[10px] uppercase leading-relaxed">
+                            Advanced anomalies allowing <span className="text-[#c8b653] font-bold underline">REPEATING DIGITS</span> (e.g., 7-7-2-7). exponentially harder to decrypt.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="p-3 bg-blue-900/10 border border-blue-500/20 rounded-lg">
+                             <div className="font-mono text-[10px] font-bold text-blue-400 mb-1">TIMER_LOCK</div>
+                             <p className="text-[8px] text-slate-500 font-mono uppercase">Mission fails if the countdown reaches zero.</p>
+                        </div>
+                        <div className="p-3 bg-purple-900/10 border border-purple-500/20 rounded-lg">
+                             <div className="font-mono text-[10px] font-bold text-purple-400 mb-1">UNLIMITED_TRIES</div>
+                             <p className="text-[8px] text-slate-500 font-mono uppercase">Bypasses attempt limits for deep analysis sessions.</p>
                         </div>
                     </div>
                   </div>
                 </motion.div>
               )}
-              {activeSection !== 'basics' && (
+
+              {activeSection === 'scoring' && (
                 <motion.div
-                   initial={{ opacity: 0 }}
-                   animate={{ opacity: 1 }}
-                   className="flex items-center justify-center h-full text-[#565758] font-mono text-[10px] uppercase tracking-widest"
+                  key="scoring"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="space-y-6"
                 >
-                   Refer to mission briefings...
+                  <div className="space-y-4">
+                    <h4 className="text-[#538d4e] font-mono text-xs font-bold uppercase tracking-widest">Operative_Efficiency_Rating</h4>
+                    
+                    <div className="space-y-4 font-mono text-[10px] uppercase">
+                        <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                            <span className="text-slate-400">Mission Complexity Base</span>
+                            <span className="text-slate-100 font-bold">500 - 10,000</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                            <span className="text-slate-400">Efficiency Multiplier (Attempts)</span>
+                            <span className="text-[#538d4e]">UP TO 2.0x</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                            <span className="text-blue-400 font-bold">Timer Bonus</span>
+                            <span className="text-blue-400">1.5x Multiplier</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-white/5 pb-2 text-red-400">
+                            <span className="">Unlimited Tries Penalty</span>
+                            <span className="">-30% Reduction</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-white/5 pb-2 text-red-400">
+                            <span className="">Hint Utilization</span>
+                            <span className="">-150 Per Request</span>
+                        </div>
+                    </div>
+
+                    <div className="p-3 bg-white/5 rounded italic text-[9px] text-[#565758] font-mono uppercase">
+                        * Solving on the first attempt yields maximum efficiency rewards.
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeSection === 'multiplayer' && (
+                <motion.div
+                  key="multiplayer"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4"
+                >
+                   <div className="w-16 h-16 border-4 border-dashed border-[#565758] rounded-full flex items-center justify-center animate-spin-slow">
+                      <svg className="w-8 h-8 text-[#565758]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                      </svg>
+                   </div>
+                   <div className="space-y-2">
+                      <h4 className="text-slate-300 font-mono text-[10px] font-black uppercase tracking-[0.5em] animate-pulse">REMOTE_UPLINK_ENCRYPTED</h4>
+                      <p className="text-[#565758] font-mono text-[9px] uppercase leading-relaxed">
+                        Peer-to-peer competitive decryption is currently undergoing tactical stress testing. Stand by for operative deployment updates.
+                      </p>
+                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
         </div>
 
+        {/* Footer */}
         <div className="p-6 border-t border-[#3a3a3c] shrink-0 bg-white/2 flex justify-center">
             <button
               onClick={onClose}
