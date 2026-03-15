@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useRef, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useGameStore } from "@/store/useGameStore";
 import { api, LeaderboardEntry } from "@/lib/api";
 
@@ -136,6 +137,7 @@ const MISSION_LEVELS: Record<string, MissionLevel[]> = {
 };
 
 function LandingView() {
+  const router = useRouter();
   const { startNewGame, menuState, setMenuState } = useGameStore();
   const [category, setCategory] = useState<"standard" | "overdrive">("standard");
   const [showHowToPlay, setShowHowToPlay] = useState(false);
@@ -188,9 +190,8 @@ function LandingView() {
               />
               <MenuButton
                 label="MULTIPLAYER"
-                desc="Remote Uplink Pending..."
-                onClick={() => {}}
-                disabled
+                desc="Remote Uplink Authorized"
+                onClick={() => router.push("/multiplayer")}
               />
             </motion.div>
           )}
