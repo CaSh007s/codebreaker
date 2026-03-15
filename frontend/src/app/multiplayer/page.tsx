@@ -52,7 +52,7 @@ export default function MultiplayerLanding() {
           <h1 className="text-2xl font-bold tracking-[0.5em] font-serif flex justify-center flex-nowrap whitespace-nowrap overflow-hidden opacity-80">
             MULTIPLAYER
           </h1>
-          <p className="text-[#538d4e] font-mono text-[11px] uppercase tracking-[0.6em] animate-pulse">
+          <p className="text-[#538d4e] font-mono text-[8px] uppercase tracking-[0.6em] animate-pulse">
             ESTABLISHING_ENCRYPTED_UPLINK...
           </p>
         </div>

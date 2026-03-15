@@ -49,6 +49,14 @@ export const useSocket = (room?: string) => {
       });
     });
 
+    socket.on("game_start", (data) => {
+      console.log("Game started!", data);
+    });
+
+    socket.on("game_over", (data) => {
+      console.log("Game over!", data);
+    });
+
     socket.on("status", (data) => {
       console.log("Status update:", data);
     });

@@ -96,6 +96,19 @@ async def toggle_ready(sid, data):
         room = multiplayer_service.update_player_ready(room_id, sid, is_ready)
         if room:
             await sio.emit('room_update', room, room=room_id)
+            if room["status"] == "playing":
+                await sio.emit('game_start', room, room=room_id)
+
+@sio.event
+async def submit_guess(sid, data):
+    room_id = data.get('room_id')
+    guess = data.get('guess')
+    if room_id and guess:
+        room = multiplayer_service.submit_guess(room_id, sid, guess)
+        if room:
+            await sio.emit('room_update', room, room=room_id)
+            if room["status"] == "finished":
+                await sio.emit('game_over', room, room=room_id)
 
 @sio.event
 async def chat_message(sid, data):
@@ -103,3 +116,11 @@ async def chat_message(sid, data):
     message = data.get('message')
     if room and message:
         await sio.emit('message', data, room=room, skip_sid=sid)
+@sio.event
+async def get_hint(sid, data):
+    room_id = data.get('room_id')
+    revealed_indices = data.get('revealed_indices', [])
+    if room_id:
+        hint = multiplayer_service.get_hint(room_id, sid, revealed_indices)
+        if hint:
+            await sio.emit('hint_received', hint, to=sid)

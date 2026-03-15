@@ -1,10 +1,17 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useRef, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGameStore } from "@/store/useGameStore";
 import { api, LeaderboardEntry } from "@/lib/api";
+import {
+  Board,
+  Keyboard,
+  AnimatedHeading,
+  HowToPlayModal,
+  AbandonMissionModal,
+} from "@/components/game/SharedGameUI";
 
 export default function Home() {
   const { view } = useGameStore();
@@ -12,8 +19,10 @@ export default function Home() {
   return (
     <main className="relative flex h-dvh w-full flex-col bg-[#0a0a0b] text-slate-100 overflow-hidden selection:bg-[#538d4e]/30">
       <TopHeader />
-      
-      <div className={`flex-1 w-full flex flex-col items-center relative z-10 px-4 min-h-0 overflow-hidden ${view === 'landing' ? 'justify-center' : ''}`}>
+
+      <div
+        className={`flex-1 w-full flex flex-col items-center relative z-10 px-4 min-h-0 overflow-hidden ${view === "landing" ? "justify-center" : ""}`}
+      >
         <AnimatePresence mode="wait">
           {view === "landing" ? (
             <LandingView key="landing" />
@@ -22,8 +31,6 @@ export default function Home() {
           )}
         </AnimatePresence>
       </div>
-
-
     </main>
   );
 }
@@ -31,12 +38,12 @@ export default function Home() {
 function TopHeader() {
   const { view, setView, status } = useGameStore();
   const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
-  
+
   const handleBack = () => {
     if (status === "active") {
-        setShowAbandonConfirm(true);
+      setShowAbandonConfirm(true);
     } else {
-        setView("landing");
+      setView("landing");
     }
   };
 
@@ -52,8 +59,18 @@ function TopHeader() {
             onClick={handleBack}
             className="text-[#565758] hover:text-[#538d4e] transition-colors p-2 rounded-full hover:bg-[#538d4e]/5"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
             </svg>
           </motion.button>
         ) : (
@@ -63,13 +80,13 @@ function TopHeader() {
 
       <AnimatePresence>
         {showAbandonConfirm && (
-            <AbandonMissionModal 
-                onClose={() => setShowAbandonConfirm(false)} 
-                onConfirm={() => {
-                    setShowAbandonConfirm(false);
-                    useGameStore.getState().resignGame();
-                }}
-            />
+          <AbandonMissionModal
+            onClose={() => setShowAbandonConfirm(false)}
+            onConfirm={() => {
+              setShowAbandonConfirm(false);
+              useGameStore.getState().resignGame();
+            }}
+          />
         )}
       </AnimatePresence>
 
@@ -77,7 +94,6 @@ function TopHeader() {
     </header>
   );
 }
-
 
 interface MissionLevel {
   label: string;
@@ -139,7 +155,9 @@ const MISSION_LEVELS: Record<string, MissionLevel[]> = {
 function LandingView() {
   const router = useRouter();
   const { startNewGame, menuState, setMenuState } = useGameStore();
-  const [category, setCategory] = useState<"standard" | "overdrive">("standard");
+  const [category, setCategory] = useState<"standard" | "overdrive">(
+    "standard",
+  );
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
 
@@ -159,7 +177,7 @@ function LandingView() {
           <HowToPlayModal onClose={() => setShowHowToPlay(false)} />
         )}
         {showLeaderboard && (
-            <LeaderboardModal onClose={() => setShowLeaderboard(false)} />
+          <LeaderboardModal onClose={() => setShowLeaderboard(false)} />
         )}
       </AnimatePresence>
 
@@ -276,7 +294,13 @@ function LandingView() {
               <button
                 onClick={() => {
                   const l = MISSION_LEVELS[category][selectedLevel];
-                  startNewGame("classic", l.length, l.tries, l.repeats, l.label);
+                  startNewGame(
+                    "classic",
+                    l.length,
+                    l.tries,
+                    l.repeats,
+                    l.label,
+                  );
                 }}
                 className="w-full py-4 bg-[#538d4e] hover:bg-[#58a352] text-black text-lg font-bold rounded-lg transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(83,141,78,0.2)] hover:shadow-[0_0_25px_rgba(83,141,78,0.4)] mt-4"
               >
@@ -301,7 +325,7 @@ function LandingView() {
         >
           FIELD_MANUAL.pdf
         </button>
-        <button 
+        <button
           onClick={() => setShowLeaderboard(true)}
           className="flex-1 py-2 px-3 border border-[#3a3a3c] rounded text-[#565758] hover:text-slate-100 hover:border-slate-500 font-mono text-[9px] transition-all tracking-tighter uppercase text-center bg-white/5"
         >
@@ -316,27 +340,7 @@ function LandingView() {
   );
 }
 
-function AnimatedHeading({ text }: { text: string }) {
-  return (
-    <h1 className="text-[clamp(1.8rem,10vw,4rem)] sm:text-6xl font-bold tracking-widest sm:tracking-widest font-serif flex justify-center flex-nowrap whitespace-nowrap overflow-hidden py-2">
-      {text.split("").map((char, i) => (
-        <motion.span
-          key={i}
-          whileHover={{
-            scale: 1.15,
-            color: "#538d4e",
-            textShadow: "0 0 20px rgba(83,141,78,0.8)",
-            y: -2,
-          }}
-          transition={{ type: "spring", stiffness: 400, damping: 20 }}
-          className="inline-block cursor-default drop-shadow-[0_0_15px_rgba(255,255,255,0.05)]"
-        >
-          {char}
-        </motion.span>
-      ))}
-    </h1>
-  );
-}
+// Redundant AnimatedHeading removed
 
 function MenuButton({
   label,
@@ -405,7 +409,8 @@ function MenuButton({
 }
 
 function ModifierPanel() {
-  const { timerLimit, setTimerLimit, infiniteMode, setInfiniteMode } = useGameStore();
+  const { timerLimit, setTimerLimit, infiniteMode, setInfiniteMode } =
+    useGameStore();
 
   const timeOptions = [
     { label: "OFF", value: null },
@@ -462,21 +467,24 @@ function ModifierPanel() {
 }
 
 function GameView() {
-  const { 
-    startNewGame, 
-    status, 
-    error, 
-    attemptsRemaining, 
-    setView, 
-    timer, 
-    setTimer, 
-    username, 
-    currentLevelLabel, 
+  const {
+    startNewGame,
+    status,
+    error,
+    attemptsRemaining,
+    setView,
+    timer,
+    setTimer,
+    username,
+    currentLevelLabel,
     guesses,
+    currentGuess,
+    codeLength,
+    isLoading,
     timerLimit,
     infiniteMode,
     calculateScore,
-    revealedCode
+    revealedCode,
   } = useGameStore();
   const [isUploading, setIsUploading] = useState(false);
   const [hasUploaded, setHasUploaded] = useState(false);
@@ -489,12 +497,12 @@ function GameView() {
       interval = setInterval(() => {
         const nextTime = timer + 1;
         setTimer(nextTime);
-        
+
         // Auto-fail if timer limit reached
         if (timerLimit && nextTime >= timerLimit) {
-            // Need a way to set status to failed.
-            // For now, I'll rely on the UI to handle it or I can add a surrender call.
-            // Actually, let's just use the timer value in UI to block actions.
+          // Need a way to set status to failed.
+          // For now, I'll rely on the UI to handle it or I can add a surrender call.
+          // Actually, let's just use the timer value in UI to block actions.
         }
       }, 1000);
     }
@@ -517,26 +525,36 @@ function GameView() {
       const upload = async () => {
         setIsUploading(true);
         try {
-            await api.postScore({
-                username,
-                level: currentLevelLabel,
-                tries: guesses.length,
-                time_seconds: timer,
-                status: "solved",
-                score: calculateScore(),
-                timerMode: timerLimit !== null,
-                infiniteMode: useGameStore.getState().infiniteMode
-            });
-            setHasUploaded(true);
+          await api.postScore({
+            username,
+            level: currentLevelLabel,
+            tries: guesses.length,
+            time_seconds: timer,
+            status: "solved",
+            score: calculateScore(),
+            timerMode: timerLimit !== null,
+            infiniteMode: useGameStore.getState().infiniteMode,
+          });
+          setHasUploaded(true);
         } catch (e) {
-            console.error(e);
+          console.error(e);
         } finally {
-            setIsUploading(false);
+          setIsUploading(false);
         }
       };
       upload();
     }
-  }, [status, hasUploaded, isUploading, username, currentLevelLabel, guesses.length, timer, timerLimit, calculateScore]);
+  }, [
+    status,
+    hasUploaded,
+    isUploading,
+    username,
+    currentLevelLabel,
+    guesses.length,
+    timer,
+    timerLimit,
+    calculateScore,
+  ]);
 
   return (
     <motion.div
@@ -577,41 +595,49 @@ function GameView() {
                     ${isTimeUp || (timerLimit && timeRemaining !== null && timeRemaining <= 30) ? "text-red-500 animate-pulse" : ""}
                 `}
               >
-                {timerLimit 
-                    ? formatTime(timeRemaining || 0) 
-                    : (infiniteMode ? "∞" : (attemptsRemaining ?? "∞"))
-                }
+                {timerLimit
+                  ? formatTime(timeRemaining || 0)
+                  : infiniteMode
+                    ? "∞"
+                    : (attemptsRemaining ?? "∞")}
               </span>
             </div>
-            
+
             <div className="flex flex-col gap-2">
-                <button 
-                  onClick={() => useGameStore.getState().triggerHint()}
-                  disabled={status !== "active" || guesses.length < 1}
-                  className="px-3 py-1 border border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/10 text-[#538d4e] font-mono text-[8px] uppercase tracking-widest rounded transition-all disabled:opacity-30"
-                >
-                    [GET_HINT]
-                </button>
-                <button 
-                  onClick={() => useGameStore.getState().resignGame()}
-                  disabled={status !== "active"}
-                  className="px-3 py-1 border border-red-500/30 bg-red-500/5 hover:bg-red-500/10 text-red-400 font-mono text-[8px] uppercase tracking-widest rounded transition-all disabled:opacity-30"
-                >
-                    [SURRENDER]
-                </button>
-                <button 
-                  onClick={() => setShowHelp(true)}
-                  className="px-3 py-1 border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 text-blue-400 font-mono text-[8px] uppercase tracking-widest rounded transition-all"
-                >
-                    [?]
-                </button>
+              <button
+                onClick={() => useGameStore.getState().triggerHint()}
+                disabled={status !== "active" || guesses.length < 1}
+                className="px-3 py-1 border border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/10 text-[#538d4e] font-mono text-[8px] uppercase tracking-widest rounded transition-all disabled:opacity-30"
+              >
+                [GET_HINT]
+              </button>
+              <button
+                onClick={() => useGameStore.getState().resignGame()}
+                disabled={status !== "active"}
+                className="px-3 py-1 border border-red-500/30 bg-red-500/5 hover:bg-red-500/10 text-red-400 font-mono text-[8px] uppercase tracking-widest rounded transition-all disabled:opacity-30"
+              >
+                [SURRENDER]
+              </button>
+              <button
+                onClick={() => setShowHelp(true)}
+                className="px-3 py-1 border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 text-blue-400 font-mono text-[8px] uppercase tracking-widest rounded transition-all"
+              >
+                [?]
+              </button>
             </div>
           </div>
         </motion.header>
       </div>
 
       <div className="flex-1 w-full max-w-md flex flex-col min-h-0 overflow-hidden px-2">
-        <Board />
+        <Board
+          guesses={guesses}
+          currentGuess={currentGuess}
+          codeLength={codeLength}
+          status={status}
+          hintsRevealed={useGameStore.getState().hintsRevealed}
+          onHintClick={(pos) => useGameStore.getState().triggerHint(pos)}
+        />
       </div>
 
       <div className="shrink-0 w-full max-w-md mt-4 pb-6">
@@ -648,8 +674,12 @@ function GameView() {
                   >
                     {status === "solved" ? (
                       <>
-                        <span className="text-xl sm:text-2xl opacity-80">MISSION</span>
-                        <span className="text-3xl sm:text-4xl">ACCOMPLISHED</span>
+                        <span className="text-xl sm:text-2xl opacity-80">
+                          MISSION
+                        </span>
+                        <span className="text-3xl sm:text-4xl">
+                          ACCOMPLISHED
+                        </span>
                       </>
                     ) : (
                       <span className="text-3xl sm:text-4xl">
@@ -658,16 +688,23 @@ function GameView() {
                     )}
                   </div>
                   <p className="text-[#565758] font-mono text-[9px] uppercase tracking-[0.3em]">
-                    {status === "solved" ? "Target Cipher Compromised" : "System Lockdown Initialized"}
+                    {status === "solved"
+                      ? "Target Cipher Compromised"
+                      : "System Lockdown Initialized"}
                   </p>
                 </div>
 
                 {revealedCode && (
                   <div className="py-4 border-y border-[#3a3a3c]/50">
-                    <span className="block text-[#565758] font-mono text-[8px] uppercase tracking-widest mb-2">Target Cipher</span>
+                    <span className="block text-[#565758] font-mono text-[8px] uppercase tracking-widest mb-2">
+                      Target Cipher
+                    </span>
                     <div className="flex justify-center gap-2">
-                      {revealedCode.split('').map((digit, i) => (
-                        <div key={i} className="w-10 h-10 border border-[#538d4e]/30 bg-[#538d4e]/5 flex items-center justify-center text-[#538d4e] font-mono font-bold text-xl rounded">
+                      {revealedCode.split("").map((digit, i) => (
+                        <div
+                          key={i}
+                          className="w-10 h-10 border border-[#538d4e]/30 bg-[#538d4e]/5 flex items-center justify-center text-[#538d4e] font-mono font-bold text-xl rounded"
+                        >
                           {digit}
                         </div>
                       ))}
@@ -677,20 +714,36 @@ function GameView() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white/5 p-3 rounded-lg border border-white/5">
-                    <span className="block text-[#565758] font-mono text-[7px] uppercase mb-1">Attempts</span>
-                    <span className="text-xl font-bold text-slate-100">{guesses.length}</span>
+                    <span className="block text-[#565758] font-mono text-[7px] uppercase mb-1">
+                      Attempts
+                    </span>
+                    <span className="text-xl font-bold text-slate-100">
+                      {guesses.length}
+                    </span>
                   </div>
                   <div className="bg-white/5 p-3 rounded-lg border border-white/5">
-                    <span className="block text-[#565758] font-mono text-[7px] uppercase mb-1">Duration</span>
-                    <span className="text-xl font-bold text-slate-100">{formatTime(timer)}</span>
+                    <span className="block text-[#565758] font-mono text-[7px] uppercase mb-1">
+                      Duration
+                    </span>
+                    <span className="text-xl font-bold text-slate-100">
+                      {formatTime(timer)}
+                    </span>
                   </div>
                   <div className="bg-white/5 p-3 rounded-lg border border-white/5">
-                    <span className="block text-[#565758] font-mono text-[7px] uppercase mb-1">Hints Used</span>
-                    <span className="text-xl font-bold text-slate-100">{useGameStore.getState().hintsUsed}</span>
+                    <span className="block text-[#565758] font-mono text-[7px] uppercase mb-1">
+                      Hints Used
+                    </span>
+                    <span className="text-xl font-bold text-slate-100">
+                      {useGameStore.getState().hintsUsed}
+                    </span>
                   </div>
                   <div className="bg-white/5 p-3 rounded-lg border border-[#538d4e]/20">
-                    <span className="block text-[#538d4e] font-mono text-[7px] uppercase mb-1">Operative Score</span>
-                    <span className="text-xl font-bold text-[#538d4e]">{status === 'solved' ? calculateScore() : '000'}</span>
+                    <span className="block text-[#538d4e] font-mono text-[7px] uppercase mb-1">
+                      Operative Score
+                    </span>
+                    <span className="text-xl font-bold text-[#538d4e]">
+                      {status === "solved" ? calculateScore() : "000"}
+                    </span>
                   </div>
                 </div>
 
@@ -698,9 +751,21 @@ function GameView() {
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       onClick={() => {
-                        const levelData = MISSION_LEVELS.standard.find(l => l.label === currentLevelLabel) || MISSION_LEVELS.overdrive.find(l => l.label === currentLevelLabel);
+                        const levelData =
+                          MISSION_LEVELS.standard.find(
+                            (l) => l.label === currentLevelLabel,
+                          ) ||
+                          MISSION_LEVELS.overdrive.find(
+                            (l) => l.label === currentLevelLabel,
+                          );
                         if (levelData) {
-                          startNewGame("classic", levelData.length, levelData.tries, levelData.repeats, levelData.label);
+                          startNewGame(
+                            "classic",
+                            levelData.length,
+                            levelData.tries,
+                            levelData.repeats,
+                            levelData.label,
+                          );
                         }
                       }}
                       className="w-full py-4 bg-white/10 hover:bg-white/20 text-slate-100 font-bold rounded-xl transition-all active:scale-95 border border-white/10 uppercase tracking-widest text-xs"
@@ -710,24 +775,48 @@ function GameView() {
                     <button
                       onClick={() => {
                         // Find current list and index
-                        const isStandard = MISSION_LEVELS.standard.some(l => l.label === currentLevelLabel);
-                        const list = isStandard ? MISSION_LEVELS.standard : MISSION_LEVELS.overdrive;
-                        const currentIndex = list.findIndex(l => l.label === currentLevelLabel);
+                        const isStandard = MISSION_LEVELS.standard.some(
+                          (l) => l.label === currentLevelLabel,
+                        );
+                        const list = isStandard
+                          ? MISSION_LEVELS.standard
+                          : MISSION_LEVELS.overdrive;
+                        const currentIndex = list.findIndex(
+                          (l) => l.label === currentLevelLabel,
+                        );
                         const nextIndex = currentIndex + 1;
-                        
+
                         if (nextIndex < list.length) {
-                            const nextLevel = list[nextIndex];
-                            startNewGame("classic", nextLevel.length, nextLevel.tries, nextLevel.repeats, nextLevel.label);
+                          const nextLevel = list[nextIndex];
+                          startNewGame(
+                            "classic",
+                            nextLevel.length,
+                            nextLevel.tries,
+                            nextLevel.repeats,
+                            nextLevel.label,
+                          );
                         } else {
-                            // If end of standard, go to overdrive, or stay at MASTER?
-                            // User said "proceed beyond hard", so let's handle transition if possible
-                            if (isStandard) {
-                                const nextLevel = MISSION_LEVELS.overdrive[0];
-                                startNewGame("classic", nextLevel.length, nextLevel.tries, nextLevel.repeats, nextLevel.label);
-                            } else {
-                                // Already at MASTER
-                                startNewGame("classic", list[currentIndex].length, list[currentIndex].tries, list[currentIndex].repeats, list[currentIndex].label);
-                            }
+                          // If end of standard, go to overdrive, or stay at MASTER?
+                          // User said "proceed beyond hard", so let's handle transition if possible
+                          if (isStandard) {
+                            const nextLevel = MISSION_LEVELS.overdrive[0];
+                            startNewGame(
+                              "classic",
+                              nextLevel.length,
+                              nextLevel.tries,
+                              nextLevel.repeats,
+                              nextLevel.label,
+                            );
+                          } else {
+                            // Already at MASTER
+                            startNewGame(
+                              "classic",
+                              list[currentIndex].length,
+                              list[currentIndex].tries,
+                              list[currentIndex].repeats,
+                              list[currentIndex].label,
+                            );
+                          }
                         }
                       }}
                       className="w-full py-4 bg-[#538d4e] hover:bg-[#58a352] text-black font-bold rounded-xl transition-all active:scale-95 shadow-[0_0_20px_rgba(83,141,78,0.3)] uppercase tracking-widest text-xs"
@@ -747,7 +836,18 @@ function GameView() {
           )}
         </AnimatePresence>
 
-        <Keyboard />
+        <Keyboard
+          onAddDigit={(d) => useGameStore.getState().addDigit(d)}
+          onRemoveDigit={() => useGameStore.getState().removeDigit()}
+          onSubmitGuess={() => useGameStore.getState().submitGuess()}
+          currentGuess={currentGuess}
+          codeLength={codeLength}
+          status={status}
+          isLoading={isLoading}
+          timerActionBlocked={isTimeUp}
+          struckKeys={useGameStore.getState().struckKeys}
+          onToggleStruckKey={(k) => useGameStore.getState().toggleStruckKey(k)}
+        />
       </div>
 
       <footer className="flex-none mt-4 text-[#565758] font-mono text-[8px] uppercase tracking-[0.4em]">
@@ -797,16 +897,120 @@ function BinaryBackground() {
   );
 }
 
-function HowToPlayModal({ onClose }: { onClose: () => void }) {
-  const sections = [
-    { id: 'basics', label: '01_CORE_MECHANICS' },
-    { id: 'modes', label: '02_MISSION_PROFILES' },
-    { id: 'scoring', label: '03_OPERATIVE_ENTRY' },
-    { id: 'multiplayer', label: '04_REMOTE_UPLINK' }
-  ] as const;
+// Redundant HowToPlayModal removed
 
-  type SectionId = typeof sections[number]['id'];
-  const [activeSection, setActiveSection] = useState<SectionId>('basics');
+// Redundant AbandonMissionModal removed
+
+function OperativeIdentity() {
+  const { username, setUsername, view, menuState } = useGameStore();
+
+  // Only editable on the main landing page
+  const isEditable = view === "landing" && menuState === "main";
+
+  const generateNewAlias = () => {
+    if (!isEditable) return;
+    const prefixes = [
+      "VOID",
+      "CYPHER",
+      "LOGIC",
+      "GHOST",
+      "SIGNAL",
+      "DECODER",
+      "PROXY",
+    ];
+    const suffixes = [
+      "WALKER",
+      "KID",
+      "STALKER",
+      "BLADE",
+      "REAPER",
+      "PULSE",
+      "BREAKER",
+    ];
+    const randomNum = Math.floor(Math.random() * 900) + 100;
+    const newAlias = `${prefixes[Math.floor(Math.random() * prefixes.length)]}_${suffixes[Math.floor(Math.random() * suffixes.length)]}_${randomNum}`;
+    setUsername(newAlias);
+  };
+
+  return (
+    <div className="flex flex-col items-end gap-1 p-2 border border-[#3a3a3c] rounded-lg bg-black/40 backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.5)] border-t-[#565758]/30">
+      <span className="text-[#565758] font-mono text-[7px] uppercase tracking-widest">
+        OPERATIVE_ID
+      </span>
+      <div className="flex items-center gap-3">
+        <span className="text-[#538d4e] font-mono text-[11px] font-bold tracking-tight drop-shadow-[0_0_5px_rgba(83,141,78,0.3)]">
+          {username}
+        </span>
+        {isEditable && (
+          <button
+            onClick={generateNewAlias}
+            className="p-1 hover:bg-[#538d4e]/10 rounded transition-colors group"
+            title="Regenerate Alias"
+          >
+            <svg
+              className="w-3.5 h-3.5 text-[#565758] group-hover:text-[#538d4e] transition-all group-hover:rotate-180 duration-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LeaderboardModal({ onClose }: { onClose: () => void }) {
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api
+      .getLeaderboard()
+      .then((data: LeaderboardEntry[]) => {
+        const local = api.getLocalLeaderboard();
+        const merged = [...data, ...local];
+        const unique = merged.filter(
+          (entry, index, self) =>
+            index ===
+            self.findIndex(
+              (e) =>
+                e.timestamp === entry.timestamp &&
+                e.username === entry.username,
+            ),
+        );
+        const statusPriority: Record<string, number> = {
+          solved: 0,
+          surrendered: 1,
+          failed: 2,
+          active: 3,
+        };
+        unique.sort((a, b) => {
+          const sp =
+            (statusPriority[a.status] ?? 99) - (statusPriority[b.status] ?? 99);
+          if (sp !== 0) return sp;
+          return b.score - a.score;
+        });
+        setEntries(unique);
+        setLoading(false);
+      })
+      .catch(() => {
+        setEntries(api.getLocalLeaderboard());
+        setLoading(false);
+      });
+  }, []);
+
+  const handlePurge = () => {
+    api.clearLeaderboard();
+    setEntries([]);
+  };
 
   return (
     <motion.div
@@ -817,724 +1021,125 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
       className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl cursor-pointer"
     >
       <motion.div
-        initial={{ scale: 0.95, y: 20, opacity: 0 }}
+        initial={{ scale: 0.95, y: 10, opacity: 0 }}
         animate={{ scale: 1, y: 0, opacity: 1 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#0f0f10] border border-[#3a3a3c] rounded-2xl max-w-2xl w-full shadow-[0_0_60px_rgba(0,0,0,1)] border-t-[#565758]/50 flex flex-col max-h-[85dvh] cursor-default overflow-hidden"
+        className="bg-[#0f0f10] border border-[#3a3a3c] p-6 sm:p-10 rounded-2xl max-w-4xl w-full shadow-[0_0_50px_rgba(0,0,0,1)] border-t-[#565758]/50 flex flex-col max-h-[80dvh] cursor-default"
       >
-        {/* Terminal Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-6 border-b border-[#3a3a3c] shrink-0 bg-white/2 gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-[#538d4e] animate-pulse" />
-            <h3 className="text-xl font-bold tracking-tighter font-serif uppercase text-slate-100">
-                FIELD_MANUAL.pdf
-            </h3>
-          </div>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#3a3a3c] pb-6 shrink-0">
+          <h3 className="text-xl sm:text-2xl font-bold tracking-tighter font-serif uppercase text-[#538d4e] drop-shadow-[0_0_15px_rgba(83,141,78,0.4)]">
+            CENTRAL_REGISTRY.reg
+          </h3>
           <button
             onClick={onClose}
-            className="text-[#565758] hover:text-white transition-all uppercase font-mono text-[10px] sm:text-xs bg-white/5 px-3 py-1.5 rounded border border-white/10 hover:border-white/20 flex items-center gap-2 group"
+            className="text-[#565758] hover:text-white transition-colors uppercase font-mono text-[10px] sm:text-xs bg-white/5 px-3 py-1.5 rounded border border-white/10 hover:border-white/20 flex items-center gap-2 group"
           >
-            <span className="hidden sm:inline">[TERMINATE_SESSION]</span>
+            <span className="hidden sm:inline">[CLOSE_TERMINAL]</span>
             <span className="sm:hidden">[X]</span>
-            <div className="w-1.5 h-1.5 rounded-full bg-red-500/50 group-hover:bg-red-500 animate-ping" />
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500/50 group-hover:bg-red-500 animate-pulse" />
           </button>
         </div>
 
-        {/* Sidebar Navigation */}
-        <div className="flex flex-col sm:flex-row flex-1 min-h-0">
-          <div className="w-full sm:w-48 border-b sm:border-b-0 sm:border-r border-[#3a3a3c] p-2 bg-black/20 overflow-x-auto sm:overflow-x-visible no-scrollbar">
-            <div className="flex sm:flex-col gap-1 min-w-max sm:min-w-0">
-              {sections.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => setActiveSection(s.id)}
-                  className={`
-                    flex-1 sm:flex-none text-left px-4 py-3 rounded-lg font-mono text-[9px] uppercase tracking-widest transition-all
-                    ${activeSection === s.id 
-                      ? "bg-[#538d4e]/10 text-[#538d4e] border-l-2 border-[#538d4e] shadow-[0_0_15px_rgba(83,141,78,0.1)]" 
-                      : "text-[#565758] hover:text-slate-300 hover:bg-white/5"}
-                  `}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Content Area */}
-          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
-            <AnimatePresence mode="wait">
-              {activeSection === 'basics' && (
-                <motion.div
-                  key="basics"
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  className="space-y-6"
-                >
-                  <div className="space-y-2">
-                    <h4 className="text-[#538d4e] font-mono text-xs font-bold uppercase tracking-widest flex items-center gap-2">
-                        <span className="w-1 h-3 bg-[#538d4e] rounded-full" />
-                        Mission_Objective
-                    </h4>
-                    <p className="text-slate-400 font-mono text-[11px] leading-relaxed uppercase">
-                        Breach the system by decrypting the hidden numeric sequence using iterative trial and feedback analysis.
-                    </p>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h4 className="text-slate-300 font-mono text-xs font-bold uppercase tracking-widest">Feedback_Protocols</h4>
-                    
-                    <div className="space-y-3">
-                        <div className="flex items-start gap-4 group">
-                             <div className="w-6 h-6 rounded bg-[#6ca965] shrink-0 shadow-[0_0_10px_rgba(108,169,101,0.3)] flex items-center justify-center text-black font-bold text-xs">B</div>
-                             <div className="flex flex-col">
-                                <span className="text-[#6ca965] font-bold font-mono text-[11px] uppercase">[BULL] - Fixed_Point_Match</span>
-                                <span className="text-slate-500 font-mono text-[10px] uppercase">A correct digit is placed in its <span className="text-[#6ca965] font-bold">exact target position</span>.</span>
-                             </div>
-                        </div>
-
-                        <div className="flex items-start gap-4 group">
-                             <div className="w-6 h-6 rounded bg-[#c8b653] shrink-0 shadow-[0_0_10px_rgba(200,182,83,0.3)] flex items-center justify-center text-black font-bold text-xs">C</div>
-                             <div className="flex flex-col">
-                                <span className="text-[#c8b653] font-bold font-mono text-[11px] uppercase">[COW] - Positional_Shift</span>
-                                <span className="text-slate-500 font-mono text-[10px] uppercase">A correct digit exists in the code, but is in a <span className="text-[#c8b653] font-bold">different position</span>.</span>
-                             </div>
-                        </div>
-
-                        <div className="flex items-start gap-4 group">
-                             <div className="w-6 h-6 rounded bg-[#3a3a3c] shrink-0 flex items-center justify-center text-slate-500 font-bold text-xs">G</div>
-                             <div className="flex flex-col">
-                                <span className="text-slate-400 font-bold font-mono text-[11px] uppercase">[GRAY] - Data_Void</span>
-                                <span className="text-slate-500 font-mono text-[10px] uppercase">Digit does not exist in the target sequence.</span>
-                             </div>
-                        </div>
-                    </div>
-                  </div>
-
-                  <div className="relative p-4 bg-amber-900/10 border border-amber-500/20 rounded-xl overflow-hidden group">
-                      <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-40 transition-opacity">
-                        <svg className="w-8 h-8 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+        <div className="overflow-y-auto overflow-x-auto min-h-0 flex-1 mt-6 no-scrollbar">
+          <table className="w-full font-mono text-[10px] sm:text-xs text-left uppercase">
+            <thead className="text-[#565758] border-b border-[#3a3a3c]/30 sticky top-0 bg-[#0f0f10] z-10">
+              <tr>
+                <th className="pb-3 px-2">RANK</th>
+                <th className="pb-3 px-2">OPERATIVE_ID</th>
+                <th className="pb-3 px-2">MISSION_LEVEL</th>
+                <th className="pb-3 px-2">EFFICIENCY</th>
+                <th className="pb-3 px-2">DURATION</th>
+                <th className="pb-3 px-2">MODIFIERS</th>
+                <th className="pb-3 px-2 text-right">SCORE</th>
+              </tr>
+            </thead>
+            <tbody className="text-slate-300">
+              {loading ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="py-12 text-center animate-pulse text-[#538d4e] text-sm"
+                  >
+                    ACCESSING_DECRYPTED_RECORDS...
+                  </td>
+                </tr>
+              ) : entries.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="py-12 text-center text-[#565758] text-sm"
+                  >
+                    NO_BREACHES_DETECTED_IN_DATABASE
+                  </td>
+                </tr>
+              ) : (
+                entries.map((e, i) => (
+                  <tr
+                    key={i}
+                    className="border-b border-[#3a3a3c]/10 hover:bg-white/5 transition-colors group"
+                  >
+                    <td className="py-4 px-2 text-[#565758]">
+                      {(i + 1).toString().padStart(2, "0")}
+                    </td>
+                    <td className="py-4 px-2 text-slate-100 font-bold group-hover:text-[#538d4e] transition-colors">
+                      {e.username}
+                    </td>
+                    <td className="py-4 px-2 text-[#c8b653] font-black">
+                      {e.level}
+                    </td>
+                    <td
+                      className={`py-4 px-2 font-mono ${e.status === "solved" ? "text-[#538d4e]" : "text-red-400 opacity-70"}`}
+                    >
+                      {e.status === "solved" ? `${e.tries} TRIES` : "RESIGNED"}
+                    </td>
+                    <td className="py-4 px-2 text-slate-100">
+                      {e.status === "solved" ? `${e.time_seconds}s` : "--"}
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="flex gap-1.5">
+                        {e.timerMode && (
+                          <span className="text-[8px] bg-[#c8b653]/10 text-[#c8b653] border border-[#c8b653]/20 px-2 py-0.5 rounded">
+                            TIMER
+                          </span>
+                        )}
+                        {e.infiniteMode && (
+                          <span className="text-[8px] bg-[#cf6679]/10 text-[#cf6679] border border-[#cf6679]/20 px-2 py-0.5 rounded">
+                            INFINITE
+                          </span>
+                        )}
+                        {!e.timerMode && !e.infiniteMode && (
+                          <span className="text-[8px] text-[#565758] border border-white/5 px-2 py-0.5 rounded">
+                            STANDARD
+                          </span>
+                        )}
                       </div>
-                      <h5 className="text-amber-400 font-mono text-[11px] font-black uppercase mb-2 tracking-widest">SIGNAL_MAPPING_PROTOCOL:</h5>
-                      <p className="text-amber-300 font-mono text-[10px] leading-relaxed uppercase pr-8">
-                        Each feedback dot is <span className="underline decoration-amber-500 font-bold">permanently assigned</span> to a specific digit slot for the entire mission. The mapping is <span className="font-black italic">ENCODED</span> — operatives must analyze patterns across multiple guesses to calibrate the signal.
-                      </p>
-                  </div>
-                </motion.div>
+                    </td>
+                    <td
+                      className={`py-4 px-2 font-bold text-right text-sm ${e.status === "solved" ? "text-[#538d4e]" : "text-[#565758]"}`}
+                    >
+                      {e.status === "solved" ? e.score.toLocaleString() : "--"}
+                    </td>
+                  </tr>
+                ))
               )}
-
-              {activeSection === 'modes' && (
-                <motion.div
-                  key="modes"
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="space-y-6"
-                >
-                  <div className="space-y-4">
-                    <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-2">
-                        <div className="flex items-center gap-2 text-[#538d4e]">
-                            <span className="font-mono text-xs font-bold">[STANDARD_CIPHERS]</span>
-                        </div>
-                        <p className="text-slate-400 font-mono text-[10px] uppercase leading-relaxed">
-                            Unique numeric sequences where no digit is repeated (e.g., 5-3-1-9). Ideal for classic logical deduction.
-                        </p>
-                    </div>
-
-                    <div className="p-4 border border-[#c8b653]/30 bg-[#c8b653]/5 rounded-xl space-y-2">
-                        <div className="flex items-center gap-2 text-[#c8b653]">
-                            <span className="font-mono text-xs font-bold">[ELITE_OVERDRIVE]</span>
-                        </div>
-                        <p className="text-slate-400 font-mono text-[10px] uppercase leading-relaxed">
-                            Advanced anomalies allowing <span className="text-[#c8b653] font-bold underline">REPEATING DIGITS</span> (e.g., 7-7-2-7). exponentially harder to decrypt.
-                        </p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="p-3 bg-blue-900/10 border border-blue-500/20 rounded-lg">
-                             <div className="font-mono text-[10px] font-bold text-blue-400 mb-1">TIMER_LOCK</div>
-                             <p className="text-[8px] text-slate-500 font-mono uppercase">Mission fails if the countdown reaches zero.</p>
-                        </div>
-                        <div className="p-3 bg-purple-900/10 border border-purple-500/20 rounded-lg">
-                             <div className="font-mono text-[10px] font-bold text-purple-400 mb-1">UNLIMITED_TRIES</div>
-                             <p className="text-[8px] text-slate-500 font-mono uppercase">Bypasses attempt limits for deep analysis sessions.</p>
-                        </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeSection === 'scoring' && (
-                <motion.div
-                  key="scoring"
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="space-y-6"
-                >
-                  <div className="space-y-4">
-                    <h4 className="text-[#538d4e] font-mono text-xs font-bold uppercase tracking-widest">Operative_Efficiency_Rating</h4>
-                    
-                    <div className="space-y-4 font-mono text-[10px] uppercase">
-                        <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                            <span className="text-slate-400">Mission Complexity Base</span>
-                            <span className="text-slate-100 font-bold">500 - 10,000</span>
-                        </div>
-                        <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                            <span className="text-slate-400">Efficiency Multiplier (Attempts)</span>
-                            <span className="text-[#538d4e]">UP TO 2.0x</span>
-                        </div>
-                        <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                            <span className="text-blue-400 font-bold">Timer Bonus</span>
-                            <span className="text-blue-400">1.5x Multiplier</span>
-                        </div>
-                        <div className="flex justify-between items-center border-b border-white/5 pb-2 text-red-400">
-                            <span className="">Unlimited Tries Penalty</span>
-                            <span className="">-30% Reduction</span>
-                        </div>
-                        <div className="flex justify-between items-center border-b border-white/5 pb-2 text-red-400">
-                            <span className="">Hint Utilization</span>
-                            <span className="">-150 Per Request</span>
-                        </div>
-                    </div>
-
-                    <div className="p-3 bg-white/5 rounded italic text-[9px] text-[#565758] font-mono uppercase">
-                        * Solving on the first attempt yields maximum efficiency rewards.
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeSection === 'multiplayer' && (
-                <motion.div
-                  key="multiplayer"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4"
-                >
-                   <div className="w-16 h-16 border-4 border-dashed border-[#565758] rounded-full flex items-center justify-center animate-spin-slow">
-                      <svg className="w-8 h-8 text-[#565758]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                      </svg>
-                   </div>
-                   <div className="space-y-2">
-                      <h4 className="text-slate-300 font-mono text-[10px] font-black uppercase tracking-[0.5em] animate-pulse">REMOTE_UPLINK_ENCRYPTED</h4>
-                      <p className="text-[#565758] font-mono text-[9px] uppercase leading-relaxed">
-                        Peer-to-peer competitive decryption is currently undergoing tactical stress testing. Stand by for operative deployment updates.
-                      </p>
-                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+            </tbody>
+          </table>
         </div>
 
-        {/* Footer */}
-        <div className="p-6 border-t border-[#3a3a3c] shrink-0 bg-white/2 flex justify-center">
+        <div className="flex justify-between items-center border-t border-[#3a3a3c] pt-6 mt-6 shrink-0">
+          <div className="text-[9px] text-[#565758] font-mono uppercase tracking-[0.3em] italic">
+            Encrypted secure uplink active • {entries.length} records found
+          </div>
+          {entries.length > 0 && (
             <button
-              onClick={onClose}
-              className="px-12 py-3 bg-[#538d4e] hover:bg-[#58a352] text-black font-bold font-mono text-xs rounded transition-all active:scale-95 shadow-[0_0_20px_rgba(83,141,78,0.2)]"
+              onClick={handlePurge}
+              className="text-[#cf6679] hover:bg-[#cf6679]/10 font-mono text-[10px] uppercase font-bold tracking-widest px-4 py-2 rounded border border-[#cf6679]/30 transition-all active:scale-95 shadow-[0_0_15px_rgba(207,102,121,0.1)]"
             >
-              CONFIRM_INTEL_RECEIVED
+              PURGE_REGISTRY_LOGS
             </button>
+          )}
         </div>
       </motion.div>
     </motion.div>
-  );
-}
-
-function AbandonMissionModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: () => void }) {
-    return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-200 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl"
-        >
-            <motion.div
-                initial={{ scale: 0.95, y: 20 }}
-                animate={{ scale: 1, y: 0 }}
-                className="bg-[#0f0f10] border border-red-500/20 p-8 rounded-2xl max-w-sm w-full shadow-[0_0_50px_rgba(239,68,68,0.1)] border-t-red-500/30 text-center space-y-8"
-            >
-                <div className="space-y-4">
-                    <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto border border-red-500/20">
-                        <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                    </div>
-                    <div className="space-y-2">
-                        <h3 className="text-xl font-bold tracking-tighter font-serif uppercase text-red-500">
-                            DESERTION_DETECTED
-                        </h3>
-                        <p className="text-[#565758] font-mono text-[10px] uppercase leading-relaxed tracking-wider">
-                            Operative is attempting to leave an active mission area without official clearance. This will result in an immediate resignation and failed evaluation.
-                        </p>
-                    </div>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                    <button
-                        onClick={onConfirm}
-                        className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold font-mono text-xs rounded transition-all active:scale-95 shadow-[0_0_20px_rgba(220,38,38,0.2)] uppercase"
-                    >
-                        CONFIRM_RESIGNATION
-                    </button>
-                    <button
-                        onClick={onClose}
-                        className="w-full py-3 border border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/10 text-[#538d4e] font-bold font-mono text-xs rounded transition-all active:scale-95 shadow-[0_0_15px_rgba(83,141,78,0.1)] uppercase"
-                    >
-                        [RETURN_TO_STATION]
-                    </button>
-                </div>
-            </motion.div>
-        </motion.div>
-    );
-}
-
-function OperativeIdentity() {
-    const { username, setUsername, view, menuState } = useGameStore();
-    
-    // Only editable on the main landing page
-    const isEditable = view === "landing" && menuState === "main";
-
-    const generateNewAlias = () => {
-        if (!isEditable) return;
-        const prefixes = ["VOID", "CYPHER", "LOGIC", "GHOST", "SIGNAL", "DECODER", "PROXY"];
-        const suffixes = ["WALKER", "KID", "STALKER", "BLADE", "REAPER", "PULSE", "BREAKER"];
-        const randomNum = Math.floor(Math.random() * 900) + 100;
-        const newAlias = `${prefixes[Math.floor(Math.random() * prefixes.length)]}_${suffixes[Math.floor(Math.random() * suffixes.length)]}_${randomNum}`;
-        setUsername(newAlias);
-    };
-
-    return (
-        <div className="flex flex-col items-end gap-1 p-2 border border-[#3a3a3c] rounded-lg bg-black/40 backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.5)] border-t-[#565758]/30">
-            <span className="text-[#565758] font-mono text-[7px] uppercase tracking-widest">OPERATIVE_ID</span>
-            <div className="flex items-center gap-3">
-                <span className="text-[#538d4e] font-mono text-[11px] font-bold tracking-tight drop-shadow-[0_0_5px_rgba(83,141,78,0.3)]">{username}</span>
-                {isEditable && (
-                    <button 
-                        onClick={generateNewAlias}
-                        className="p-1 hover:bg-[#538d4e]/10 rounded transition-colors group"
-                        title="Regenerate Alias"
-                    >
-                        <svg className="w-3.5 h-3.5 text-[#565758] group-hover:text-[#538d4e] transition-all group-hover:rotate-180 duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                    </button>
-                )}
-            </div>
-        </div>
-    );
-}
-
-function LeaderboardModal({ onClose }: { onClose: () => void }) {
-    const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        api.getLeaderboard().then((data: LeaderboardEntry[]) => {
-            const local = api.getLocalLeaderboard();
-            const merged = [...data, ...local];
-            const unique = merged.filter((entry, index, self) => 
-                index === self.findIndex(e => e.timestamp === entry.timestamp && e.username === entry.username)
-            );
-            const statusPriority: Record<string, number> = { solved: 0, surrendered: 1, failed: 2, active: 3 };
-            unique.sort((a, b) => {
-                const sp = (statusPriority[a.status] ?? 99) - (statusPriority[b.status] ?? 99);
-                if (sp !== 0) return sp;
-                return b.score - a.score;
-            });
-            setEntries(unique);
-            setLoading(false);
-        }).catch(() => {
-            setEntries(api.getLocalLeaderboard());
-            setLoading(false);
-        });
-    }, []);
-
-    const handlePurge = () => {
-        api.clearLeaderboard();
-        setEntries([]);
-    };
-
-    return (
-        <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl cursor-pointer"
-        >
-            <motion.div 
-                initial={{ scale: 0.95, y: 10, opacity: 0 }}
-                animate={{ scale: 1, y: 0, opacity: 1 }}
-                onClick={(e) => e.stopPropagation()}
-                className="bg-[#0f0f10] border border-[#3a3a3c] p-6 sm:p-10 rounded-2xl max-w-4xl w-full shadow-[0_0_50px_rgba(0,0,0,1)] border-t-[#565758]/50 flex flex-col max-h-[80dvh] cursor-default"
-            >
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#3a3a3c] pb-6 shrink-0">
-                    <h3 className="text-xl sm:text-2xl font-bold tracking-tighter font-serif uppercase text-[#538d4e] drop-shadow-[0_0_15px_rgba(83,141,78,0.4)]">CENTRAL_REGISTRY.reg</h3>
-                    <button 
-                        onClick={onClose} 
-                        className="text-[#565758] hover:text-white transition-colors uppercase font-mono text-[10px] sm:text-xs bg-white/5 px-3 py-1.5 rounded border border-white/10 hover:border-white/20 flex items-center gap-2 group"
-                    >
-                        <span className="hidden sm:inline">[CLOSE_TERMINAL]</span>
-                        <span className="sm:hidden">[X]</span>
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500/50 group-hover:bg-red-500 animate-pulse" />
-                    </button>
-                </div>
-                
-                <div className="overflow-y-auto overflow-x-auto min-h-0 flex-1 mt-6 no-scrollbar">
-                    <table className="w-full font-mono text-[10px] sm:text-xs text-left uppercase">
-                        <thead className="text-[#565758] border-b border-[#3a3a3c]/30 sticky top-0 bg-[#0f0f10] z-10">
-                            <tr>
-                                <th className="pb-3 px-2">RANK</th>
-                                <th className="pb-3 px-2">OPERATIVE_ID</th>
-                                <th className="pb-3 px-2">MISSION_LEVEL</th>
-                                <th className="pb-3 px-2">EFFICIENCY</th>
-                                <th className="pb-3 px-2">DURATION</th>
-                                <th className="pb-3 px-2">MODIFIERS</th>
-                                <th className="pb-3 px-2 text-right">SCORE</th>
-                            </tr>
-                        </thead>
-                        <tbody className="text-slate-300">
-                            {loading ? (
-                                <tr><td colSpan={7} className="py-12 text-center animate-pulse text-[#538d4e] text-sm">ACCESSING_DECRYPTED_RECORDS...</td></tr>
-                            ) : entries.length === 0 ? (
-                                <tr><td colSpan={7} className="py-12 text-center text-[#565758] text-sm">NO_BREACHES_DETECTED_IN_DATABASE</td></tr>
-                            ) : entries.map((e, i) => (
-                                <tr key={i} className="border-b border-[#3a3a3c]/10 hover:bg-white/5 transition-colors group">
-                                    <td className="py-4 px-2 text-[#565758]">{(i + 1).toString().padStart(2, '0')}</td>
-                                    <td className="py-4 px-2 text-slate-100 font-bold group-hover:text-[#538d4e] transition-colors">{e.username}</td>
-                                    <td className="py-4 px-2 text-[#c8b653] font-black">{e.level}</td>
-                                    <td className={`py-4 px-2 font-mono ${e.status === 'solved' ? 'text-[#538d4e]' : 'text-red-400 opacity-70'}`}>
-                                        {e.status === 'solved' ? `${e.tries} TRIES` : 'RESIGNED'}
-                                    </td>
-                                    <td className="py-4 px-2 text-slate-100">{e.status === 'solved' ? `${e.time_seconds}s` : '--'}</td>
-                                    <td className="py-4 px-2">
-                                        <div className="flex gap-1.5">
-                                            {e.timerMode && <span className="text-[8px] bg-[#c8b653]/10 text-[#c8b653] border border-[#c8b653]/20 px-2 py-0.5 rounded">TIMER</span>}
-                                            {e.infiniteMode && <span className="text-[8px] bg-[#cf6679]/10 text-[#cf6679] border border-[#cf6679]/20 px-2 py-0.5 rounded">INFINITE</span>}
-                                            {!e.timerMode && !e.infiniteMode && <span className="text-[8px] text-[#565758] border border-white/5 px-2 py-0.5 rounded">STANDARD</span>}
-                                        </div>
-                                    </td>
-                                    <td className={`py-4 px-2 font-bold text-right text-sm ${e.status === 'solved' ? 'text-[#538d4e]' : 'text-[#565758]'}`}>
-                                        {e.status === 'solved' ? e.score.toLocaleString() : '--'}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div className="flex justify-between items-center border-t border-[#3a3a3c] pt-6 mt-6 shrink-0">
-                    <div className="text-[9px] text-[#565758] font-mono uppercase tracking-[0.3em] italic">
-                        Encrypted secure uplink active • {entries.length} records found
-                    </div>
-                    {entries.length > 0 && (
-                        <button 
-                            onClick={handlePurge}
-                            className="text-[#cf6679] hover:bg-[#cf6679]/10 font-mono text-[10px] uppercase font-bold tracking-widest px-4 py-2 rounded border border-[#cf6679]/30 transition-all active:scale-95 shadow-[0_0_15px_rgba(207,102,121,0.1)]"
-                        >
-                            PURGE_REGISTRY_LOGS
-                        </button>
-                    )}
-                </div>
-            </motion.div>
-        </motion.div>
-    );
-}
-
-function Board() {
-  const { guesses, currentGuess, codeLength, status, hintsRevealed } = useGameStore();
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll to bottom when a new guess is added
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior: "smooth",
-      });
-    }
-  }, [guesses.length]);
-
-  // Render all existing guesses + 1 active row if game is active
-  const totalRows = status === "active" ? guesses.length + 1 : guesses.length;
-  // Always show at least some empty rows for aesthetic if board is empty
-  const displayRows = Math.max(totalRows, 6);
-  const rows = Array.from({ length: displayRows });
-
-  return (
-    <div
-      ref={scrollRef}
-      className="flex-1 min-h-0 w-full overflow-y-auto no-scrollbar scroll-smooth"
-    >
-      <div className="flex flex-col gap-1.5 py-2">
-        {rows.map((_, i) => {
-          const guessObj = guesses[i];
-          const isCurrent = i === guesses.length && status === "active";
-          const content = guessObj
-            ? guessObj.guess
-            : isCurrent
-              ? currentGuess
-              : "";
-          const feedback = guessObj ? guessObj.feedback : [];
-
-          return (
-            <GuessRow
-              key={i}
-              content={content}
-              codeLength={codeLength}
-              feedback={feedback}
-              isActive={isCurrent}
-              isCompleted={!!guessObj}
-              hints={isCurrent ? hintsRevealed : []}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function GuessRow({
-  content,
-  codeLength,
-  feedback,
-  isActive,
-  isCompleted,
-  hints = []
-}: {
-  content: string;
-  codeLength: number;
-  feedback: string[];
-  isActive: boolean;
-  isCompleted: boolean;
-  hints?: { position: number; digit: string }[];
-}) {
-  const { triggerHint } = useGameStore();
-  const digits = content.split("");
-  const placeholders = Array.from({ length: codeLength });
-
-  return (
-    <motion.div
-      layout
-      className={`flex items-center gap-3 w-full p-1 rounded-lg transition-colors ${isActive ? "bg-[#3a3a3c]/10 border border-[#3a3a3c]/30" : "border border-transparent"}`}
-    >
-      <div className="flex gap-1.5 grow justify-center">
-        {placeholders.map((_, i) => {
-          const hint = hints.find(h => h.position === i);
-          return (
-            <DigitTile
-                key={i}
-                digit={hint ? hint.digit : (digits[i] || "")}
-                isActive={isActive && i === digits.length}
-                isCompleted={isCompleted}
-                isHint={!!hint}
-                delay={i * 0.1}
-                onClick={isActive && !hint ? () => triggerHint(i) : undefined}
-            />
-          );
-        })}
-      </div>
-      <div className="flex flex-wrap gap-1.5 w-16 justify-center">
-        <FeedbackDots feedback={feedback} codeLength={codeLength} />
-      </div>
-    </motion.div>
-  );
-}
-
-function DigitTile({
-  digit,
-  isActive,
-  isCompleted,
-  isHint,
-  delay,
-  onClick,
-}: {
-  digit: string;
-  isActive: boolean;
-  isCompleted: boolean;
-  isHint?: boolean;
-  delay: number;
-  onClick?: () => void;
-}) {
-  return (
-    <motion.div
-      initial={isCompleted ? { rotateX: 0 } : false}
-      animate={isCompleted ? { rotateX: [0, 90, 0] } : {}}
-      transition={{ duration: 0.5, delay }}
-      onClick={onClick}
-      className={`
-                w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-xl sm:text-2xl font-mono font-bold border-2 transition-all duration-200 rounded
-                ${isHint ? "border-[#538d4e]/50 bg-[#538d4e]/10 text-[#538d4e] shadow-[0_0_10px_rgba(83,141,78,0.2)] cursor-default" : 
-                  digit ? "border-[#565758] bg-[#121213] text-white" : "border-[#3a3a3c] bg-[#121213] text-[#3a3a3c]"}
-                ${isActive ? "border-[#818384]" : ""}
-                ${isCompleted ? "border-[#3a3a3c] opacity-100" : ""}
-                ${onClick ? "hover:border-[#538d4e]/50 cursor-pointer" : ""}
-            `}
-    >
-      {digit}
-    </motion.div>
-  );
-}
-
-function FeedbackDots({
-  feedback,
-  codeLength,
-}: {
-  feedback: string[];
-  codeLength: number;
-}) {
-  const dots = [...feedback];
-  while (dots.length < codeLength) {
-    dots.push("hollow");
-  }
-
-  // Adjust grid columns based on code length for better layout
-  const cols = codeLength > 4 ? "grid-cols-3" : "grid-cols-2";
-
-  return (
-    <div className={`grid ${cols} gap-1.5`}>
-      {dots.map((type, i) => (
-        <motion.div
-          key={i}
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: i * 0.1 + 0.5, type: "spring", stiffness: 300 }}
-          className={`
-                        w-2.5 h-2.5 rounded-full border
-                        ${type === "bull" ? "bg-[#6ca965] border-[#6ca965]" : ""}
-                        ${type === "cow" ? "bg-[#c8b653] border-[#c8b653]" : ""}
-                        ${type === "gray" ? "bg-[#787c7f] border-[#787c7f]" : ""}
-                        ${type === "hollow" ? "bg-transparent border-[#3a3a3c]" : ""}
-                    `}
-        />
-      ))}
-    </div>
-  );
-}
-
-function Keyboard() {
-  const {
-    addDigit,
-    removeDigit,
-    submitGuess,
-    currentGuess,
-    codeLength,
-    status,
-    isLoading,
-    timer,
-    timerLimit,
-  } = useGameStore();
-
-  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isTimeUp = timerLimit !== null && (timerLimit - timer) <= 0;
-      if (status !== "active" || isTimeUp) return;
-      if (e.key >= "0" && e.key <= "9") addDigit(e.key);
-      if (e.key === "Backspace") removeDigit();
-      if (e.key === "Enter") submitGuess();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [addDigit, removeDigit, submitGuess, status, timer, timerLimit]);
-
-  return (
-    <div className="w-full max-w-sm flex flex-col gap-1.5 mt-auto pb-4">
-      <div className="grid grid-cols-5 gap-1.5">
-        {keys.slice(0, 5).map((k) => (
-          <KeyButton key={k} label={k} onClick={() => addDigit(k)} />
-        ))}
-      </div>
-      <div className="grid grid-cols-5 gap-1.5">
-        {keys.slice(5).map((k) => (
-          <KeyButton key={k} label={k} onClick={() => addDigit(k)} />
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-1.5 mt-1">
-        <button
-          onClick={removeDigit}
-          className="col-span-2 h-10 sm:h-12 bg-[#cf6679] hover:bg-[#b15668] active:bg-[#934656] text-white font-bold rounded uppercase text-[10px] tracking-widest transition-all shadow-[0_0_15px_rgba(207,102,121,0.2)] active:scale-95"
-        >
-          DEL
-        </button>
-        <button
-          onClick={submitGuess}
-          disabled={
-            currentGuess.length !== codeLength ||
-            status !== "active" ||
-            isLoading ||
-            (timerLimit !== null && (timerLimit - timer) <= 0)
-          }
-          className={`
-                        col-span-5 h-10 sm:h-12 font-bold rounded uppercase text-xs tracking-widest transition-all
-                        ${
-                          currentGuess.length === codeLength &&
-                          status === "active" &&
-                          !isLoading
-                            ? "bg-[#538d4e] hover:bg-[#58a352] text-black cursor-pointer shadow-[0_0_20px_rgba(83,141,78,0.3)] hover:shadow-[0_0_30px_rgba(83,141,78,0.5)] active:scale-95"
-                            : "bg-[#3a3a3c] text-[#565758] cursor-not-allowed"
-                        }
-                        ${isLoading ? "animate-pulse" : ""}
-                    `}
-        >
-          {isLoading ? "PROCESSING..." : "SUBMIT"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function KeyButton({ label, onClick }: { label: string; onClick: () => void }) {
-  const { struckKeys, toggleStruckKey } = useGameStore();
-  const isStruck = struckKeys.includes(label);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const startLongPress = () => {
-    timerRef.current = setTimeout(() => {
-        toggleStruckKey(label);
-    }, 600);
-  };
-
-  const endLongPress = () => {
-    if (timerRef.current) {
-        clearTimeout(timerRef.current);
-    }
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        toggleStruckKey(label);
-      }}
-      onTouchStart={startLongPress}
-      onTouchEnd={endLongPress}
-      onMouseDown={startLongPress}
-      onMouseUp={endLongPress}
-      className={`
-        relative h-10 sm:h-12 flex items-center justify-center font-bold font-mono text-lg rounded transition-all active:scale-90 select-none
-        ${isStruck 
-            ? "bg-[#3a3a3c]/20 text-[#565758] border border-[#3a3a3c]/30" 
-            : "bg-[#3a3a3c] hover:bg-[#4a4a4c] text-slate-100 shadow-lg"}
-      `}
-    >
-      {label}
-      {isStruck && (
-        <motion.div 
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
-        >
-            <div className="w-full h-0.5 bg-red-500/50 rotate-45 absolute" />
-            <div className="w-full h-0.5 bg-red-500/50 -rotate-45 absolute" />
-        </motion.div>
-      )}
-    </button>
   );
 }
