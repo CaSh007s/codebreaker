@@ -306,10 +306,13 @@ function KeyButton({
   onToggleStruck: () => void;
 }) {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [longPressTriggered, setLongPressTriggered] = useState(false);
 
   const startLongPress = () => {
+    setLongPressTriggered(false);
     timerRef.current = setTimeout(() => {
         onToggleStruck();
+        setLongPressTriggered(true);
     }, 600);
   };
 
@@ -321,7 +324,11 @@ function KeyButton({
 
   return (
     <button
-      onClick={onClick}
+      onClick={() => {
+        if (!longPressTriggered) {
+          onClick();
+        }
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         onToggleStruck();

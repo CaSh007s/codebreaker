@@ -45,12 +45,24 @@ async def init_room(sid, data):
         # Check if room already exists — don't overwrite!
         existing = multiplayer_service.get_room(room_id)
         if existing:
-            # Room exists: just join the SID to the socket room and send current state
-            if len(existing["players"]) >= 2 and sid not in existing.get("players", {}):
+            # Identity-based "Room Full" check
+            player_info = data.get('player_info', {})
+            player_id = player_info.get('player_id')
+            
+            is_returning = player_id and player_id in existing.get("players", {})
+            if len(existing["players"]) >= 2 and not is_returning:
                 await sio.emit('error', {'message': 'Room is full'}, to=sid)
                 return
+            
             await sio.enter_room(sid, room_id)
             sid_to_room[sid] = room_id
+            
+            # Host Refresh Recovery: If info is present, update SID
+            if is_returning:
+                room = multiplayer_service.join_room(room_id, sid, player_info)
+                if room:
+                    existing = room # Use the updated state
+
             await sio.emit('room_update', existing, to=sid)
         else:
             # Create a brand new room
@@ -68,13 +80,28 @@ async def join_room(sid, data):
             await sio.emit('error', {'message': 'Room not found'}, to=sid)
             return
 
-        if len(room["players"]) >= 2:
+        # Identity-based "Room Full" check
+        player_info = data.get('player_info', {})
+        player_id = player_info.get('player_id')
+        is_returning = player_id and player_id in room.get("players", {})
+
+        if len(room["players"]) >= 2 and not is_returning:
             await sio.emit('error', {'message': 'Room is full'}, to=sid)
             return
-
+ 
         await sio.enter_room(sid, room_id)
         sid_to_room[sid] = room_id
-        # We don't add to players list yet, wait for setup_player
+        
+        # If client sent player_info, try to re-join/update SID
+        if player_info and player_id:
+            updated_room = multiplayer_service.join_room(room_id, sid, player_info)
+            if updated_room and "error" not in updated_room:
+                await sio.emit('room_update', updated_room, room=room_id)
+                return
+            elif updated_room:
+                 room = updated_room
+ 
+        # Otherwise just send the current room state
         await sio.emit('room_update', room, to=sid)
 
 @sio.event
@@ -82,7 +109,7 @@ async def setup_player(sid, data):
     room_id = data.get('room_id')
     player_info = data.get('player_info')
     if room_id and player_info:
-        room = multiplayer_service.join_room(room_id, sid, player_info)
+        room = multiplayer_service.register_player(room_id, sid, player_info)
         if room and "error" in room:
             await sio.emit('error', room, to=sid)
         elif room:

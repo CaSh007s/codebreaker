@@ -43,15 +43,53 @@ class MultiplayerService:
         return room_data
 
     def join_room(self, room_id: str, sid: str, player_info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Handles session recovery and SID updates for existing players.
+        Does NOT add new players to the room.
+        """
         room = self.get_room(room_id)
         if not room:
             return None
         
-        # Limit to 2 players
-        if len(room["players"]) >= 2 and sid not in room["players"]:
+        player_id = player_info.get("player_id")
+        if not player_id:
+            return {"error": "Missing player_id"}
+
+        # If player already exists (session recovery), update their SID
+        if player_id in room["players"]:
+            room["players"][player_id]["sid"] = sid
+            self.save_room(room_id, room)
+            return room
+
+        # If not an existing player, we just return the room for view synchronization
+        # (The frontend will see the player is NOT in room['players'] and stay in setup)
+        return room
+
+    def register_player(self, room_id: str, sid: str, player_info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Explicitly adds a new player to the room during setup.
+        """
+        room = self.get_room(room_id)
+        if not room:
+            return None
+
+        player_id = player_info.get("player_id")
+        if not player_id:
+            return {"error": "Missing player_id"}
+
+        # Recovery if they already exist
+        if player_id in room["players"]:
+            room["players"][player_id]["sid"] = sid
+            room["players"][player_id]["username"] = player_info.get("username", room["players"][player_id]["username"])
+            room["players"][player_id]["avatar"] = player_info.get("avatar", room["players"][player_id]["avatar"])
+            self.save_room(room_id, room)
+            return room
+
+        if len(room["players"]) >= 2:
             return {"error": "Room is full"}
 
-        room["players"][sid] = {
+        room["players"][player_id] = {
+            "player_id": player_id,
             "sid": sid,
             "username": player_info.get("username", "Anonymous"),
             "avatar": player_info.get("avatar", ""),
@@ -64,27 +102,31 @@ class MultiplayerService:
 
     def leave_room(self, room_id: str, sid: str):
         room = self.get_room(room_id)
-        if room and sid in room["players"]:
-            del room["players"][sid]
-            if not room["players"]:
-                # If last player leaves, we could delete or let it expire
-                self.redis_client.delete(self._get_room_key(room_id))
-            else:
-                self.save_room(room_id, room)
+        if room:
+            # Find the player by SID
+            player_id = next((pid for pid, p in room["players"].items() if p["sid"] == sid), None)
+            if player_id:
+                # We don't necessarily delete the player from the room immediately for persistence
+                # But if they explicitly leave, we might want to.
+                # For now, let's keep them in the dictionary so they can reconnect.
+                # Maybe just mark them as disconnected?
+                pass
             return room
         return None
 
     def update_player_ready(self, room_id: str, sid: str, is_ready: bool) -> Optional[Dict[str, Any]]:
         room = self.get_room(room_id)
-        if room and sid in room["players"]:
-            room["players"][sid]["is_ready"] = is_ready
-            
-            # Check if all players (2) are ready
-            if len(room["players"]) == 2 and all(p["is_ready"] for p in room["players"].values()):
-                return self.start_game(room_id)
+        if room:
+            player_id = next((pid for pid, p in room["players"].items() if p["sid"] == sid), None)
+            if player_id:
+                room["players"][player_id]["is_ready"] = is_ready
                 
-            self.save_room(room_id, room)
-            return room
+                # Check if all players (2) are ready
+                if len(room["players"]) == 2 and all(p["is_ready"] for p in room["players"].values()):
+                    return self.start_game(room_id)
+                    
+                self.save_room(room_id, room)
+                return room
         return None
 
     def start_game(self, room_id: str) -> Optional[Dict[str, Any]]:
@@ -100,10 +142,9 @@ class MultiplayerService:
             room["started_at"] = datetime.utcnow().isoformat()
             
             # Reset player progress but keep hints_used and points tracking
-            for sid in room["players"]:
+            for pid in room["players"]:
                 # Initialize hints_used if missing
-                hints = room["players"][sid]["progress"].get("hints_used", 0)
-                room["players"][sid]["progress"] = {
+                room["players"][pid]["progress"] = {
                     "bulls": 0, 
                     "cows": 0, 
                     "attempts": 0, 
@@ -122,9 +163,9 @@ class MultiplayerService:
         if not room or room["status"] != "playing":
             return None
         
-        target = room.get("target")
-        feedback_map = room.get("feedback_map")
-        if not target or not feedback_map or sid not in room["players"]:
+        # Find player by SID
+        player_id = next((pid for pid, p in room["players"].items() if p["sid"] == sid), None)
+        if not player_id:
             return None
             
         # Calculate bulls, cows and gray using the Static Scramble Protocol
@@ -132,11 +173,11 @@ class MultiplayerService:
         shuffled_feedback = GameService.evaluate_positional(target, guess, feedback_map)
                 
         # Update player progress
-        room["players"][sid]["progress"]["bulls"] = bulls
-        room["players"][sid]["progress"]["cows"] = cows
-        room["players"][sid]["progress"]["attempts"] += 1
-        room["players"][sid]["progress"]["last_feedback"] = shuffled_feedback
-        room["players"][sid]["progress"]["guesses"].append({
+        room["players"][player_id]["progress"]["bulls"] = bulls
+        room["players"][player_id]["progress"]["cows"] = cows
+        room["players"][player_id]["progress"]["attempts"] += 1
+        room["players"][player_id]["progress"]["last_feedback"] = shuffled_feedback
+        room["players"][player_id]["progress"]["guesses"].append({
             "guess": guess,
             "feedback": shuffled_feedback
         })
@@ -163,15 +204,19 @@ class MultiplayerService:
             earned = max(50, round(raw_points))
             
             # Add to accumulated points
-            room["players"][sid]["points"] += earned
-            room["players"][sid]["progress"]["last_points_earned"] = earned
+            room["players"][player_id]["points"] += earned
+            room["players"][player_id]["progress"]["last_points_earned"] = earned
             
         self.save_room(room_id, room)
         return room
 
     def get_hint(self, room_id: str, sid: str, revealed_indices: list) -> Optional[Dict[str, Any]]:
         room = self.get_room(room_id)
-        if not room or room["status"] != "playing" or sid not in room["players"]:
+        if not room or room["status"] != "playing":
+            return None
+            
+        player_id = next((pid for pid, p in room["players"].items() if p["sid"] == sid), None)
+        if not player_id:
             return None
         
         target = room.get("target")
@@ -180,7 +225,7 @@ class MultiplayerService:
             
         code_len = len(target)
         max_hints = code_len // 2
-        hints_used = room["players"][sid]["progress"].get("hints_used", 0)
+        hints_used = room["players"][player_id]["progress"].get("hints_used", 0)
         
         if hints_used >= max_hints:
             return {"error": f"MAXIMUM_HINTS_REACHED: ONLY {max_hints} HINTS ALLOWED"}
@@ -193,7 +238,7 @@ class MultiplayerService:
         target_idx = random.choice(available_indices)
         
         # Increment hints used
-        room["players"][sid]["progress"]["hints_used"] = hints_used + 1
+        room["players"][player_id]["progress"]["hints_used"] = hints_used + 1
         self.save_room(room_id, room)
         
         return {
@@ -209,14 +254,16 @@ class MultiplayerService:
         room["status"] = "finished"
         room["resigned_sid"] = sid
         # The other player is the winner
-        winner = [s for s in room["players"] if s != sid]
+        winner = [p for p in room["players"].values() if p["sid"] != sid]
         if winner:
-            winner_sid = winner[0]
-            room["winner_sid"] = winner_sid
+            winner_player = winner[0]
+            winner_pid = winner_player["player_id"]
+            room["winner_sid"] = winner_player["sid"] # Maintain winner_sid for frontend compatibility
+            room["winner_pid"] = winner_pid
             # Award points for winner
             earned = 500
-            room["players"][winner_sid]["points"] += earned
-            room["players"][winner_sid]["progress"]["last_points_earned"] = earned
+            room["players"][winner_pid]["points"] += earned
+            room["players"][winner_pid]["progress"]["last_points_earned"] = earned
             
         room["finished_at"] = datetime.utcnow().isoformat()
         room["end_reason"] = "resignation"

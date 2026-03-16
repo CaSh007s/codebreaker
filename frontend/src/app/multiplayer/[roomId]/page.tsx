@@ -14,7 +14,8 @@ import {
 } from "@/components/game/SharedGameUI";
 
 interface Player {
-  sid: string;
+  player_id: string; // Persistent ID
+  sid: string;       // Current socket session ID
   username: string;
   avatar: string;
   is_ready: boolean;
@@ -44,6 +45,7 @@ interface RoomData {
   };
   status: string;
   winner_sid?: string;
+  winner_pid?: string;
   resigned_sid?: string;
   end_reason?: "solved" | "resignation";
   target?: string;
@@ -68,26 +70,62 @@ export default function MultiplayerRoom() {
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
   const [hintsRevealed, setHintsRevealed] = useState<Hint[]>([]);
-
+  const [playerId, setPlayerId] = useState<string>("");
   const mode = searchParams.get("mode") || "standard";
   const level = parseInt(searchParams.get("level") || "4"); // Default mission length is 4
+
+  // Session Management
+  useEffect(() => {
+    let pid = localStorage.getItem("codebreaker_player_id");
+    if (!pid) {
+      pid = `OP_${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+      localStorage.setItem("codebreaker_player_id", pid);
+    }
+    setTimeout(() => setPlayerId(pid), 0);
+
+    // Try to recover codename/avatar
+    const savedCodename = localStorage.getItem(`cb_codename_${roomId}`);
+    const savedAvatar = localStorage.getItem(`cb_avatar_${roomId}`);
+    if (savedCodename || savedAvatar) {
+      setTimeout(() => {
+        if (savedCodename) setUsername(savedCodename);
+        if (savedAvatar) {
+          const seedMatch = savedAvatar.match(/seed=([^&]+)/);
+          if (seedMatch) setAvatarSeed(seedMatch[1]);
+        }
+      }, 0);
+    }
+  }, [roomId]);
 
   const getAvatarUrl = (seed: string) =>
     `https://api.dicebear.com/7.x/pixel-art/svg?seed=${seed}`;
 
   // Initialize room or join existing
   useEffect(() => {
-    if (isConnected && socket) {
+    if (isConnected && socket && playerId) {
+      const savedCodename = localStorage.getItem(`cb_codename_${roomId}`);
+      const savedAvatar = localStorage.getItem(`cb_avatar_${roomId}`);
+      
+      const playerInfo = {
+        player_id: playerId,
+        username: savedCodename || username,
+        avatar: savedAvatar || getAvatarUrl(avatarSeed || username)
+      };
+
       if (searchParams.has("mode")) {
         emitEvent("init_room", {
           room_id: roomId,
           config: { mode, level },
+          player_info: playerInfo // Send player info too in case we are re-initializing
         });
       } else {
-        emitEvent("join_room", { room_id: roomId });
+        emitEvent("join_room", { 
+          room_id: roomId,
+          player_info: playerInfo 
+        });
       }
     }
-  }, [isConnected, socket, roomId, mode, level, searchParams, emitEvent]);
+  }, [isConnected, socket, roomId, mode, level, searchParams, emitEvent, playerId, avatarSeed, username]);
 
   // Handle room updates and view transitions
   useEffect(() => {
@@ -102,19 +140,32 @@ export default function MultiplayerRoom() {
         const prevStatus = roomData?.status;
         setRoomData(data);
         
+        // Auto-transition view if we are already in the player list
+        if (playerId && data.players[playerId]) {
+          if (data.status === "playing" || data.status === "finished") {
+            setView("game");
+          } else if (data.status === "waiting") {
+            setView("lobby");
+          }
+        }
+
         // Reset hints locally when a new game starts
         if (data.status === "playing" && prevStatus !== "playing") {
           setHintsRevealed([]);
         }
-
-        if (data.status === "playing") {
-          setView("game");
-        } else if (data.status === "finished") {
-          setView("game"); // Stay in game view to show winner
-        }
       });
     }
-  }, [lastRoomData, roomId, roomData?.status]);
+  }, [lastRoomData, roomId, roomData?.status, playerId]);
+
+  // Sync Ready Status after refresh
+  useEffect(() => {
+    if (roomData && playerId && roomData.players[playerId]) {
+      const serverReady = roomData.players[playerId].is_ready;
+      if (serverReady !== isReady) {
+        setTimeout(() => setIsReady(serverReady), 0);
+      }
+    }
+  }, [roomData, playerId, isReady]);
 
   // Handle errors
   useEffect(() => {
@@ -138,9 +189,18 @@ export default function MultiplayerRoom() {
       return;
     }
     const finalAvatar = getAvatarUrl(avatarSeed || username);
+    
+    // Persist identity for this room
+    localStorage.setItem(`cb_codename_${roomId}`, username);
+    localStorage.setItem(`cb_avatar_${roomId}`, finalAvatar);
+
     emitEvent("setup_player", {
       room_id: roomId,
-      player_info: { username, avatar: finalAvatar },
+      player_info: { 
+        player_id: playerId,
+        username, 
+        avatar: finalAvatar 
+      },
     });
     setView("lobby");
   };
@@ -294,7 +354,7 @@ export default function MultiplayerRoom() {
             >
               <GameView
                 roomData={roomData}
-                mySid={socket?.id || ""}
+                mySid={playerId} // Use persistent playerId for identification in UI
                 onSubmitGuess={submitGuess}
                 onExit={() => setShowAbandonConfirm(true)}
                 onShowHelp={() => setShowHowToPlay(true)}
@@ -323,8 +383,8 @@ export default function MultiplayerRoom() {
               className="bg-[#121213]/50 border border-white/10 p-6 sm:p-12 rounded-[2.5rem] text-center space-y-10 max-w-2xl w-full shadow-[0_0_50px_rgba(0,0,0,0.5)] border-t-white/20"
             >
               {(() => {
-                const isWinner = roomData.winner_sid === socket?.id;
-                const me = roomData.players[socket?.id || ""];
+                const isWinner = roomData.winner_pid === playerId;
+                const me = roomData.players[playerId || ""];
                 return (
                   <div className="space-y-10">
                     <div className="space-y-4">
@@ -389,7 +449,7 @@ export default function MultiplayerRoom() {
                           Hostile Tries
                         </span>
                         <span className="text-3xl sm:text-4xl font-black text-slate-100 font-mono">
-                          {Object.values(roomData.players).find(p => p.sid !== socket?.id)?.progress.attempts || 0}
+                          {Object.values(roomData.players).find(p => p.player_id !== playerId)?.progress.attempts || 0}
                         </span>
                       </div>
                     </div>
