@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
@@ -58,49 +58,74 @@ export default function MultiplayerLanding() {
         </div>
 
         <div className="w-full space-y-4">
-          <div className="flex gap-2 p-1 bg-white/5 border border-white/10 rounded-lg">
+          <div className="flex gap-2 p-1 bg-white/5 border border-white/10 rounded-lg relative overflow-hidden">
             <button
               onClick={() => { setCategory("standard"); setSelectedLevel(0); }}
-              className={`flex-1 py-2 font-mono text-[10px] rounded transition-all ${category === "standard" ? "bg-[#538d4e] text-black" : "text-[#565758] hover:text-slate-300"}`}
+              className={`relative flex-1 py-2 font-mono text-[10px] rounded transition-colors z-10 ${category === "standard" ? "text-black font-bold" : "text-[#565758] hover:text-slate-300"}`}
             >
-              STANDARD
+              {category === "standard" && (
+                <motion.div
+                  layoutId="active-pill"
+                  className="absolute inset-0 bg-[#538d4e] rounded shadow-[0_0_15px_rgba(83,141,78,0.3)]"
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                />
+              )}
+              <span className="relative z-10">STANDARD</span>
             </button>
             <button
               onClick={() => { setCategory("overdrive"); setSelectedLevel(0); }}
-              className={`flex-1 py-2 font-mono text-[10px] rounded transition-all ${category === "overdrive" ? "bg-[#538d4e] text-black" : "text-[#565758] hover:text-slate-300"}`}
+              className={`relative flex-1 py-2 font-mono text-[10px] rounded transition-colors z-10 ${category === "overdrive" ? "text-black font-bold" : "text-[#565758] hover:text-slate-300"}`}
             >
-              OVERDRIVE
+              {category === "overdrive" && (
+                <motion.div
+                  layoutId="active-pill"
+                  className="absolute inset-0 bg-[#538d4e] rounded shadow-[0_0_15px_rgba(83,141,78,0.3)]"
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                />
+              )}
+              <span className="relative z-10">OVERDRIVE</span>
             </button>
           </div>
 
-          <div className="flex flex-col gap-2 max-h-[30dvh] overflow-y-auto pr-1 custom-scrollbar">
-            {MISSION_LEVELS[category].map((level, i) => (
-              <button
-                key={level.label}
-                onClick={() => setSelectedLevel(i)}
-                className={`
-                  group relative p-4 rounded-lg border-2 transition-all flex items-center justify-between text-left
-                  ${selectedLevel === i ? "border-[#6ca965] bg-[#6ca965]/5 shadow-[0_0_20px_rgba(108,169,101,0.1)]" : "border-[#3a3a3c] hover:border-[#565758]"}
-                `}
+          <div className="flex flex-col gap-2 min-h-[160px] max-h-[30dvh] overflow-y-auto pr-1 custom-scrollbar">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={category}
+                initial={{ opacity: 0, x: category === "standard" ? -10 : 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: category === "standard" ? 10 : -10 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex flex-col gap-2 w-full"
               >
-                <div className="flex flex-col">
-                  <span className={`font-mono text-sm font-bold ${selectedLevel === i ? "text-[#538d4e]" : "text-slate-300"}`}>
-                    {level.label}
-                  </span>
-                  <span className="text-[#565758] font-mono text-[9px] uppercase">
-                    {`${level.desc} // ${level.length}D // ${level.tries}T`}
-                  </span>
-                </div>
-                {selectedLevel === i && (
-                  <motion.div
-                    layoutId="level-indicator"
-                    className="text-[#538d4e]"
+                {MISSION_LEVELS[category].map((level, i) => (
+                  <button
+                    key={level.label}
+                    onClick={() => setSelectedLevel(i)}
+                    className={`
+                      group relative p-4 rounded-lg border-2 transition-all flex items-center justify-between text-left
+                      ${selectedLevel === i ? "border-[#6ca965] bg-[#6ca965]/5 shadow-[0_0_20px_rgba(108,169,101,0.1)]" : "border-[#3a3a3c] hover:border-[#565758]"}
+                    `}
                   >
-                    <div className="w-2 h-2 rounded-full bg-[#538d4e] shadow-[0_0_10px_rgba(83,141,78,0.5)] animate-ping" />
-                  </motion.div>
-                )}
-              </button>
-            ))}
+                    <div className="flex flex-col">
+                      <span className={`font-mono text-sm font-bold ${selectedLevel === i ? "text-[#538d4e]" : "text-slate-300"}`}>
+                        {level.label}
+                      </span>
+                      <span className="text-[#565758] font-mono text-[9px] uppercase">
+                        {`${level.desc} // ${level.length}D // ${level.tries}T`}
+                      </span>
+                    </div>
+                    {selectedLevel === i && (
+                      <motion.div
+                        layoutId="level-indicator"
+                        className="text-[#538d4e]"
+                      >
+                        <div className="w-2 h-2 rounded-full bg-[#538d4e] shadow-[0_0_10px_rgba(83,141,78,0.5)] animate-ping" />
+                      </motion.div>
+                    )}
+                  </button>
+                ))}
+              </motion.div>
+            </AnimatePresence>
           </div>
 
           <button
