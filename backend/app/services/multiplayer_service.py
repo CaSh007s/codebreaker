@@ -36,6 +36,7 @@ class MultiplayerService:
             "players": {},
             "config": config,
             "status": "waiting",
+            "replay_requests": [], # Track player_ids that want a rematch
             "created_at": datetime.utcnow().isoformat(),
             "feedback_map": GameService.generate_feedback_map(digits)
         }
@@ -139,6 +140,7 @@ class MultiplayerService:
             target = "".join(random.choices("0123456789", k=digits))
             room["target"] = target
             room["status"] = "playing"
+            room["replay_requests"] = [] # Reset for next time
             room["started_at"] = datetime.utcnow().isoformat()
             
             # Reset player progress but keep hints_used and points tracking
@@ -245,6 +247,24 @@ class MultiplayerService:
             "position": target_idx,
             "digit": target[target_idx]
         }
+    def request_replay(self, room_id: str, sid: str) -> Optional[Dict[str, Any]]:
+        room = self.get_room(room_id)
+        if not room or room["status"] != "finished":
+            return None
+
+        player_id = next((pid for pid, p in room["players"].items() if p["sid"] == sid), None)
+        if not player_id:
+            return None
+
+        if player_id not in room["replay_requests"]:
+            room["replay_requests"].append(player_id)
+            self.save_room(room_id, room)
+
+        # If all players (2) requested replay, start new game
+        if len(room["replay_requests"]) >= len(room["players"]):
+            return self.start_game(room_id)
+
+        return room
 
     def surrender(self, room_id: str, sid: str) -> Optional[Dict[str, Any]]:
         room = self.get_room(room_id)
@@ -253,6 +273,9 @@ class MultiplayerService:
             
         room["status"] = "finished"
         room["resigned_sid"] = sid
+        # Find player_id of the person who resigned
+        resigned_pid = next((pid for pid, p in room["players"].items() if p["sid"] == sid), None)
+        room["resigned_pid"] = resigned_pid
         # The other player is the winner
         winner = [p for p in room["players"].values() if p["sid"] != sid]
         if winner:

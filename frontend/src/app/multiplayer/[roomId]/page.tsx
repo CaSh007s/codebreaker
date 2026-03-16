@@ -44,9 +44,11 @@ interface RoomData {
     level: number;
   };
   status: string;
+  replay_requests: string[]; // IDs of players who want a rematch
   winner_sid?: string;
   winner_pid?: string;
   resigned_sid?: string;
+  resigned_pid?: string;
   end_reason?: "solved" | "resignation";
   target?: string;
 }
@@ -303,6 +305,7 @@ export default function MultiplayerRoom() {
               roomId={roomId}
               copyLink={copyLink}
               copied={copied}
+              myPlayerId={playerId}
             />
           </motion.div>
         )}
@@ -318,7 +321,7 @@ export default function MultiplayerRoom() {
                 {(() => {
                   const targetLength = roomData.config.level || 4;
                   const maxHints = Math.floor(targetLength / 2);
-                  const hintsUsed = roomData.players[socket?.id || ""]?.progress.hints_used || 0;
+                  const hintsUsed = roomData.players[playerId || ""]?.progress.hints_used || 0;
                   const isLimitReached = hintsUsed >= maxHints;
                   
                   return (
@@ -384,27 +387,28 @@ export default function MultiplayerRoom() {
             >
               {(() => {
                 const isWinner = roomData.winner_pid === playerId;
+                const hasResigned = roomData.resigned_pid === playerId;
                 const me = roomData.players[playerId || ""];
                 return (
                   <div className="space-y-10">
                     <div className="space-y-4">
                       <h2
-                        className={`text-[clamp(1.1rem,4.5vw,2.25rem)] font-serif font-black tracking-tighter uppercase leading-none whitespace-nowrap px-2 ${
+                        className={`w-full text-[clamp(1rem,4vw,2rem)] sm:text-[clamp(1.1rem,4.5vw,2.25rem)] font-serif font-black tracking-tighter uppercase leading-none px-2 text-center ${
                           roomData.end_reason === "resignation"
-                            ? (roomData.resigned_sid === socket?.id ? "text-orange-500 drop-shadow-[0_0_25px_rgba(249,115,22,0.5)]" : "text-[#538d4e] drop-shadow-[0_0_25px_rgba(83,141,78,0.5)]")
+                            ? (hasResigned ? "text-orange-500 drop-shadow-[0_0_25px_rgba(249,115,22,0.5)]" : "text-[#538d4e] drop-shadow-[0_0_25px_rgba(83,141,78,0.5)]")
                             : (isWinner
                                 ? "text-[#538d4e] drop-shadow-[0_0_25px_rgba(83,141,78,0.5)]"
                                 : "text-[#cf6679] drop-shadow-[0_0_25px_rgba(207,102,121,0.5)]")
                         }`}
                       >
                         {roomData.end_reason === "resignation"
-                          ? (roomData.resigned_sid === socket?.id ? "MISSION_ABANDONED" : "UPLINK_SECURED_BY_FORFEIT")
+                          ? (hasResigned ? "MISSION_ABANDONED" : "UPLINK_SECURED_BY_FORFEIT")
                           : (isWinner ? "ENCRYPTION_SUCCESS" : "INTERCEPTED_BY_ENEMY")}
                       </h2>
                       <div className="flex flex-col items-center gap-1">
                         <p className="text-[#565758] font-mono text-xs sm:text-sm uppercase tracking-[0.4em] opacity-80">
                           {roomData.end_reason === "resignation"
-                            ? (roomData.resigned_sid === socket?.id ? "Desertion_Logged_To_Base" : "Hostile_Operative_Fled")
+                            ? (hasResigned ? "Desertion_Logged_To_Base" : "Hostile_Operative_Fled")
                             : (isWinner ? "Mission_Complete" : "Operative_Down")}
                         </p>
                         <div className="flex gap-4 mt-2">
@@ -456,11 +460,24 @@ export default function MultiplayerRoom() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
                       <button
-                        onClick={() => {/* TODO: Implement Replay Request */}}
-                        className="py-5 bg-[#538d4e]/10 hover:bg-[#538d4e]/20 border border-[#538d4e]/30 rounded-2xl font-mono text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] transition-all active:scale-[0.98] text-[#538d4e] shadow-[0_0_20px_rgba(83,141,78,0.1)] group"
+                        onClick={() => emitEvent("request_replay", { room_id: roomId })}
+                        disabled={roomData.replay_requests.includes(playerId || "")}
+                        className={`py-5 border rounded-2xl font-mono text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(83,141,78,0.1)] group ${
+                          roomData.replay_requests.includes(playerId || "")
+                            ? "bg-[#538d4e]/5 border-[#538d4e]/10 text-[#538d4e]/40 cursor-wait"
+                            : "bg-[#538d4e]/10 hover:bg-[#538d4e]/20 border-[#538d4e]/30 text-[#538d4e]"
+                        }`}
                       >
-                        <span className="group-hover:tracking-[0.3em] transition-all duration-300">REQUEST_REPLAY</span>
-                        <span className="block text-[8px] opacity-40 mt-1 font-normal tracking-normal">[UNAVAILABLE]</span>
+                        <span className="group-hover:tracking-[0.3em] transition-all duration-300">
+                          {roomData.replay_requests.includes(playerId || "") 
+                            ? "WAITING_FOR_OPPONENT" 
+                            : roomData.replay_requests.length > 0 
+                              ? "ACCEPT_REMATCH" 
+                              : "REQUEST_REMATCH"}
+                        </span>
+                        {roomData.replay_requests.includes(playerId || "") && (
+                          <span className="block text-[8px] opacity-40 mt-1 font-normal tracking-normal animate-pulse">[UPLINK_PENDING]</span>
+                        )}
                       </button>
                       <button
                         onClick={() => router.push("/multiplayer")}
@@ -589,6 +606,7 @@ interface LobbyProps {
   roomId: string;
   copyLink: () => void;
   copied: boolean;
+  myPlayerId: string | null;
 }
 
 function Lobby({
@@ -598,6 +616,7 @@ function Lobby({
   roomId,
   copyLink,
   copied,
+  myPlayerId,
 }: LobbyProps) {
   const players = roomData?.players ? Object.values(roomData.players) : [];
 
@@ -630,7 +649,7 @@ function Lobby({
                     className="w-16 h-16 rounded-xl shadow-lg"
                   />
                   <span className="font-mono text-[10px] font-bold text-center truncate w-full">
-                    {player.username}
+                    {player.player_id === myPlayerId ? "YOU" : player.username}
                   </span>
                   <div
                     className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-tighter ${player.is_ready ? "bg-[#538d4e] text-black font-bold" : "bg-white/10 text-slate-400"}`}
@@ -711,7 +730,7 @@ function GameView({
 }: GameViewProps) {
   const [currentGuess, setCurrentGuess] = useState("");
   const me = roomData.players[mySid];
-  const opponent = Object.values(roomData.players).find((p) => p.sid !== mySid);
+  const opponent = Object.values(roomData.players).find((p) => p.player_id !== mySid);
   const targetLength = roomData.config.level || 4;
   const isGameOver = roomData.status === "finished";
 

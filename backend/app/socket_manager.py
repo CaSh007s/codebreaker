@@ -153,6 +153,16 @@ async def chat_message(sid, data):
     if room and message:
         await sio.emit('message', data, room=room, skip_sid=sid)
 @sio.event
+async def request_replay(sid, data):
+    room_id = data.get('room_id')
+    if room_id:
+        room = multiplayer_service.request_replay(room_id, sid)
+        if room:
+            await sio.emit('room_update', room, room=room_id)
+            if room["status"] == "playing":
+                await sio.emit('game_start', room, room=room_id)
+
+@sio.event
 async def get_hint(sid, data):
     room_id = data.get('room_id')
     revealed_indices = data.get('revealed_indices', [])
