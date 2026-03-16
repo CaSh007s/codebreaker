@@ -99,7 +99,14 @@ export default function MultiplayerRoom() {
     ) {
       const data = lastRoomData as unknown as RoomData;
       requestAnimationFrame(() => {
+        const prevStatus = roomData?.status;
         setRoomData(data);
+        
+        // Reset hints locally when a new game starts
+        if (data.status === "playing" && prevStatus !== "playing") {
+          setHintsRevealed([]);
+        }
+
         if (data.status === "playing") {
           setView("game");
         } else if (data.status === "finished") {
@@ -107,7 +114,7 @@ export default function MultiplayerRoom() {
         }
       });
     }
-  }, [lastRoomData, roomId]);
+  }, [lastRoomData, roomId, roomData?.status]);
 
   // Handle errors
   useEffect(() => {
@@ -158,7 +165,11 @@ export default function MultiplayerRoom() {
   const handleGetHint = () => {
     const targetLength = roomData?.config.level || 4;
     const maxHints = Math.floor(targetLength / 2);
-    if (hintsRevealed.length >= maxHints) return;
+    const mySid = socket?.id || "";
+    const me = roomData?.players[mySid];
+    const hintsUsed = me?.progress.hints_used || 0;
+
+    if (hintsUsed >= maxHints) return;
     emitEvent("get_hint", { 
       room_id: roomId, 
       revealed_indices: hintsRevealed.map(h => h.position) 
@@ -244,13 +255,22 @@ export default function MultiplayerRoom() {
               
               {/* Desktop-only Centered Utility Buttons */}
               <div className="hidden sm:flex items-center gap-6 mt-1 pb-1">
-                <button
-                  onClick={handleGetHint}
-                  disabled={hintsRevealed.length >= Math.floor(level / 2)}
-                  className={`px-4 py-2 font-mono text-xs border rounded-lg transition-all uppercase tracking-widest shadow-[0_0_15px_rgba(83,141,78,0.1)] hover:scale-105 active:scale-95 ${hintsRevealed.length >= Math.floor(level / 2) ? "opacity-30 border-white/10 text-white/30 cursor-not-allowed" : "text-[#538d4e] border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/20"}`}
-                >
-                  {hintsRevealed.length >= Math.floor(level / 2) ? "[HINT_LIMIT_REACHED]" : `[GET_HINT] (${hintsRevealed.length}/${Math.floor(level / 2)})`}
-                </button>
+                {(() => {
+                  const targetLength = roomData.config.level || 4;
+                  const maxHints = Math.floor(targetLength / 2);
+                  const hintsUsed = roomData.players[socket?.id || ""]?.progress.hints_used || 0;
+                  const isLimitReached = hintsUsed >= maxHints;
+                  
+                  return (
+                    <button
+                      onClick={handleGetHint}
+                      disabled={isLimitReached}
+                      className={`px-4 py-2 font-mono text-xs border rounded-lg transition-all uppercase tracking-widest shadow-[0_0_15px_rgba(83,141,78,0.1)] hover:scale-105 active:scale-95 ${isLimitReached ? "opacity-30 border-white/10 text-white/30 cursor-not-allowed" : "text-[#538d4e] border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/20"}`}
+                    >
+                      {isLimitReached ? "[HINT_LIMIT_REACHED]" : `[GET_HINT] (${hintsUsed}/${maxHints})`}
+                    </button>
+                  );
+                })()}
                 <button
                   onClick={() => setShowHowToPlay(true)}
                   className="px-4 py-2 font-mono text-xs text-blue-400 border border-blue-400/30 bg-blue-400/5 hover:bg-blue-400/20 rounded-lg transition-all tracking-widest shadow-[0_0_15px_rgba(96,165,250,0.1)] hover:scale-105 active:scale-95"
@@ -677,13 +697,20 @@ function GameView({
       <div className="w-full bg-black/40 backdrop-blur-md border-b border-[#3a3a3c] shrink-0 z-20 sm:hidden">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-center">
           <div className="flex items-center gap-4">
-            <button
-              onClick={onHint}
-              disabled={hintsRevealed.length >= Math.floor(targetLength / 2)}
-              className={`px-3 py-1.5 font-mono text-[10px] border rounded transition-all uppercase tracking-tighter ${hintsRevealed.length >= Math.floor(targetLength / 2) ? "opacity-30 border-white/10 text-white/30" : "text-[#538d4e] border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/20"}`}
-            >
-              {hintsRevealed.length >= Math.floor(targetLength / 2) ? "[HINT_LIMIT_REACHED]" : `[GET_HINT] (${hintsRevealed.length}/${Math.floor(targetLength / 2)})`}
-            </button>
+            {(() => {
+              const maxHints = Math.floor(targetLength / 2);
+              const hintsUsed = me?.progress.hints_used || 0;
+              const isLimitReached = hintsUsed >= maxHints;
+              return (
+                <button
+                  onClick={onHint}
+                  disabled={isLimitReached}
+                  className={`px-3 py-1.5 font-mono text-[10px] border rounded transition-all uppercase tracking-tighter ${isLimitReached ? "opacity-30 border-white/10 text-white/30" : "text-[#538d4e] border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/20"}`}
+                >
+                  {isLimitReached ? "[HINT_LIMIT_REACHED]" : `[GET_HINT] (${hintsUsed}/${maxHints})`}
+                </button>
+              );
+            })()}
             <button
               onClick={onShowHelp}
               className="px-3 py-1.5 font-mono text-[10px] text-blue-400 border border-blue-400/30 bg-blue-400/5 hover:bg-blue-400/20 rounded transition-all tracking-tighter"
