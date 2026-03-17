@@ -148,24 +148,23 @@ export default function LoadingOverlay() {
                             {complete ? "UPLINK_SECURED" : "HANDSHAKE_PENDING"}
                         </span>
                     </div>
+
+                    {/* Integrated Progress Bar */}
+                    <div className="w-48 h-0.5 bg-[#538d4e]/10 rounded-full mt-6 overflow-hidden">
+                        <motion.div 
+                            initial={{ width: "0%" }}
+                            animate={{ width: complete ? "100%" : "70%" }}
+                            transition={{ 
+                                duration: complete ? 1 : 20, 
+                                ease: complete ? "easeOut" : "linear" 
+                            }}
+                            className="h-full bg-[#538d4e] shadow-[0_0_15px_#538d4e]"
+                        />
+                    </div>
                 </motion.div>
             </div>
         </div>
 
-        {/* Progress Display */}
-        <div className="absolute bottom-24 flex flex-col items-center gap-4">
-             <div className="w-48 h-0.5 bg-white/5 rounded-full overflow-hidden">
-                <motion.div 
-                    initial={{ width: "0%" }}
-                    animate={{ width: complete ? "100%" : "70%" }}
-                    transition={{ 
-                        duration: complete ? 1 : 20, 
-                        ease: complete ? "easeOut" : "linear" 
-                    }}
-                    className="h-full bg-[#538d4e] shadow-[0_0_10px_#538d4e]"
-                />
-             </div>
-        </div>
 
         {/* Tactical Console Logs */}
         <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-[90%] max-w-md h-24 flex flex-col justify-end">
