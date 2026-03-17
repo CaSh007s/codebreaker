@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
+import { useChatStore, ChatMessage } from "@/store/useChatStore";
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8000";
 
@@ -11,6 +12,8 @@ export const useSocket = (room?: string) => {
   const [lastMessage, setLastMessage] = useState<Record<string, unknown> | null>(null);
   const [lastRoomData, setLastRoomData] = useState<Record<string, unknown> | null>(null);
   const [lastError, setLastError] = useState<Record<string, unknown> | null>(null);
+  
+  const addChatMessage = useChatStore((state) => state.addMessage);
 
   useEffect(() => {
     // Initialize socket connection
@@ -27,9 +30,6 @@ export const useSocket = (room?: string) => {
     socket.on("connect", () => {
       setIsConnected(true);
       console.log("Connected to socket server");
-      if (room) {
-        socket.emit("join_room", { room });
-      }
     });
 
     socket.on("disconnect", () => {
@@ -41,6 +41,10 @@ export const useSocket = (room?: string) => {
       requestAnimationFrame(() => {
         setLastMessage(data);
       });
+    });
+
+    socket.on("chat_message", (data: ChatMessage) => {
+      addChatMessage(data);
     });
 
     socket.on("room_update", (data) => {
@@ -70,15 +74,21 @@ export const useSocket = (room?: string) => {
 
     return () => {
       if (room) {
-        socket.emit("leave_room", { room });
+        socket.emit("leave_room", { room_id: room });
       }
       socket.disconnect();
     };
-  }, [room]);
+  }, [room, addChatMessage]);
 
-  const sendMessage = (message: string | Record<string, unknown>) => {
+  const sendMessage = (data: { text: string; sender_id: string; sender_username: string }) => {
     if (socket && room) {
-      socket.emit("chat_message", { room, message });
+      socket.emit("chat_message", { room_id: room, ...data });
+    }
+  };
+  
+  const sendEmoji = (data: { emoji: string; sender_id: string; sender_username: string }) => {
+    if (socket && room) {
+      socket.emit("send_emoji", { room_id: room, ...data });
     }
   };
 
@@ -95,6 +105,7 @@ export const useSocket = (room?: string) => {
     lastRoomData,
     lastError,
     sendMessage,
+    sendEmoji,
     emitEvent,
   };
 };

@@ -12,6 +12,8 @@ import {
   HowToPlayModal,
   AbandonMissionModal,
 } from "@/components/game/SharedGameUI";
+import ChatPanel from "@/components/game/ChatPanel";
+import { useChatStore } from "@/store/useChatStore";
 
 interface Player {
   player_id: string; // Persistent ID
@@ -57,8 +59,10 @@ export default function MultiplayerRoom() {
   const { roomId } = useParams() as { roomId: string };
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { isConnected, socket, lastRoomData, lastError, emitEvent } =
+  const { isConnected, socket, lastRoomData, lastError, emitEvent, sendMessage, sendEmoji } =
     useSocket(roomId);
+
+  const { toggleOpen, unreadCount } = useChatStore();
 
   const [view, setView] = useState<"setup" | "lobby" | "game" | "full">(
     "setup",
@@ -346,6 +350,17 @@ export default function MultiplayerRoom() {
                 >
                   SURRENDER
                 </button>
+                <button
+                  onClick={toggleOpen}
+                  className="relative px-4 py-2 font-mono text-xs text-yellow-500 border border-yellow-500/30 bg-yellow-500/5 hover:bg-yellow-500/20 rounded-lg transition-all tracking-widest shadow-[0_0_15px_rgba(234,179,8,0.1)] hover:scale-105 active:scale-95 flex items-center gap-2"
+                >
+                  [CHAT]
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full animate-bounce">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
               </div>
             </div>
 
@@ -364,6 +379,8 @@ export default function MultiplayerRoom() {
                 hintsRevealed={hintsRevealed}
                 setHintsRevealed={setHintsRevealed}
                 onHint={handleGetHint}
+                toggleChat={toggleOpen}
+                unreadCount={unreadCount}
               />
             </motion.div>
           </div>
@@ -493,6 +510,13 @@ export default function MultiplayerRoom() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ChatPanel
+        player_id={playerId}
+        username={username}
+        onSendMessage={sendMessage}
+        onSendEmoji={sendEmoji}
+      />
     </main>
   );
 }
@@ -716,6 +740,8 @@ interface GameViewProps {
   hintsRevealed: Hint[];
   setHintsRevealed: React.Dispatch<React.SetStateAction<Hint[]>>;
   onHint: () => void;
+  toggleChat: () => void;
+  unreadCount: number;
 }
 
 function GameView({
@@ -727,6 +753,8 @@ function GameView({
   hintsRevealed,
   setHintsRevealed,
   onHint,
+  toggleChat,
+  unreadCount,
 }: GameViewProps) {
   const [currentGuess, setCurrentGuess] = useState("");
   const me = roomData.players[mySid];
@@ -801,6 +829,17 @@ function GameView({
               className="px-4 py-1.5 font-mono text-[10px] text-black bg-[#cf6679] hover:bg-[#cf6679]/90 rounded transition-all uppercase font-bold tracking-tighter shadow-[0_0_15px_rgba(207,102,121,0.2)]"
             >
               SURRENDER
+            </button>
+            <button
+              onClick={toggleChat}
+              className="relative px-3 py-1.5 font-mono text-[10px] text-yellow-500 border border-yellow-500/30 bg-yellow-500/5 hover:bg-yellow-500/20 rounded transition-all uppercase font-bold tracking-tighter shadow-[0_0_15px_rgba(234,179,8,0.1)] flex items-center gap-1"
+            >
+              CHAT
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 text-white text-[7px] flex items-center justify-center rounded-full">
+                  {unreadCount}
+                </span>
+              )}
             </button>
           </div>
         </div>
