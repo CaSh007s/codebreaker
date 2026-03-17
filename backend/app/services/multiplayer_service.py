@@ -25,7 +25,25 @@ class MultiplayerService:
 
     def save_room(self, room_id: str, room_data: Dict[str, Any]):
         key = self._get_room_key(room_id)
-        self.redis_client.setex(key, ROOM_EXPIRY, json.dumps(room_data))
+        
+        # Room Lifecycle: The room expires in 15 mins if abandoned (no 'connected' players)
+        # We only refresh/set TTL if at least one player is physically connected.
+        has_connected_player = any(p.get("connected", True) for p in room_data.get("players", {}).values())
+        
+        serialized = json.dumps(room_data)
+        if has_connected_player:
+            self.redis_client.setex(key, ROOM_EXPIRY, serialized)
+        else:
+            # If no one is connected, we still save it but don't refresh the 15min timer
+            # unless it's already expiring or doesn't exist.
+            # Actually, the user requirement is: "even if there's one player left in the room, it won't be cleared"
+            # This implies "left in the room" means "exists in the players dict".
+            # "Clear the room in case there are no players after every 15 mins"
+            # So if room["players"] is empty, it should expire.
+            if len(room_data.get("players", {})) > 0:
+                self.redis_client.setex(key, ROOM_EXPIRY, serialized)
+            else:
+                self.redis_client.set(key, serialized, ex=ROOM_EXPIRY)
 
     def create_room(self, room_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
         digits = config.get("level", 4)
@@ -59,6 +77,7 @@ class MultiplayerService:
         # If player already exists (session recovery), update their SID
         if player_id in room["players"]:
             room["players"][player_id]["sid"] = sid
+            room["players"][player_id]["connected"] = True
             self.save_room(room_id, room)
             return room
 
@@ -81,6 +100,7 @@ class MultiplayerService:
         # Recovery if they already exist
         if player_id in room["players"]:
             room["players"][player_id]["sid"] = sid
+            room["players"][player_id]["connected"] = True
             room["players"][player_id]["username"] = player_info.get("username", room["players"][player_id]["username"])
             room["players"][player_id]["avatar"] = player_info.get("avatar", room["players"][player_id]["avatar"])
             self.save_room(room_id, room)
@@ -95,6 +115,7 @@ class MultiplayerService:
             "username": player_info.get("username", "Anonymous"),
             "avatar": player_info.get("avatar", ""),
             "is_ready": False,
+            "connected": True,
             "progress": {"bulls": 0, "cows": 0, "attempts": 0, "guesses": [], "hints_used": 0, "last_points_earned": 0},
             "points": 0
         }
@@ -107,11 +128,9 @@ class MultiplayerService:
             # Find the player by SID
             player_id = next((pid for pid, p in room["players"].items() if p["sid"] == sid), None)
             if player_id:
-                # We don't necessarily delete the player from the room immediately for persistence
-                # But if they explicitly leave, we might want to.
-                # For now, let's keep them in the dictionary so they can reconnect.
-                # Maybe just mark them as disconnected?
-                pass
+                # Mark as disconnected but keep in dict for recovery
+                room["players"][player_id]["connected"] = False
+                self.save_room(room_id, room)
             return room
         return None
 
