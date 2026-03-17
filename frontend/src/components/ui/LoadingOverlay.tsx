@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8000";
+const RAW_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8000";
+const BACKEND_URL = RAW_URL.replace(/\/$/, ""); // Strip trailing slash
 
 const BOOT_LOGS = [
   "INITIATING TACTICAL HANDSHAKE...",
@@ -45,20 +46,29 @@ export default function LoadingOverlay() {
     const checkHealth = async () => {
       if (complete) return;
       try {
-        const res = await fetch(`${BACKEND_URL}/health`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const res = await fetch(`${BACKEND_URL}/health`, { 
+            signal: controller.signal,
+            mode: 'cors' 
+        });
+        clearTimeout(timeoutId);
+
         if (res.ok) {
           setComplete(true);
           sessionStorage.setItem("cb_backend_woken", "true");
           addLog("HANDSHAKE COMPLETE. WELCOME OPERATIVE.");
           clearInterval(logInterval);
-          setTimeout(() => setShow(false), 1500);
+          // If was already up, disappear faster
+          setTimeout(() => setShow(false), logIndex === 0 ? 500 : 1500);
         }
-      } catch {
-        // Still cold starting
+      } catch (err) {
+        console.warn("Handshake pending...", err);
       }
     };
 
-    const healthInterval = setInterval(checkHealth, 2000);
+    const healthInterval = setInterval(checkHealth, 3000);
     checkHealth();
 
     return () => {
