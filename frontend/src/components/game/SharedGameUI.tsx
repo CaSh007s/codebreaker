@@ -592,21 +592,65 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
               {activeSection === 'multiplayer' && (
                 <motion.div
                   key="multiplayer"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="space-y-6"
                 >
-                   <div className="w-16 h-16 border-4 border-dashed border-[#565758] rounded-full flex items-center justify-center animate-spin-slow">
-                      <svg className="w-8 h-8 text-[#565758]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                      </svg>
-                   </div>
-                   <div className="space-y-2">
-                      <h4 className="text-slate-300 font-mono text-[10px] font-black uppercase tracking-[0.5em] animate-pulse">REMOTE_UPLINK_ENCRYPTED</h4>
-                      <p className="text-[#565758] font-mono text-[9px] uppercase leading-relaxed">
-                        Peer-to-peer competitive decryption is currently undergoing tactical stress testing. Stand by for operative deployment updates.
-                      </p>
-                   </div>
+                  <div className="space-y-4">
+                    <h4 className="text-[#538d4e] font-mono text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                        <span className="w-1 h-3 bg-[#538d4e] rounded-full" />
+                        Remote_Uplink_Protocol
+                    </h4>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-2">
+                            <span className="text-[#538d4e] font-mono text-[10px] font-bold uppercase">Target_Synchronization</span>
+                            <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">
+                                Both operatives are tasked with cracking the <span className="text-slate-200">SAME sequence</span> simultaneously. The first to achieve 100% decryption wins the session.
+                            </p>
+                        </div>
+                        <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-2">
+                            <span className="text-[#c8b653] font-mono text-[10px] font-bold uppercase">Static_Scramble_Protocol</span>
+                            <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">
+                                The feedback mapping is <span className="text-slate-200">IDENTICAL</span> for both players. Observe your opponent&apos;s progress to deduce the signal mapping faster.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <h5 className="text-slate-300 font-mono text-[10px] font-black uppercase tracking-widest">Tactical_Tools</h5>
+                        
+                        <div className="flex items-start gap-4 p-3 border border-blue-500/20 bg-blue-500/5 rounded-lg">
+                             <div className="w-8 h-8 rounded bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-xs shrink-0">H</div>
+                             <div className="flex flex-col">
+                                <span className="text-blue-400 font-bold font-mono text-[10px] uppercase">Intel_Hints</span>
+                                <span className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">
+                                    Request a single digit reveal. Limited to <span className="text-blue-400 font-bold">50% of code length</span>. Each request incurs a <span className="text-red-400 font-bold">150 point penalty</span>.
+                                </span>
+                             </div>
+                        </div>
+
+                        <div className="flex items-start gap-4 p-3 border border-red-500/20 bg-red-500/5 rounded-lg">
+                             <div className="w-8 h-8 rounded bg-red-500/20 flex items-center justify-center text-red-400 font-bold text-xs shrink-0">A</div>
+                             <div className="flex flex-col">
+                                <span className="text-red-400 font-bold font-mono text-[10px] uppercase">Abandonment_Protocol</span>
+                                <span className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">
+                                    Surrendering immediately awards the mission to your opponent. The remaining operative receives a <span className="text-[#538d4e] font-bold">500 point bonus</span> for system maintenance.
+                                </span>
+                             </div>
+                        </div>
+                    </div>
+
+                    <div className="p-4 border border-purple-500/20 bg-purple-500/5 rounded-xl">
+                        <div className="flex items-center gap-2 mb-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+                            <span className="text-purple-400 font-mono text-[10px] font-bold uppercase">Efficiency_Synchronization</span>
+                        </div>
+                        <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">
+                            Multiplayer scoring utilizes the same <span className="text-slate-200 underline">Efficiency_Rating</span> as single-player field ops. Speed and precision are paramount.
+                        </p>
+                    </div>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
