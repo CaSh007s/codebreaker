@@ -43,6 +43,15 @@ app.mount("/socket.io", app_sio)
 games: Dict[str, GameState] = {}
 leaderboard: List[LeaderboardEntry] = []
 
+@app.get("/")
+async def root():
+    return {
+        "message": "Codebreaker API - Tactical Uplink Active",
+        "status": "online",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
 @app.post("/game/new", response_model=NewGameResponse)
 @limiter.limit("5/minute")
 async def create_game(request: Request, game_req: NewGameRequest):
