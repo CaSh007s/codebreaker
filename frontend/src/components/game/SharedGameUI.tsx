@@ -221,14 +221,14 @@ export function Keyboard({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!(status === "active" || status === "playing") || timerActionBlocked) return;
+      if (!(status === "active" || status === "playing") || timerActionBlocked || isLoading) return;
       if (e.key >= "0" && e.key <= "9") onAddDigit(e.key);
       if (e.key === "Backspace") onRemoveDigit();
       if (e.key === "Enter") onSubmitGuess();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onAddDigit, onRemoveDigit, onSubmitGuess, status, timerActionBlocked]);
+  }, [onAddDigit, onRemoveDigit, onSubmitGuess, status, timerActionBlocked, isLoading]);
 
   return (
     <div className="w-full max-w-sm flex flex-col gap-1.5 mt-auto pb-4">
@@ -257,12 +257,14 @@ export function Keyboard({
       <div className="grid grid-cols-7 gap-1.5 mt-1">
         <button
           onClick={onRemoveDigit}
+          onMouseDown={(e) => e.preventDefault()}
           className="col-span-2 h-10 sm:h-12 bg-[#cf6679] hover:bg-[#b15668] active:bg-[#934656] text-white font-bold rounded uppercase text-[10px] tracking-widest transition-all shadow-[0_0_15px_rgba(207,102,121,0.2)] active:scale-95"
         >
           DEL
         </button>
         <button
           onClick={onSubmitGuess}
+          onMouseDown={(e) => e.preventDefault()}
           disabled={
             currentGuess.length !== codeLength ||
             !(status === "active" || status === "playing") ||
@@ -324,13 +326,16 @@ function KeyButton({
           onClick();
         }
       }}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        startLongPress();
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         onToggleStruck();
       }}
       onTouchStart={startLongPress}
       onTouchEnd={endLongPress}
-      onMouseDown={startLongPress}
       onMouseUp={endLongPress}
       className={`
         relative h-10 sm:h-12 flex items-center justify-center font-bold font-mono text-lg rounded transition-all active:scale-90 select-none

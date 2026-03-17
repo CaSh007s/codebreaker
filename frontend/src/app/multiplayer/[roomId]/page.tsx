@@ -856,6 +856,13 @@ function GameView({
     }
   };
 
+  // Reset input buffer when a new match starts
+  useEffect(() => {
+    if (roomData.status === "playing") {
+      setTimeout(() => setCurrentGuess(""), 0);
+    }
+  }, [roomData.status]);
+
   // Mission Policy: Clear hints once they are utilized in the active cipher buffer
   useEffect(() => {
     const remainingHints = hintsRevealed.filter(
