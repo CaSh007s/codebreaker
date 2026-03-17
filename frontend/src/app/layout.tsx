@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   description: "A logic puzzle game similar to Mastermind",
 };
 
+
 export default function RootLayout({
   children,
 }: Readonly<{

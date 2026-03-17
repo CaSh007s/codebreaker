@@ -12,12 +12,14 @@ import {
   HowToPlayModal,
   AbandonMissionModal,
 } from "@/components/game/SharedGameUI";
+import LoadingOverlay from "@/components/ui/LoadingOverlay";
 
 export default function Home() {
   const { view } = useGameStore();
 
   return (
     <main className="relative flex h-dvh w-full flex-col bg-[#0a0a0b] text-slate-100 overflow-hidden selection:bg-[#538d4e]/30">
+      <LoadingOverlay />
       <TopHeader />
 
       <div
@@ -636,7 +638,6 @@ function GameView() {
           codeLength={codeLength}
           status={status}
           hintsRevealed={useGameStore.getState().hintsRevealed}
-          onHintClick={(pos) => useGameStore.getState().triggerHint(pos)}
         />
       </div>
 

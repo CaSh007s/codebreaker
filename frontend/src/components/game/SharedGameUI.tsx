@@ -379,7 +379,9 @@ export function AnimatedHeading({ text }: { text: string }) {
       ))}
     </h1>
   );
-}export function HowToPlayModal({ onClose }: { onClose: () => void }) {
+}
+
+export function HowToPlayModal({ onClose }: { onClose: () => void }) {
   const sections = [
     { id: 'basics', label: '01_CORE_MECHANICS' },
     { id: 'modes', label: '02_MISSION_PROFILES' },

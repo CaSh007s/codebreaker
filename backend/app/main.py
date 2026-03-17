@@ -23,7 +23,11 @@ app = FastAPI(title="Codebreaker API")
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For production, replace with specific origins
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://0.0.0.0:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,18 +47,18 @@ leaderboard: List[LeaderboardEntry] = []
 
 @app.post("/game/new", response_model=NewGameResponse)
 @limiter.limit("5/minute")
-async def create_game(request: NewGameRequest, request_obj: Request):
+async def create_game(request: Request, game_req: NewGameRequest):
     game_id = str(uuid.uuid4())
-    secret_code = GameService.generate_secret_code(request.code_length, request.allow_repeats)
-    feedback_map = GameService.generate_feedback_map(request.code_length)
+    secret_code = GameService.generate_secret_code(game_req.code_length, game_req.allow_repeats)
+    feedback_map = GameService.generate_feedback_map(game_req.code_length)
     
     game = GameState(
         id=game_id,
         secret_code=secret_code,
-        mode=request.mode,
+        mode=game_req.mode,
         status=GameStatus.ACTIVE,
         attempts=0,
-        max_attempts=request.max_attempts,
+        max_attempts=game_req.max_attempts,
         feedback_map=feedback_map,
         created_at=datetime.utcnow()
     )
@@ -63,8 +67,8 @@ async def create_game(request: NewGameRequest, request_obj: Request):
     
     return NewGameResponse(
         game_id=game_id,
-        code_length=request.code_length,
-        mode=request.mode,
+        code_length=game_req.code_length,
+        mode=game_req.mode,
         max_attempts=game.max_attempts
     )
 
@@ -172,16 +176,16 @@ async def get_leaderboard():
 
 @app.post("/leaderboard", response_model=LeaderboardEntry)
 @limiter.limit("2/minute")
-async def add_to_leaderboard(request: LeaderboardRequest, request_obj: Request):
+async def add_to_leaderboard(request: Request, lb_req: LeaderboardRequest):
     entry = LeaderboardEntry(
-        username=request.username,
-        level=request.level,
-        tries=request.tries,
-        time_seconds=request.time_seconds,
-        status=request.status,
-        score=request.score,
-        timer_mode=request.timer_mode,
-        infinite_mode=request.infinite_mode,
+        username=lb_req.username,
+        level=lb_req.level,
+        tries=lb_req.tries,
+        time_seconds=lb_req.time_seconds,
+        status=lb_req.status,
+        score=lb_req.score,
+        timer_mode=lb_req.timer_mode,
+        infinite_mode=lb_req.infinite_mode,
         timestamp=datetime.utcnow()
     )
     leaderboard.append(entry)
