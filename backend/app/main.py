@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.models.game import (
     GameMode, GameStatus, GameState, 
@@ -42,7 +42,8 @@ games: Dict[str, GameState] = {}
 leaderboard: List[LeaderboardEntry] = []
 
 @app.post("/game/new", response_model=NewGameResponse)
-async def create_game(request: NewGameRequest):
+@limiter.limit("5/minute")
+async def create_game(request: NewGameRequest, request_obj: Request):
     game_id = str(uuid.uuid4())
     secret_code = GameService.generate_secret_code(request.code_length, request.allow_repeats)
     feedback_map = GameService.generate_feedback_map(request.code_length)
@@ -170,7 +171,8 @@ async def get_leaderboard():
     return sorted_leaderboard[:20]
 
 @app.post("/leaderboard", response_model=LeaderboardEntry)
-async def add_to_leaderboard(request: LeaderboardRequest):
+@limiter.limit("2/minute")
+async def add_to_leaderboard(request: LeaderboardRequest, request_obj: Request):
     entry = LeaderboardEntry(
         username=request.username,
         level=request.level,

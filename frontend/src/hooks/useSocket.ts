@@ -14,6 +14,7 @@ export const useSocket = (room?: string) => {
   const [lastError, setLastError] = useState<Record<string, unknown> | null>(null);
   
   const addChatMessage = useChatStore((state) => state.addMessage);
+  const clearSystemMessages = useChatStore((state) => state.clearSystemMessages);
 
   useEffect(() => {
     // Initialize socket connection
@@ -55,6 +56,7 @@ export const useSocket = (room?: string) => {
 
     socket.on("game_start", (data) => {
       console.log("Game started!", data);
+      clearSystemMessages();
     });
 
     socket.on("game_over", (data) => {
@@ -78,7 +80,7 @@ export const useSocket = (room?: string) => {
       }
       socket.disconnect();
     };
-  }, [room, addChatMessage]);
+  }, [room, addChatMessage, clearSystemMessages]);
 
   const sendMessage = (data: { text: string; sender_id: string; sender_username: string }) => {
     if (socket && room) {

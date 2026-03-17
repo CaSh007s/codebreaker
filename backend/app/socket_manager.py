@@ -28,6 +28,35 @@ sid_to_room = {}
 MAX_MESSAGE_LENGTH = 200
 VALID_EMOJIS = ["🎯", "💀", "🔥", "👀", "🤯"]
 
+# Rate limiting settings (events per 10 seconds)
+CHAT_LIMIT = 10
+GUESS_LIMIT = 5
+RATE_LIMIT_WINDOW = 10
+
+
+# --- Helper: Simple HTML Sanitization ---
+def _sanitize_text(text: str) -> str:
+    """Very basic tag stripping to prevent XSS in chat messages."""
+    import re
+    # Remove anything that looks like an HTML tag
+    clean = re.compile('<.*?>')
+    return re.sub(clean, '', text).strip()
+
+
+# --- Helper: Redis Rate Limiter ---
+async def _is_rate_limited(sid: str, action: str, limit: int) -> bool:
+    """Check if an action is rate limited for a specific SID using Redis."""
+    key = f"rate_limit:{action}:{sid}"
+    try:
+        current = await mgr.redis.incr(key)
+        if current == 1:
+            await mgr.redis.expire(key, RATE_LIMIT_WINDOW)
+        
+        return current > limit
+    except Exception as e:
+        print(f"Rate limit error: {e}")
+        return False # Fallback to allow if Redis has issues
+
 
 # --- Helper: Emit system message to a room ---
 async def emit_system_message(room_id: str, text: str):
@@ -60,9 +89,17 @@ async def connect(sid, environ):
 async def disconnect(sid):
     room_id = sid_to_room.get(sid)
     if room_id:
+        room_before = multiplayer_service.get_room(room_id)
+        username = _get_player_username(room_before, sid)
+        
+        # We still notify the room even if leave_room doesn't change anything
+        # as the player is still physically gone from the socket.
+        await emit_system_message(room_id, f"{username} lost connection")
+        
         room = multiplayer_service.leave_room(room_id, sid)
         if room:
             await sio.emit('room_update', room, room=room_id)
+            
         del sid_to_room[sid]
     print(f"Client disconnected: {sid}")
 
@@ -91,6 +128,9 @@ async def init_room(sid, data):
                 room = multiplayer_service.join_room(room_id, sid, player_info)
                 if room:
                     existing = room # Use the updated state
+                    # System message: reconnected
+                    username = player_info.get("username", "UNKNOWN")
+                    await emit_system_message(room_id, f"{username} re-established uplink")
 
             await sio.emit('room_update', existing, to=sid)
         else:
@@ -126,6 +166,11 @@ async def join_room(sid, data):
             updated_room = multiplayer_service.join_room(room_id, sid, player_info)
             if updated_room and "error" not in updated_room:
                 await sio.emit('room_update', updated_room, room=room_id)
+                
+                # System message: reconnected
+                if is_returning:
+                    username = player_info.get("username", "UNKNOWN")
+                    await emit_system_message(room_id, f"{username} re-established uplink")
                 return
             elif updated_room:
                  room = updated_room
@@ -162,6 +207,11 @@ async def toggle_ready(sid, data):
 
 @sio.event
 async def submit_guess(sid, data):
+    # Rate limit: 5 guesses per 10 seconds
+    if await _is_rate_limited(sid, "guess", GUESS_LIMIT):
+        await sio.emit('error', 'TOO_MANY_GUESSES_RETRY_LATER', to=sid)
+        return
+
     room_id = data.get('room_id')
     guess = data.get('guess')
     if room_id and guess:
@@ -194,8 +244,15 @@ async def surrender(sid, data):
 @sio.event
 async def chat_message(sid, data):
     """Handle player chat messages with validation."""
+    # Rate limit: 10 messages per 10 seconds
+    if await _is_rate_limited(sid, "chat", CHAT_LIMIT):
+        await sio.emit('error', 'TOO_MANY_MESSAGES_RETRY_LATER', to=sid)
+        return
+
     room_id = data.get('room_id')
-    text = data.get('text', '').strip()
+    raw_text = data.get('text', '')
+    text = _sanitize_text(raw_text)
+    
     sender_id = data.get('sender_id', '')
     sender_username = data.get('sender_username', 'UNKNOWN')
 

@@ -17,6 +17,7 @@ interface ChatStore {
 
   addMessage: (msg: ChatMessage) => void;
   clearMessages: () => void;
+  clearSystemMessages: () => void;
   setOpen: (open: boolean) => void;
   toggleOpen: () => void;
 }
@@ -34,6 +35,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
   },
 
   clearMessages: () => set({ messages: [], unreadCount: 0 }),
+  
+  clearSystemMessages: () => set((state) => ({
+    messages: state.messages.filter(m => m.type !== "system"),
+    unreadCount: 0,
+  })),
 
   setOpen: (open) =>
     set({

@@ -17,7 +17,7 @@ import { useChatStore } from "@/store/useChatStore";
 
 interface Player {
   player_id: string; // Persistent ID
-  sid: string;       // Current socket session ID
+  sid: string; // Current socket session ID
   username: string;
   avatar: string;
   is_ready: boolean;
@@ -59,8 +59,15 @@ export default function MultiplayerRoom() {
   const { roomId } = useParams() as { roomId: string };
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { isConnected, socket, lastRoomData, lastError, emitEvent, sendMessage, sendEmoji } =
-    useSocket(roomId);
+  const {
+    isConnected,
+    socket,
+    lastRoomData,
+    lastError,
+    emitEvent,
+    sendMessage,
+    sendEmoji,
+  } = useSocket(roomId);
 
   const { toggleOpen, unreadCount } = useChatStore();
 
@@ -111,27 +118,38 @@ export default function MultiplayerRoom() {
     if (isConnected && socket && playerId) {
       const savedCodename = localStorage.getItem(`cb_codename_${roomId}`);
       const savedAvatar = localStorage.getItem(`cb_avatar_${roomId}`);
-      
+
       const playerInfo = {
         player_id: playerId,
         username: savedCodename || username,
-        avatar: savedAvatar || getAvatarUrl(avatarSeed || username)
+        avatar: savedAvatar || getAvatarUrl(avatarSeed || username),
       };
 
       if (searchParams.has("mode")) {
         emitEvent("init_room", {
           room_id: roomId,
           config: { mode, level },
-          player_info: playerInfo // Send player info too in case we are re-initializing
+          player_info: playerInfo, // Send player info too in case we are re-initializing
         });
       } else {
-        emitEvent("join_room", { 
+        emitEvent("join_room", {
           room_id: roomId,
-          player_info: playerInfo 
+          player_info: playerInfo,
         });
       }
     }
-  }, [isConnected, socket, roomId, mode, level, searchParams, emitEvent, playerId, avatarSeed, username]);
+  }, [
+    isConnected,
+    socket,
+    roomId,
+    mode,
+    level,
+    searchParams,
+    emitEvent,
+    playerId,
+    avatarSeed,
+    username,
+  ]);
 
   // Handle room updates and view transitions
   useEffect(() => {
@@ -145,7 +163,7 @@ export default function MultiplayerRoom() {
       requestAnimationFrame(() => {
         const prevStatus = roomData?.status;
         setRoomData(data);
-        
+
         // Auto-transition view if we are already in the player list
         if (playerId && data.players[playerId]) {
           if (data.status === "playing" || data.status === "finished") {
@@ -195,17 +213,17 @@ export default function MultiplayerRoom() {
       return;
     }
     const finalAvatar = getAvatarUrl(avatarSeed || username);
-    
+
     // Persist identity for this room
     localStorage.setItem(`cb_codename_${roomId}`, username);
     localStorage.setItem(`cb_avatar_${roomId}`, finalAvatar);
 
     emitEvent("setup_player", {
       room_id: roomId,
-      player_info: { 
+      player_info: {
         player_id: playerId,
-        username, 
-        avatar: finalAvatar 
+        username,
+        avatar: finalAvatar,
       },
     });
     setView("lobby");
@@ -236,9 +254,9 @@ export default function MultiplayerRoom() {
     const hintsUsed = me?.progress.hints_used || 0;
 
     if (hintsUsed >= maxHints) return;
-    emitEvent("get_hint", { 
-      room_id: roomId, 
-      revealed_indices: hintsRevealed.map(h => h.position) 
+    emitEvent("get_hint", {
+      room_id: roomId,
+      revealed_indices: hintsRevealed.map((h) => h.position),
     });
   };
 
@@ -246,7 +264,7 @@ export default function MultiplayerRoom() {
   useEffect(() => {
     if (!socket) return;
     const onHintReceived = (hint: Hint) => {
-      setHintsRevealed(prev => [...prev, hint]);
+      setHintsRevealed((prev) => [...prev, hint]);
     };
     socket.on("hint_received", onHintReceived);
     return () => {
@@ -255,7 +273,9 @@ export default function MultiplayerRoom() {
   }, [socket]);
 
   return (
-    <main className={`relative flex h-dvh w-full flex-col bg-[#0a0a0b] text-slate-100 items-center overflow-hidden selection:bg-[#538d4e]/30 p-2 sm:p-4 ${view === "game" ? "justify-start" : "justify-center"}`}>
+    <main
+      className={`relative flex h-dvh w-full flex-col bg-[#0a0a0b] text-slate-100 items-center overflow-hidden selection:bg-[#538d4e]/30 p-2 sm:p-4 ${view === "game" ? "justify-start" : "justify-center"}`}
+    >
       <BinaryBackground />
 
       <AnimatePresence>
@@ -319,22 +339,25 @@ export default function MultiplayerRoom() {
             {/* Full-width Heading & Centered Buttons (Extreme Vertical Compression) */}
             <div className="w-full flex flex-col items-center pt-0 pb-1 shrink-0">
               <AnimatedHeading text="CODEBREAKER" />
-              
+
               {/* Desktop-only Centered Utility Buttons */}
               <div className="hidden sm:flex items-center gap-6 mt-1 pb-1">
                 {(() => {
                   const targetLength = roomData.config.level || 4;
                   const maxHints = Math.floor(targetLength / 2);
-                  const hintsUsed = roomData.players[playerId || ""]?.progress.hints_used || 0;
+                  const hintsUsed =
+                    roomData.players[playerId || ""]?.progress.hints_used || 0;
                   const isLimitReached = hintsUsed >= maxHints;
-                  
+
                   return (
                     <button
                       onClick={handleGetHint}
                       disabled={isLimitReached}
                       className={`px-4 py-2 font-mono text-xs border rounded-lg transition-all uppercase tracking-widest shadow-[0_0_15px_rgba(83,141,78,0.1)] hover:scale-105 active:scale-95 ${isLimitReached ? "opacity-30 border-white/10 text-white/30 cursor-not-allowed" : "text-[#538d4e] border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/20"}`}
                     >
-                      {isLimitReached ? "[HINT_LIMIT_REACHED]" : `[GET_HINT] (${hintsUsed}/${maxHints})`}
+                      {isLimitReached
+                        ? "[HINT_LIMIT_REACHED]"
+                        : `[GET_HINT] (${hintsUsed}/${maxHints})`}
                     </button>
                   );
                 })()}
@@ -396,7 +419,7 @@ export default function MultiplayerRoom() {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-100 flex items-center justify-center bg-[#0a0a0b]/90 backdrop-blur-xl p-4 sm:p-8"
           >
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ delay: 0.2, duration: 0.5, ease: "easeOut" }}
@@ -407,31 +430,47 @@ export default function MultiplayerRoom() {
                 const hasResigned = roomData.resigned_pid === playerId;
                 const me = roomData.players[playerId || ""];
                 return (
-                  <div className="space-y-10">
-                    <div className="space-y-4">
+                  <div className="space-y-10 flex flex-col items-center">
+                    <div className="space-y-4 w-full flex flex-col items-center">
                       <h2
-                        className={`w-full text-[clamp(1rem,4vw,2rem)] sm:text-[clamp(1.1rem,4.5vw,2.25rem)] font-serif font-black tracking-tighter uppercase leading-none px-2 text-center ${
+                        className={`w-full text-[clamp(0.8rem,3.5vw,1.4rem)] sm:text-[clamp(1rem,4vw,1.8rem)] font-serif font-black tracking-tight uppercase leading-tight text-center relative -left-1 ${
                           roomData.end_reason === "resignation"
-                            ? (hasResigned ? "text-orange-500 drop-shadow-[0_0_25px_rgba(249,115,22,0.5)]" : "text-[#538d4e] drop-shadow-[0_0_25px_rgba(83,141,78,0.5)]")
-                            : (isWinner
-                                ? "text-[#538d4e] drop-shadow-[0_0_25px_rgba(83,141,78,0.5)]"
-                                : "text-[#cf6679] drop-shadow-[0_0_25px_rgba(207,102,121,0.5)]")
+                            ? hasResigned
+                              ? "text-orange-500 drop-shadow-[0_0_25px_rgba(249,115,22,0.5)]"
+                              : "text-[#538d4e] drop-shadow-[0_0_25px_rgba(83,141,78,0.5)]"
+                            : isWinner
+                              ? "text-[#538d4e] drop-shadow-[0_0_25px_rgba(83,141,78,0.5)]"
+                              : "text-[#cf6679] drop-shadow-[0_0_25px_rgba(207,102,121,0.5)]"
                         }`}
                       >
                         {roomData.end_reason === "resignation"
-                          ? (hasResigned ? "MISSION_ABANDONED" : "UPLINK_SECURED_BY_FORFEIT")
-                          : (isWinner ? "ENCRYPTION_SUCCESS" : "INTERCEPTED_BY_ENEMY")}
+                          ? hasResigned
+                            ? "MISSION_ABANDONED"
+                            : "UPLINK_SECURED_BY_FORFEIT"
+                          : isWinner
+                            ? "ENCRYPTION_SUCCESS"
+                            : "INTERCEPTED_BY_ENEMY"}
                       </h2>
+
                       <div className="flex flex-col items-center gap-1">
-                        <p className="text-[#565758] font-mono text-xs sm:text-sm uppercase tracking-[0.4em] opacity-80">
+                        <p className="text-[#565758] font-mono text-xs sm:text-sm uppercase tracking-[0.4em] opacity-80 text-center">
                           {roomData.end_reason === "resignation"
-                            ? (hasResigned ? "Desertion_Logged_To_Base" : "Hostile_Operative_Fled")
-                            : (isWinner ? "Mission_Complete" : "Operative_Down")}
+                            ? hasResigned
+                              ? "Desertion_Logged_To_Base"
+                              : "Hostile_Operative_Fled"
+                            : isWinner
+                              ? "Mission_Complete"
+                              : "Operative_Down"}
                         </p>
-                        <div className="flex gap-4 mt-2">
+
+                        <div className="flex justify-center gap-4 mt-2">
                           <div className="text-center">
-                            <p className="text-[8px] text-[#565758] uppercase font-mono tracking-widest">Points_Earned</p>
-                            <p className="text-[#c8b653] font-mono text-lg font-black">+{me?.progress.last_points_earned || 0}</p>
+                            <p className="text-[8px] text-[#565758] uppercase font-mono tracking-widest">
+                              Points_Earned
+                            </p>
+                            <p className="text-[#c8b653] font-mono text-lg font-black">
+                              +{me?.progress.last_points_earned || 0}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -440,7 +479,7 @@ export default function MultiplayerRoom() {
                     <div className="py-10 border-y border-white/5 relative">
                       <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-white/10 to-transparent" />
                       <div className="absolute inset-x-0 bottom-0 h-px bg-linear-to-r from-transparent via-white/10 to-transparent" />
-                      
+
                       <span className="block text-[#565758] font-mono text-[10px] uppercase tracking-widest mb-6 opacity-60">
                         Final Target Cipher
                       </span>
@@ -470,37 +509,47 @@ export default function MultiplayerRoom() {
                           Hostile Tries
                         </span>
                         <span className="text-3xl sm:text-4xl font-black text-slate-100 font-mono">
-                          {Object.values(roomData.players).find(p => p.player_id !== playerId)?.progress.attempts || 0}
+                          {Object.values(roomData.players).find(
+                            (p) => p.player_id !== playerId,
+                          )?.progress.attempts || 0}
                         </span>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
                       <button
-                        onClick={() => emitEvent("request_replay", { room_id: roomId })}
-                        disabled={roomData.replay_requests.includes(playerId || "")}
-                        className={`py-5 border rounded-2xl font-mono text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(83,141,78,0.1)] group ${
+                        onClick={() =>
+                          emitEvent("request_replay", { room_id: roomId })
+                        }
+                        disabled={roomData.replay_requests.includes(
+                          playerId || "",
+                        )}
+                        className={`py-8 border rounded-2xl font-mono text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(83,141,78,0.1)] group ${
                           roomData.replay_requests.includes(playerId || "")
                             ? "bg-[#538d4e]/5 border-[#538d4e]/10 text-[#538d4e]/40 cursor-wait"
                             : "bg-[#538d4e]/10 hover:bg-[#538d4e]/20 border-[#538d4e]/30 text-[#538d4e]"
                         }`}
                       >
                         <span className="group-hover:tracking-[0.3em] transition-all duration-300">
-                          {roomData.replay_requests.includes(playerId || "") 
-                            ? "WAITING_FOR_OPPONENT" 
-                            : roomData.replay_requests.length > 0 
-                              ? "ACCEPT_REMATCH" 
+                          {roomData.replay_requests.includes(playerId || "")
+                            ? "WAITING_FOR_OPPONENT"
+                            : roomData.replay_requests.length > 0
+                              ? "ACCEPT_REMATCH"
                               : "REQUEST_REMATCH"}
                         </span>
                         {roomData.replay_requests.includes(playerId || "") && (
-                          <span className="block text-[8px] opacity-40 mt-1 font-normal tracking-normal animate-pulse">[UPLINK_PENDING]</span>
+                          <span className="block text-[8px] opacity-40 mt-1 font-normal tracking-normal animate-pulse">
+                            [UPLINK_PENDING]
+                          </span>
                         )}
                       </button>
                       <button
                         onClick={() => router.push("/multiplayer")}
-                        className="py-5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-mono text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] transition-all active:scale-[0.98] text-slate-300 group"
+                        className="py-8 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-mono text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] transition-all active:scale-[0.98] text-slate-300 group"
                       >
-                        <span className="group-hover:tracking-[0.3em] transition-all duration-300">Return_To_Base</span>
+                        <span className="group-hover:tracking-[0.3em] transition-all duration-300">
+                          Return_To_Base
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -758,7 +807,9 @@ function GameView({
 }: GameViewProps) {
   const [currentGuess, setCurrentGuess] = useState("");
   const me = roomData.players[mySid];
-  const opponent = Object.values(roomData.players).find((p) => p.player_id !== mySid);
+  const opponent = Object.values(roomData.players).find(
+    (p) => p.player_id !== mySid,
+  );
   const targetLength = roomData.config.level || 4;
   const isGameOver = roomData.status === "finished";
 
@@ -791,7 +842,7 @@ function GameView({
   // Mission Policy: Clear hints once they are utilized in the active cipher buffer
   useEffect(() => {
     const remainingHints = hintsRevealed.filter(
-      (h) => currentGuess[h.position] !== h.digit
+      (h) => currentGuess[h.position] !== h.digit,
     );
     if (remainingHints.length !== hintsRevealed.length) {
       setHintsRevealed(remainingHints);
@@ -814,7 +865,9 @@ function GameView({
                   disabled={isLimitReached}
                   className={`px-3 py-1.5 font-mono text-[10px] border rounded transition-all uppercase tracking-tighter ${isLimitReached ? "opacity-30 border-white/10 text-white/30" : "text-[#538d4e] border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/20"}`}
                 >
-                  {isLimitReached ? "[HINT_LIMIT_REACHED]" : `[GET_HINT] (${hintsUsed}/${maxHints})`}
+                  {isLimitReached
+                    ? "[HINT_LIMIT_REACHED]"
+                    : `[GET_HINT] (${hintsUsed}/${maxHints})`}
                 </button>
               );
             })()}
