@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Codebreaker",
   description: "A logic puzzle game similar to Mastermind",
+  icons: {
+    icon: "/icon.png",
+  },
 };
 
 
