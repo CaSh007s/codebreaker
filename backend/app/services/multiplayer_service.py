@@ -139,6 +139,7 @@ class MultiplayerService:
             
             target = "".join(random.choices("0123456789", k=digits))
             room["target"] = target
+            room["feedback_map"] = GameService.generate_feedback_map(digits)
             room["status"] = "playing"
             room["replay_requests"] = [] # Reset for next time
             room["started_at"] = datetime.utcnow().isoformat()
@@ -171,6 +172,14 @@ class MultiplayerService:
             return None
             
         # Calculate bulls, cows and gray using the Static Scramble Protocol
+        target = room["target"]
+        feedback_map = room.get("feedback_map")
+        
+        # Fallback for rooms created before the map was mandatory
+        if not feedback_map:
+            feedback_map = GameService.generate_feedback_map(len(target))
+            room["feedback_map"] = feedback_map
+
         bulls, cows, gray = GameService.evaluate_guess(target, guess)
         shuffled_feedback = GameService.evaluate_positional(target, guess, feedback_map)
                 
@@ -187,7 +196,7 @@ class MultiplayerService:
         # Check Win Condition
         if bulls == len(target):
             room["status"] = "finished"
-            room["winner_sid"] = sid
+            room["winner_pid"] = player_id
             room["finished_at"] = datetime.utcnow().isoformat()
             
             # Calculate points for the winner
@@ -195,10 +204,10 @@ class MultiplayerService:
             # or map room config to level labels.
             base = 1000 # Default to 1000
             max_attempts = 20
-            attempts = room["players"][sid]["progress"]["attempts"]
+            attempts = room["players"][player_id]["progress"]["attempts"]
             efficiency_ratio = max(0.1, 1 - (attempts - 1) / max_attempts)
             
-            hints_used = room["players"][sid]["progress"].get("hints_used", 0)
+            hints_used = room["players"][player_id]["progress"].get("hints_used", 0)
             hint_penalty = hints_used * 150
             
             # Multiplayer points calculation

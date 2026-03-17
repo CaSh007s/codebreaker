@@ -23,28 +23,29 @@ export function DigitTile({
   isCompleted,
   isHint,
   delay,
-  onClick,
 }: {
   digit: string;
   isActive: boolean;
   isCompleted: boolean;
   isHint?: boolean;
   delay: number;
-  onClick?: () => void;
 }) {
   return (
     <motion.div
       initial={isCompleted ? { rotateX: 0 } : false}
       animate={isCompleted ? { rotateX: [0, 90, 0] } : {}}
-      transition={{ duration: 0.5, delay }}
-      onClick={onClick}
+      whileTap={{ scale: 0.95 }}
+      transition={{ 
+        rotateX: { duration: 0.5, delay },
+        scale: { type: "spring", stiffness: 400, damping: 17 }
+      }}
       className={`
                 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-xl sm:text-2xl font-mono font-bold border-2 transition-all duration-200 rounded
                 ${isHint ? "border-[#538d4e]/50 bg-[#538d4e]/10 text-[#538d4e] shadow-[0_0_10px_rgba(83,141,78,0.2)] cursor-default" : 
                   digit ? "border-[#565758] bg-[#121213] text-white" : "border-[#3a3a3c] bg-[#121213] text-[#3a3a3c]"}
                 ${isActive ? "border-[#818384]" : ""}
                 ${isCompleted ? "border-[#3a3a3c] opacity-100" : ""}
-                ${onClick ? "hover:border-[#538d4e]/50 cursor-pointer" : ""}
+                ${!isHint && !isCompleted ? "hover:border-[#538d4e]/50 cursor-pointer" : ""}
             `}
     >
       {digit}
@@ -94,7 +95,6 @@ export function GuessRow({
   isActive,
   isCompleted,
   hints = [],
-  onHintClick,
 }: {
   content: string;
   codeLength: number;
@@ -102,7 +102,6 @@ export function GuessRow({
   isActive: boolean;
   isCompleted: boolean;
   hints?: Hint[];
-  onHintClick?: (position: number) => void;
 }) {
   const digits = content.split("");
   const placeholders = Array.from({ length: codeLength });
@@ -123,7 +122,6 @@ export function GuessRow({
                 isCompleted={isCompleted}
                 isHint={!!hint}
                 delay={i * 0.1}
-                onClick={isActive && !hint && onHintClick ? () => onHintClick(i) : undefined}
             />
           );
         })}
@@ -141,14 +139,12 @@ export function Board({
   codeLength, 
   status, 
   hintsRevealed,
-  onHintClick
 }: {
   guesses: Guess[];
   currentGuess: string;
   codeLength: number;
   status: string;
   hintsRevealed: Hint[];
-  onHintClick?: (position: number) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -190,7 +186,6 @@ export function Board({
               isActive={isCurrent}
               isCompleted={!!guessObj}
               hints={isCurrent ? hintsRevealed : []}
-              onHintClick={onHintClick}
             />
           );
         })}

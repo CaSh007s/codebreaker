@@ -79,6 +79,7 @@ export default function MultiplayerRoom() {
   const [roomData, setRoomData] = useState<RoomData | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
@@ -177,6 +178,9 @@ export default function MultiplayerRoom() {
         if (data.status === "playing" && prevStatus !== "playing") {
           setHintsRevealed([]);
         }
+        
+        // Clear isSubmitting when room data updates (presumably with new guess)
+        setIsSubmitting(false);
       });
     }
   }, [lastRoomData, roomId, roomData?.status, playerId]);
@@ -193,15 +197,22 @@ export default function MultiplayerRoom() {
 
   // Handle errors
   useEffect(() => {
-    if (lastError && typeof lastError === "object" && "message" in lastError) {
-      const msg = lastError.message as string;
+    if (lastError) {
+      let msg = "";
+      if (typeof lastError === "string") {
+        msg = lastError;
+      } else if (typeof lastError === "object" && "message" in lastError) {
+        msg = lastError.message as string;
+      }
+
       if (msg === "Room is full") {
         router.push("/multiplayer/full");
       } else if (msg === "Room not found") {
         router.push("/multiplayer");
-      } else {
+      } else if (msg) {
         requestAnimationFrame(() => {
           setError(msg || "AN_ERROR_OCCURRED");
+          setIsSubmitting(false); // Reset submitting on error
         });
       }
     }
@@ -243,7 +254,10 @@ export default function MultiplayerRoom() {
   };
 
   const submitGuess = (guess: string) => {
+    setIsSubmitting(true);
     emitEvent("submit_guess", { room_id: roomId, guess });
+    // Safety timeout to clear submitting state if no update comes
+    setTimeout(() => setIsSubmitting(false), 2000);
   };
 
   const handleGetHint = () => {
@@ -404,6 +418,7 @@ export default function MultiplayerRoom() {
                 onHint={handleGetHint}
                 toggleChat={toggleOpen}
                 unreadCount={unreadCount}
+                isSubmitting={isSubmitting}
               />
             </motion.div>
           </div>
@@ -791,6 +806,7 @@ interface GameViewProps {
   onHint: () => void;
   toggleChat: () => void;
   unreadCount: number;
+  isSubmitting: boolean;
 }
 
 function GameView({
@@ -804,6 +820,7 @@ function GameView({
   onHint,
   toggleChat,
   unreadCount,
+  isSubmitting,
 }: GameViewProps) {
   const [currentGuess, setCurrentGuess] = useState("");
   const me = roomData.players[mySid];
@@ -999,7 +1016,6 @@ function GameView({
               codeLength={targetLength}
               status={roomData.status}
               hintsRevealed={hintsRevealed}
-              onHintClick={() => onHint()}
             />
           </div>
 
@@ -1011,7 +1027,7 @@ function GameView({
               currentGuess={currentGuess}
               codeLength={targetLength}
               status={roomData.status}
-              isLoading={false}
+              isLoading={isSubmitting}
               timerActionBlocked={false}
               struckKeys={struckKeys}
               onToggleStruckKey={toggleStruckKey}

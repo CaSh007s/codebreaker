@@ -8,7 +8,9 @@ import { v4 as uuidv4 } from "uuid";
 export default function MultiplayerLanding() {
   const router = useRouter();
   const [selectedLevel, setSelectedLevel] = useState(0);
-  const [category, setCategory] = useState<"standard" | "overdrive">("standard");
+  const [category, setCategory] = useState<"standard" | "overdrive">(
+    "standard",
+  );
 
   interface MissionLevel {
     label: string;
@@ -20,14 +22,50 @@ export default function MultiplayerLanding() {
 
   const MISSION_LEVELS: Record<string, MissionLevel[]> = {
     standard: [
-      { label: "ROOKIE", length: 3, tries: 25, repeats: false, desc: "Tactical Induction" },
-      { label: "EASY", length: 4, tries: 20, repeats: false, desc: "Standard Protocol" },
-      { label: "MEDIUM", length: 5, tries: 15, repeats: false, desc: "Advanced Recon" },
-      { label: "HARD", length: 6, tries: 10, repeats: false, desc: "Special Ops" },
+      {
+        label: "ROOKIE",
+        length: 3,
+        tries: 25,
+        repeats: false,
+        desc: "Tactical Induction",
+      },
+      {
+        label: "EASY",
+        length: 4,
+        tries: 20,
+        repeats: false,
+        desc: "Standard Protocol",
+      },
+      {
+        label: "MEDIUM",
+        length: 5,
+        tries: 15,
+        repeats: false,
+        desc: "Advanced Recon",
+      },
+      {
+        label: "HARD",
+        length: 6,
+        tries: 10,
+        repeats: false,
+        desc: "Special Ops",
+      },
     ],
     overdrive: [
-      { label: "ELITE", length: 5, tries: 15, repeats: true, desc: "Signal Noise Alert" },
-      { label: "MASTER", length: 6, tries: 10, repeats: true, desc: "Cryptographic Chaos" },
+      {
+        label: "ELITE",
+        length: 5,
+        tries: 15,
+        repeats: true,
+        desc: "Signal Noise Alert",
+      },
+      {
+        label: "MASTER",
+        length: 6,
+        tries: 10,
+        repeats: true,
+        desc: "Cryptographic Chaos",
+      },
     ],
   };
 
@@ -35,7 +73,9 @@ export default function MultiplayerLanding() {
     const roomId = uuidv4().slice(0, 8);
     // Encode level params in URL or use room state on backend
     // For Phase 1, we just want to see the overview.
-    router.push(`/multiplayer/${roomId}?mode=${category}&level=${selectedLevel}`);
+    router.push(
+      `/multiplayer/${roomId}?mode=${category}&level=${selectedLevel}`,
+    );
   };
 
   return (
@@ -60,7 +100,10 @@ export default function MultiplayerLanding() {
         <div className="w-full space-y-4">
           <div className="flex gap-2 p-1 bg-white/5 border border-white/10 rounded-lg relative overflow-hidden">
             <button
-              onClick={() => { setCategory("standard"); setSelectedLevel(0); }}
+              onClick={() => {
+                setCategory("standard");
+                setSelectedLevel(0);
+              }}
               className={`relative flex-1 py-2 font-mono text-[10px] rounded transition-colors z-10 ${category === "standard" ? "text-black font-bold" : "text-[#565758] hover:text-slate-300"}`}
             >
               {category === "standard" && (
@@ -73,7 +116,10 @@ export default function MultiplayerLanding() {
               <span className="relative z-10">STANDARD</span>
             </button>
             <button
-              onClick={() => { setCategory("overdrive"); setSelectedLevel(0); }}
+              onClick={() => {
+                setCategory("overdrive");
+                setSelectedLevel(0);
+              }}
               className={`relative flex-1 py-2 font-mono text-[10px] rounded transition-colors z-10 ${category === "overdrive" ? "text-black font-bold" : "text-[#565758] hover:text-slate-300"}`}
             >
               {category === "overdrive" && (
@@ -87,7 +133,7 @@ export default function MultiplayerLanding() {
             </button>
           </div>
 
-          <div className="flex flex-col gap-2 min-h-[160px] max-h-[30dvh] overflow-y-auto pr-1 custom-scrollbar">
+          <div className="flex flex-col gap-2 min-h-40 max-h-[30dvh] overflow-y-auto pr-1 custom-scrollbar">
             <AnimatePresence mode="wait">
               <motion.div
                 key={category}
@@ -107,7 +153,9 @@ export default function MultiplayerLanding() {
                     `}
                   >
                     <div className="flex flex-col">
-                      <span className={`font-mono text-sm font-bold ${selectedLevel === i ? "text-[#538d4e]" : "text-slate-300"}`}>
+                      <span
+                        className={`font-mono text-sm font-bold ${selectedLevel === i ? "text-[#538d4e]" : "text-slate-300"}`}
+                      >
                         {level.label}
                       </span>
                       <span className="text-[#565758] font-mono text-[9px] uppercase">
@@ -152,7 +200,9 @@ export default function MultiplayerLanding() {
 }
 
 function BinaryBackground() {
-  const [particles, setParticles] = useState<{ value: number; duration: number; delay: number }[]>([]);
+  const [particles, setParticles] = useState<
+    { value: number; duration: number; delay: number }[]
+  >([]);
 
   useEffect(() => {
     const p = Array.from({ length: 200 }).map(() => ({
@@ -163,7 +213,7 @@ function BinaryBackground() {
     requestAnimationFrame(() => {
       setParticles(p);
     });
-  }, []); 
+  }, []);
 
   return (
     <div className="absolute inset-0 overflow-hidden opacity-[0.03] pointer-events-none select-none font-mono text-[10px] flex flex-wrap gap-4 leading-none">
@@ -171,7 +221,11 @@ function BinaryBackground() {
         <motion.span
           key={i}
           animate={{ opacity: [0.1, 0.5, 0.1] }}
-          transition={{ duration: p.duration, repeat: Infinity, delay: p.delay }}
+          transition={{
+            duration: p.duration,
+            repeat: Infinity,
+            delay: p.delay,
+          }}
           className="text-[#565758]"
         >
           {p.value}
