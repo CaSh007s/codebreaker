@@ -64,18 +64,33 @@ export default function LoadingOverlay() {
           setTimeout(() => setShow(false), logIndex === 0 ? 500 : 1500);
         }
       } catch (err) {
-        console.warn("Handshake pending...", err);
+        console.warn(`[DIAGNOSTIC]: Handshake failed for ${BACKEND_URL}/health`, err);
       }
     };
 
     const healthInterval = setInterval(checkHealth, 3000);
     checkHealth();
 
+    // Emergency Bypass Trigger
+    const bypassTimeout = setTimeout(() => {
+        if (!complete) {
+            addLog("ERR_SYNC_TIMEOUT // EMERGENCY_BYPASS_ENABLED");
+        }
+    }, 8000);
+
     return () => {
       clearInterval(logInterval);
       clearInterval(healthInterval);
+      clearTimeout(bypassTimeout);
     };
   }, [complete, addLog]);
+
+  const handleBypass = () => {
+    setComplete(true);
+    sessionStorage.setItem("cb_backend_woken", "true");
+    addLog("MANUAL_OVERRIDE_ENGAGED. CONNECTING...");
+    setTimeout(() => setShow(false), 800);
+  };
 
   if (!show) return null;
 
@@ -171,10 +186,23 @@ export default function LoadingOverlay() {
                             className="h-full bg-[#538d4e] shadow-[0_0_15px_#538d4e]"
                         />
                     </div>
+
+                    {/* Emergency Bypass Button */}
+                    <AnimatePresence>
+                        {!complete && logs.some(l => l.includes("TIMEOUT")) && (
+                            <motion.button
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                onClick={handleBypass}
+                                className="mt-8 px-4 py-1.5 border border-[#538d4e]/30 bg-[#538d4e]/5 text-[#538d4e] font-mono text-[10px] tracking-widest hover:bg-[#538d4e]/20 transition-colors uppercase"
+                            >
+                                [ MANUALLY_BYPASS_UPLINK ]
+                            </motion.button>
+                        )}
+                    </AnimatePresence>
                 </motion.div>
             </div>
         </div>
-
 
         {/* Tactical Console Logs */}
         <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-[90%] max-w-md h-24 flex flex-col justify-end">
