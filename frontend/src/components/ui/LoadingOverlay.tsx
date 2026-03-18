@@ -7,15 +7,17 @@ const RAW_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_SOCKE
 const BACKEND_URL = RAW_URL.replace(/\/$/, ""); // Strip trailing slash
 
 const BOOT_LOGS = [
-  "INITIATING TACTICAL HANDSHAKE...",
-  "ESTABLISHING ENCRYPTED TUNNEL...",
-  "SYNCHRONIZING NEURAL BUFFERS...",
-  "AUDITING CRYPTO_CORES...",
-  "VERIFYING UPLINK AUTHENTICITY...",
-  "CALIBRATING SIGNAL NOISE...",
-  "DEPLOYING FIELD AGENTS...",
-  "SECURING SIGNAL STRENGTH...",
-  "MAPPING GEOSPATIAL COORDINATES...",
+  "INITIATING TACTICAL HANDSHAKE",
+  "CONNECTING TO RENDER CLOUD",
+  "WAITING FOR BACKEND TO INITIALIZE",
+  "ESTABLISHING ENCRYPTED TUNNEL",
+  "SYNCHRONIZING NEURAL BUFFERS",
+  "AUDITING CRYPTO_CORES",
+  "VERIFYING UPLINK AUTHENTICITY",
+  "CALIBRATING SIGNAL NOISE",
+  "DEPLOYING FIELD AGENTS",
+  "SECURING SIGNAL STRENGTH",
+  "MAPPING GEOSPATIAL COORDINATES",
   "UPLINK_STABLE // READY_FOR_DEPLOYMENT"
 ];
 
@@ -71,26 +73,11 @@ export default function LoadingOverlay() {
     const healthInterval = setInterval(checkHealth, 3000);
     checkHealth();
 
-    // Emergency Bypass Trigger
-    const bypassTimeout = setTimeout(() => {
-        if (!complete) {
-            addLog("ERR_SYNC_TIMEOUT // EMERGENCY_BYPASS_ENABLED");
-        }
-    }, 8000);
-
     return () => {
       clearInterval(logInterval);
       clearInterval(healthInterval);
-      clearTimeout(bypassTimeout);
     };
   }, [complete, addLog]);
-
-  const handleBypass = () => {
-    setComplete(true);
-    sessionStorage.setItem("cb_backend_woken", "true");
-    addLog("MANUAL_OVERRIDE_ENGAGED. CONNECTING...");
-    setTimeout(() => setShow(false), 800);
-  };
 
   if (!show) return null;
 
@@ -186,20 +173,6 @@ export default function LoadingOverlay() {
                             className="h-full bg-[#538d4e] shadow-[0_0_15px_#538d4e]"
                         />
                     </div>
-
-                    {/* Emergency Bypass Button */}
-                    <AnimatePresence>
-                        {!complete && logs.some(l => l.includes("TIMEOUT")) && (
-                            <motion.button
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                onClick={handleBypass}
-                                className="mt-8 px-4 py-1.5 border border-[#538d4e]/30 bg-[#538d4e]/5 text-[#538d4e] font-mono text-[10px] tracking-widest hover:bg-[#538d4e]/20 transition-colors uppercase"
-                            >
-                                [ MANUALLY_BYPASS_UPLINK ]
-                            </motion.button>
-                        )}
-                    </AnimatePresence>
                 </motion.div>
             </div>
         </div>

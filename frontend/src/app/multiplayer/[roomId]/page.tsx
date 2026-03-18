@@ -933,7 +933,7 @@ function GameView({
               />
             );
 
-          const isMe = p.sid === mySid;
+          const isMe = p.player_id === mySid;
           const bulls = p.progress.bulls;
 
           // Glow intensity/color based on proximity (bulls)
@@ -974,7 +974,7 @@ function GameView({
                     {p.username}
                   </p>
                   <p className="text-[#565758] font-mono text-[8px] uppercase tracking-widest">
-                    {p.sid === mySid ? "LOCAL_OPERATIVE" : "REMOTE_ENTITY"}
+                    {p.player_id === mySid ? "LOCAL_OPERATIVE" : "REMOTE_ENTITY"}
                   </p>
                 </div>
               </div>

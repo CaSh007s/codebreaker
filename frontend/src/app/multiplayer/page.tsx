@@ -74,7 +74,7 @@ export default function MultiplayerLanding() {
     // Encode level params in URL or use room state on backend
     // For Phase 1, we just want to see the overview.
     router.push(
-      `/multiplayer/${roomId}?mode=${category}&level=${selectedLevel}`,
+      `/multiplayer/${roomId}?mode=${category}&level=${MISSION_LEVELS[category][selectedLevel].length}`,
     );
   };
 
