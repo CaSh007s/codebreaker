@@ -148,14 +148,20 @@ export function Board({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Tactical Auto-Scroll: Ensure the latest signal analysis is always in focus
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior: "smooth",
+      const scrollContainer = scrollRef.current;
+      // Use requestAnimationFrame to ensure the DOM nodes for new guesses are rendered 
+      // before calculating the scroll position.
+      requestAnimationFrame(() => {
+        scrollContainer.scrollTo({
+          top: scrollContainer.scrollHeight,
+          behavior: "smooth",
+        });
       });
     }
-  }, [guesses.length]);
+  }, [guesses.length, status, currentGuess.length]);
 
   const totalRows = (status === "active" || status === "playing") ? guesses.length + 1 : guesses.length;
   const displayRows = Math.max(totalRows, 6);

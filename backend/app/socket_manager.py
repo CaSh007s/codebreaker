@@ -30,7 +30,7 @@ VALID_EMOJIS = ["🎯", "💀", "🔥", "👀", "🤯"]
 
 # Rate limiting settings (events per 10 seconds)
 CHAT_LIMIT = 10
-GUESS_LIMIT = 5
+GUESS_LIMIT = 30
 RATE_LIMIT_WINDOW = 10
 
 
