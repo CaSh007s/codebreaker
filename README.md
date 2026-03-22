@@ -54,21 +54,56 @@ Engineered for performance and real-time competition, the platform orchestrates 
 ## 🚀 Key Features
 
 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 20px;">
+  <!-- Feature 1: Missions -->
   <div style="background: #111; padding: 25px; border-radius: 12px; border: 1px solid #222; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
-    <h3 style="margin-top: 0; color: #fff;">Classified Missions</h3>
-    <p style="color: #999; line-height: 1.6;">Engage in a progressive single-player campaign. Each level introduces unique constraints, varying code lengths, and limited attempts to test your analytical limits.</p>
+    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+      <span style="background: #1a1a1a; padding: 10px; border-radius: 8px; border: 1px solid #333; font-size: 1.5rem; display: flex; align-items: center; justify-content: center;">🎮</span>
+      <h3 style="margin: 0; color: #fff;">Classified Missions</h3>
+    </div>
+    <ul style="color: #999; line-height: 1.6; padding-left: 20px;">
+      <li>Progressive single-player campaign with adaptive difficulty.</li>
+      <li>Dynamic code lengths and limited survival attempts.</li>
+      <li>Strategic level constraints designed to test analytical edge.</li>
+    </ul>
   </div>
+
+  <!-- Feature 2: Multiplayer -->
   <div style="background: #111; padding: 25px; border-radius: 12px; border: 1px solid #222; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
-    <h3 style="margin-top: 0; color: #fff;">Live Operations</h3>
-    <p style="color: #999; line-height: 1.6;">Face off against other players in real-time. Use the low-latency Socket.IO bridge to coordinate guesses and monitor opponent progress instantly.</p>
+    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+      <span style="background: #1a1a1a; padding: 10px; border-radius: 8px; border: 1px solid #333; font-size: 1.5rem; display: flex; align-items: center; justify-content: center;">⚔️</span>
+      <h3 style="margin: 0; color: #fff;">Live Operations</h3>
+    </div>
+    <ul style="color: #999; line-height: 1.6; padding-left: 20px;">
+      <li>Real-time head-to-head combat via global matchmaking.</li>
+      <li>Low-latency Socket.IO bridge for instantaneous synchronization.</li>
+      <li>Live opponent tracking to monitor competitive maneuvers.</li>
+    </ul>
   </div>
+
+  <!-- Feature 3: Analytics -->
   <div style="background: #111; padding: 25px; border-radius: 12px; border: 1px solid #222; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
-    <h3 style="margin-top: 0; color: #fff;">Tactical Analytics</h3>
-    <p style="color: #999; line-height: 1.6;">Real-time hit/miss calculations and visual clues provide immediate tactical feedback. The interactive grid system ensures you never lose track of your mission history.</p>
+    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+      <span style="background: #1a1a1a; padding: 10px; border-radius: 8px; border: 1px solid #333; font-size: 1.5rem; display: flex; align-items: center; justify-content: center;">📊</span>
+      <h3 style="margin: 0; color: #fff;">Tactical Analytics</h3>
+    </div>
+    <ul style="color: #999; line-height: 1.6; padding-left: 20px;">
+      <li>Instantaneous hit/miss calculations and visual guidance.</li>
+      <li>Persistent mission history via an interactive grid system.</li>
+      <li>Real-time clue distribution for rapid strategic pivots.</li>
+    </ul>
   </div>
+
+  <!-- Feature 4: UI/UX -->
   <div style="background: #111; padding: 25px; border-radius: 12px; border: 1px solid #222; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
-    <h3 style="margin-top: 0; color: #fff;">Premium UI Engine</h3>
-    <p style="color: #999; line-height: 1.6;">Built with a focus on visual excellence. Framer Motion drives fluid transitions, while the dark-mode "Commando" theme evokes a high-tech tactical center.</p>
+    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+      <span style="background: #1a1a1a; padding: 10px; border-radius: 8px; border: 1px solid #333; font-size: 1.5rem; display: flex; align-items: center; justify-content: center;">✨</span>
+      <h3 style="margin: 0; color: #fff;">Premium UI Engine</h3>
+    </div>
+    <ul style="color: #999; line-height: 1.6; padding-left: 20px;">
+      <li>High-fidelity "Commando" theme with dark-mode optimization.</li>
+      <li>Fluid Framer Motion transitions and micro-animations.</li>
+      <li>Immersive tactical interface built for precision interaction.</li>
+    </ul>
   </div>
 </div>
 
