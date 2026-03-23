@@ -134,6 +134,5 @@ pnpm dev
 <hr style="border: 0; border-top: 1px solid #222; margin: 60px 0;" />
 
 <div align="center">
-  <p style="color: #666; font-size: 0.9rem;"><em>Designed for the mission-critical strategist.</em></p>
   <p style="color: #555; font-size: 0.8rem;">© 2026 Kalash Pratap Gaur. All Rights Reserved.</p>
 </div>
