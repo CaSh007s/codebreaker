@@ -95,6 +95,7 @@ export function GuessRow({
   isActive,
   isCompleted,
   hints = [],
+  innerRef,
 }: {
   content: string;
   codeLength: number;
@@ -102,12 +103,14 @@ export function GuessRow({
   isActive: boolean;
   isCompleted: boolean;
   hints?: Hint[];
+  innerRef?: React.RefObject<HTMLDivElement | null>;
 }) {
   const digits = content.split("");
   const placeholders = Array.from({ length: codeLength });
 
   return (
     <motion.div
+      ref={innerRef}
       layout
       className={`flex items-center gap-3 w-full p-1 rounded-lg transition-colors ${isActive ? "bg-[#3a3a3c]/10 border border-[#3a3a3c]/30" : "border border-transparent"}`}
     >
@@ -147,14 +150,14 @@ export function Board({
   hintsRevealed: Hint[];
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const activeRowRef = useRef<HTMLDivElement>(null);
 
   // Tactical Auto-Scroll: Ensure the latest signal analysis is always in focus
   useEffect(() => {
     const timer = setTimeout(() => {
-        bottomRef.current?.scrollIntoView({
+        activeRowRef.current?.scrollIntoView({
             behavior: "smooth",
-            block: "end",
+            block: "nearest",
         });
     }, 100);
     
@@ -173,7 +176,10 @@ export function Board({
       <div className="flex flex-col gap-1.5 py-2">
         {rows.map((_, i) => {
           const guessObj = guesses[i];
-          const isCurrent = i === guesses.length && (status === "active" || status === "playing");
+          const isActiveGame = status === "active" || status === "playing";
+          const isCurrent = i === guesses.length && isActiveGame;
+          const isLastGuessIfFinished = !isActiveGame && i === guesses.length - 1;
+          
           const content = guessObj
             ? guessObj.guess
             : isCurrent
@@ -184,6 +190,7 @@ export function Board({
           return (
             <GuessRow
               key={i}
+              innerRef={isCurrent || isLastGuessIfFinished ? activeRowRef : undefined}
               content={content}
               codeLength={codeLength}
               feedback={feedback}
@@ -193,7 +200,6 @@ export function Board({
             />
           );
         })}
-        <div ref={bottomRef} className="h-px w-full shrink-0" aria-hidden="true" />
       </div>
     </div>
   );
