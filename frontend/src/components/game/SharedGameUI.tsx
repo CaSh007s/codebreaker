@@ -147,20 +147,18 @@ export function Board({
   hintsRevealed: Hint[];
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   // Tactical Auto-Scroll: Ensure the latest signal analysis is always in focus
   useEffect(() => {
-    if (scrollRef.current) {
-      const scrollContainer = scrollRef.current;
-      // Use requestAnimationFrame to ensure the DOM nodes for new guesses are rendered 
-      // before calculating the scroll position.
-      requestAnimationFrame(() => {
-        scrollContainer.scrollTo({
-          top: scrollContainer.scrollHeight,
-          behavior: "smooth",
+    const timer = setTimeout(() => {
+        bottomRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "end",
         });
-      });
-    }
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, [guesses.length, status, currentGuess.length]);
 
   const totalRows = (status === "active" || status === "playing") ? guesses.length + 1 : guesses.length;
@@ -195,6 +193,7 @@ export function Board({
             />
           );
         })}
+        <div ref={bottomRef} className="h-px w-full shrink-0" aria-hidden="true" />
       </div>
     </div>
   );
