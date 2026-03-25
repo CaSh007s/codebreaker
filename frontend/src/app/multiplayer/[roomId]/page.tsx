@@ -478,14 +478,42 @@ export default function MultiplayerRoom() {
                               : "Operative_Down"}
                         </p>
 
-                        <div className="flex justify-center gap-4 mt-2">
-                          <div className="text-center">
-                            <p className="text-[8px] text-[#565758] uppercase font-mono tracking-widest">
-                              Points_Earned
-                            </p>
-                            <p className="text-[#c8b653] font-mono text-lg font-black">
-                              +{me?.progress.last_points_earned || 0}
-                            </p>
+                        <div className="w-full max-w-sm bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 backdrop-blur-md mt-6">
+                          <div className="grid grid-cols-2 gap-4 divide-x divide-white/10">
+                            {/* YOU */}
+                            <div className="flex flex-col items-center gap-2">
+                              <span className="text-[#538d4e] font-mono text-[7px] font-black uppercase tracking-[0.2em] opacity-80">
+                                YOU // {me?.username}
+                              </span>
+                              <div className="space-y-0 text-center">
+                                <p className="text-xl sm:text-2xl font-black text-white font-mono leading-none">
+                                  {me?.points || 0}
+                                </p>
+                                <p className="text-[#538d4e] font-mono text-[9px] font-bold mt-1">
+                                  +{me?.progress.last_points_earned || 0} PTS
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* OPPONENT */}
+                            {(() => {
+                              const opponent = Object.values(roomData.players).find(p => p.player_id !== playerId);
+                              return (
+                                <div className="flex flex-col items-center gap-2">
+                                  <span className="text-[#cf6679] font-mono text-[7px] font-black uppercase tracking-[0.2em] opacity-80">
+                                    OPPONENT // {opponent?.username || "UNKNOWN"}
+                                  </span>
+                                  <div className="space-y-0 text-center">
+                                    <p className="text-xl sm:text-2xl font-black text-white font-mono leading-none">
+                                      {opponent?.points || 0}
+                                    </p>
+                                    <p className="text-[#cf6679] font-mono text-[9px] font-bold mt-1">
+                                      +{opponent?.progress.last_points_earned || 0} PTS
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
