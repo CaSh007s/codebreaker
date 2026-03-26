@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>Codebreaker</h1>
+  <h1>CODEBREAKER</h1>
   <p style="font-size: 1.2rem; color: #888;"><strong>Precision Logic. Tactical Superiority.</strong></p>
 
   <!-- Screenshots Preview -->
@@ -215,5 +215,8 @@ pnpm dev
 <hr style="border: 0; border-top: 1px solid #222; margin: 60px 0;" />
 
 <div align="center">
-  <p style="color: #555; font-size: 0.8rem;">© 2026 Kalash Pratap Gaur. All Rights Reserved.</p>
+  <p style="color: #555; font-size: 0.8rem;">
+    © 2026 Kalash Pratap Gaur. All Rights Reserved.<br />
+    Released under the MIT License.
+  </p>
 </div>
