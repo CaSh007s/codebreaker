@@ -2,18 +2,18 @@
   <h1>Codebreaker</h1>
   <p style="font-size: 1.2rem; color: #888;"><strong>Precision Logic. Tactical Superiority.</strong></p>
 
-  <!-- Screenshots Placeholder -->
+  <!-- Screenshots Preview -->
   <div style="display: flex; flex-direction: column; gap: 20px; align-items: center; margin-top: 30px;">
-    <div style="width: 100%; max-width: 850px; border-radius: 16px; overflow: hidden; background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%); padding: 60px; text-align: center; border: 1px solid #333; box-shadow: 0 20px 50px rgba(0,0,0,0.6);">
-      <p style="color: #4a4a4a; font-family: 'Inter', sans-serif; font-weight: 600; letter-spacing: 2px;">[ PRIMARY INTERFACE PREVIEW ]</p>
+    <div style="width: 100%; max-width: 850px; border-radius: 16px; overflow: hidden; border: 1px solid #333; box-shadow: 0 20px 50px rgba(0,0,0,0.6);">
+      <img src="screenshots/desktop/landing_page.png" alt="Primary Interface Preview" style="width: 100%; display: block;" />
     </div>
 
     <div style="display: flex; gap: 20px; width: 100%; max-width: 850px; justify-content: space-between;">
-      <div style="flex: 1; border-radius: 12px; height: 200px; background: #111; border: 1px solid #222; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,0.4);">
-        <p style="color: #444; font-family: monospace; font-size: 0.8rem;">[ MISSION OPERATIONS ]</p>
+      <div style="flex: 1; border-radius: 12px; overflow: hidden; border: 1px solid #222; box-shadow: 0 10px 30px rgba(0,0,0,0.4);">
+        <img src="screenshots/desktop/levelselection_singleplayer_standard.png" alt="Mission Operations" style="width: 100%; display: block;" />
       </div>
-      <div style="flex: 1; border-radius: 12px; height: 200px; background: #111; border: 1px solid #222; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,0.4);">
-        <p style="color: #444; font-family: monospace; font-size: 0.8rem;">[ MULTIPLAYER ENGAGEMENT ]</p>
+      <div style="flex: 1; border-radius: 12px; overflow: hidden; border: 1px solid #222; box-shadow: 0 10px 30px rgba(0,0,0,0.4);">
+        <img src="screenshots/desktop/multiplayer_lobby.png" alt="Multiplayer Engagement" style="width: 100%; display: block;" />
       </div>
     </div>
   </div>
@@ -105,6 +105,28 @@ Engineered for performance and real-time competition, the platform orchestrates 
       <li>Immersive tactical interface built for precision interaction.</li>
     </ul>
   </div>
+</div>
+
+<hr style="border: 0; border-top: 1px solid #222; margin: 50px 0;" />
+
+## 🖼️ System Gallery
+
+### 💻 Desktop Operations
+<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 30px;">
+  <img src="screenshots/desktop/chat_interface.png" alt="Chat Interface" style="border-radius: 8px; border: 1px solid #333;" />
+  <img src="screenshots/desktop/howtoplay.png" alt="Intelligence Briefing" style="border-radius: 8px; border: 1px solid #333;" />
+  <img src="screenshots/desktop/leaderboard.png" alt="Global Leaderboard" style="border-radius: 8px; border: 1px solid #333;" />
+  <img src="screenshots/desktop/loading_page.png" alt="Infiltration Protocol" style="border-radius: 8px; border: 1px solid #333;" />
+  <img src="screenshots/desktop/multiplayer_win.png" alt="Mission Success" style="border-radius: 8px; border: 1px solid #333;" />
+  <img src="screenshots/desktop/multiplayer_loss.png" alt="Mission Compromised" style="border-radius: 8px; border: 1px solid #333;" />
+</div>
+
+### 📱 Mobile Reconnaissance
+<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+  <img src="screenshots/mobile/singleplayer_gameplay.png" alt="Logic Engine" style="border-radius: 8px; border: 1px solid #333;" />
+  <img src="screenshots/mobile/levelselection_singleplayer_overdrive.png" alt="Mission Selection" style="border-radius: 8px; border: 1px solid #333;" />
+  <img src="screenshots/mobile/multiplayer_loss_mobile.png" alt="Field Loss" style="border-radius: 8px; border: 1px solid #333;" />
+  <img src="screenshots/mobile/gameendscreen_resign.png" alt="Resignation" style="border-radius: 8px; border: 1px solid #333;" />
 </div>
 
 <hr style="border: 0; border-top: 1px solid #222; margin: 50px 0;" />
