@@ -7,15 +7,6 @@
     <div style="width: 100%; max-width: 850px; border-radius: 16px; overflow: hidden; border: 1px solid #333; box-shadow: 0 20px 50px rgba(0,0,0,0.6);">
       <img src="screenshots/desktop/landing_page.png" alt="Primary Interface Preview" style="width: 100%; display: block;" />
     </div>
-
-    <div style="display: flex; gap: 20px; width: 100%; max-width: 850px; justify-content: space-between;">
-      <div style="flex: 1; border-radius: 12px; overflow: hidden; border: 1px solid #222; box-shadow: 0 10px 30px rgba(0,0,0,0.4);">
-        <img src="screenshots/desktop/levelselection_singleplayer_standard.png" alt="Mission Operations" style="width: 100%; display: block;" />
-      </div>
-      <div style="flex: 1; border-radius: 12px; overflow: hidden; border: 1px solid #222; box-shadow: 0 10px 30px rgba(0,0,0,0.4);">
-        <img src="screenshots/desktop/multiplayer_lobby.png" alt="Multiplayer Engagement" style="width: 100%; display: block;" />
-      </div>
-    </div>
   </div>
 
   <br />
@@ -111,22 +102,90 @@ Engineered for performance and real-time competition, the platform orchestrates 
 
 ## 🖼️ System Gallery
 
+<div style="max-width: 900px; margin: 0 auto;">
+
 ### 💻 Desktop Operations
-<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 30px;">
-  <img src="screenshots/desktop/chat_interface.png" alt="Chat Interface" style="border-radius: 8px; border: 1px solid #333;" />
-  <img src="screenshots/desktop/howtoplay.png" alt="Intelligence Briefing" style="border-radius: 8px; border: 1px solid #333;" />
-  <img src="screenshots/desktop/leaderboard.png" alt="Global Leaderboard" style="border-radius: 8px; border: 1px solid #333;" />
-  <img src="screenshots/desktop/loading_page.png" alt="Infiltration Protocol" style="border-radius: 8px; border: 1px solid #333;" />
-  <img src="screenshots/desktop/multiplayer_win.png" alt="Mission Success" style="border-radius: 8px; border: 1px solid #333;" />
-  <img src="screenshots/desktop/multiplayer_loss.png" alt="Mission Compromised" style="border-radius: 8px; border: 1px solid #333;" />
-</div>
+
+<table width="100%" style="border-collapse: collapse; border: 1px solid #333;">
+  <tr>
+    <td align="center" width="50%" style="border: 1px solid #333; padding: 25px;">
+      <h3 style="margin: 0; color: #fff;">System Initialization</h3>
+      <p style="color: #888; margin: 10px 0 20px 0;">Secure authentication and logic system decryption protocol.</p>
+      <img src="screenshots/desktop/loading_page.png" width="100%" style="border-radius: 8px; border: 1px solid #222;" />
+    </td>
+    <td align="center" width="50%" style="border: 1px solid #333; padding: 25px;">
+      <h3 style="margin: 0; color: #fff;">Intelligence Briefing</h3>
+      <p style="color: #888; margin: 10px 0 20px 0;">Comprehensive operational guide for tactical logic specialists.</p>
+      <img src="screenshots/desktop/howtoplay.png" width="100%" style="border-radius: 8px; border: 1px solid #222;" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%" style="border: 1px solid #333; padding: 25px;">
+      <h3 style="margin: 0; color: #fff;">Global Operative Rankings</h3>
+      <p style="color: #888; margin: 10px 0 20px 0;">Top-tier operative performance metrics and strategic superiority.</p>
+      <img src="screenshots/desktop/leaderboard.png" width="100%" style="border-radius: 8px; border: 1px solid #222;" />
+    </td>
+    <td align="center" width="50%" style="border: 1px solid #333; padding: 25px;">
+      <h3 style="margin: 0; color: #fff;">Tactical Communications</h3>
+      <p style="color: #888; margin: 10px 0 20px 0;">Real-time head-to-head communication with mission-critical status updates.</p>
+      <img src="screenshots/desktop/chat_interface.png" width="100%" style="border-radius: 8px; border: 1px solid #222;" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%" style="border: 1px solid #333; padding: 25px;">
+      <h3 style="margin: 0; color: #fff;">Live Operations Theater</h3>
+      <p style="color: #888; margin: 10px 0 20px 0;">Regional matchmaking for active high-stakes logic engagements.</p>
+      <img src="screenshots/desktop/multiplayer_lobby.png" width="100%" style="border-radius: 8px; border: 1px solid #222;" />
+    </td>
+    <td align="center" width="50%" style="border: 1px solid #333; padding: 25px;">
+      <h3 style="margin: 0; color: #fff;">Classified Mission Ops</h3>
+      <p style="color: #888; margin: 10px 0 20px 0;">Single-player campaign operations with adaptive logical constraints.</p>
+      <img src="screenshots/desktop/levelselection_singleplayer_standard.png" width="100%" style="border-radius: 8px; border: 1px solid #222;" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%" style="border: 1px solid #333; padding: 25px;">
+      <h3 style="margin: 0; color: #fff;">Operational Success</h3>
+      <p style="color: #888; margin: 10px 0 20px 0;">Verification of objective completion and logic system mastery.</p>
+      <img src="screenshots/desktop/multiplayer_win.png" width="100%" style="border-radius: 8px; border: 1px solid #222;" />
+    </td>
+    <td align="center" width="50%" style="border: 1px solid #333; padding: 25px;">
+      <h3 style="margin: 0; color: #fff;">Critical System Failure</h3>
+      <p style="color: #888; margin: 10px 0 20px 0;">Post-operational review of compromised logic states.</p>
+      <img src="screenshots/desktop/multiplayer_loss.png" width="100%" style="border-radius: 8px; border: 1px solid #222;" />
+    </td>
+  </tr>
+</table>
 
 ### 📱 Mobile Reconnaissance
-<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
-  <img src="screenshots/mobile/singleplayer_gameplay.png" alt="Logic Engine" style="border-radius: 8px; border: 1px solid #333;" />
-  <img src="screenshots/mobile/levelselection_singleplayer_overdrive.png" alt="Mission Selection" style="border-radius: 8px; border: 1px solid #333;" />
-  <img src="screenshots/mobile/multiplayer_loss_mobile.png" alt="Field Loss" style="border-radius: 8px; border: 1px solid #333;" />
-  <img src="screenshots/mobile/gameendscreen_resign.png" alt="Resignation" style="border-radius: 8px; border: 1px solid #333;" />
+
+<table width="100%" style="border-collapse: collapse; border: 1px solid #333;">
+  <tr>
+    <td align="center" width="50%" style="border: 1px solid #333; padding: 25px;">
+      <h3 style="margin: 0; color: #fff;">Mobile Tactical Interface</h3>
+      <p style="color: #888; margin: 10px 0 20px 0;">High-fidelity field operations for logic agents on mobile devices.</p>
+      <img src="screenshots/mobile/singleplayer_gameplay.png" width="100%" style="border-radius: 8px; border: 1px solid #222;" />
+    </td>
+    <td align="center" width="50%" style="border: 1px solid #333; padding: 25px;">
+      <h3 style="margin: 0; color: #fff;">Overdrive Protocol Selection</h3>
+      <p style="color: #888; margin: 10px 0 20px 0;">Selection of high-intensity mission profiles in maximum stress mode.</p>
+      <img src="screenshots/mobile/levelselection_singleplayer_overdrive.png" width="100%" style="border-radius: 8px; border: 1px solid #222;" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%" style="border: 1px solid #333; padding: 25px;">
+      <h3 style="margin: 0; color: #fff;">Operational Degradation</h3>
+      <p style="color: #888; margin: 10px 0 20px 0;">Real-time alert for compromised multiplayer mission parameters.</p>
+      <img src="screenshots/mobile/multiplayer_loss_mobile.png" width="100%" style="border-radius: 8px; border: 1px solid #222;" />
+    </td>
+    <td align="center" width="50%" style="border: 1px solid #333; padding: 25px;">
+      <h3 style="margin: 0; color: #fff;">Strategic Withdrawal</h3>
+      <p style="color: #888; margin: 10px 0 20px 0;">Formal termination of an active field operation.</p>
+      <img src="screenshots/mobile/gameendscreen_resign.png" width="100%" style="border-radius: 8px; border: 1px solid #222;" />
+    </td>
+  </tr>
+</table>
+
 </div>
 
 <hr style="border: 0; border-top: 1px solid #222; margin: 50px 0;" />
