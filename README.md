@@ -33,7 +33,7 @@ Engineered for performance and real-time competition, the platform orchestrates 
 
 | Layer | Technologies | Role |
 | :--- | :--- | :--- |
-| **Frontend** | React 19, Next.js 15, TypeScript | Core application logic and responsive UI |
+| **Frontend** | Next.js 15 (React 19, TypeScript) | Core application logic and responsive UI |
 | **Styling** | Tailwind CSS 4, Framer Motion | Design system and micro-animations |
 | **Backend** | FastAPI, Python 3.11+ | Asynchronous service architecture |
 | **Real-time** | Socket.IO, WebSockets | Bi-directional game state synchronization |
@@ -210,7 +210,8 @@ pnpm dev
 
 ### 3. Requirements
 - **Redis**: Mandatory for multiplayer session handling.
-- **Node.js 20+** & **Python 3.11+**
+- **Node.js Runtime**: Version 20+ required for the field interface.
+- **Python Engine**: Version 3.11+ required for intelligence services.
 
 <hr style="border: 0; border-top: 1px solid #222; margin: 60px 0;" />
 
