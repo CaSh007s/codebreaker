@@ -363,32 +363,44 @@ export default function MultiplayerRoom() {
                     roomData.players[playerId || ""]?.progress.hints_used || 0;
                   const isLimitReached = hintsUsed >= maxHints;
 
-                  return (
-                    <button
-                      onClick={handleGetHint}
-                      disabled={isLimitReached}
-                      className={`px-4 py-2 font-mono text-xs border rounded-lg transition-all uppercase tracking-widest shadow-[0_0_15px_rgba(83,141,78,0.1)] hover:scale-105 active:scale-95 ${isLimitReached ? "opacity-30 border-white/10 text-white/30 cursor-not-allowed" : "text-[#538d4e] border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/20"}`}
-                    >
-                      {isLimitReached
-                        ? "[HINT_LIMIT_REACHED]"
-                        : `[GET_HINT] (${hintsUsed}/${maxHints})`}
-                    </button>
-                  );
+                    return (
+                      <button
+                        onClick={(e) => {
+                          e.currentTarget.blur();
+                          handleGetHint();
+                        }}
+                        disabled={isLimitReached}
+                        className={`px-4 py-2 font-mono text-xs border rounded-lg transition-all uppercase tracking-widest shadow-[0_0_15px_rgba(83,141,78,0.1)] hover:scale-105 active:scale-95 ${isLimitReached ? "opacity-30 border-white/10 text-white/30 cursor-not-allowed" : "text-[#538d4e] border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/20"}`}
+                      >
+                        {isLimitReached
+                          ? "[HINT_LIMIT_REACHED]"
+                          : `[GET_HINT] (${hintsUsed}/${maxHints})`}
+                      </button>
+                    );
                 })()}
                 <button
-                  onClick={() => setShowHowToPlay(true)}
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    setShowHowToPlay(true);
+                  }}
                   className="px-4 py-2 font-mono text-xs text-blue-400 border border-blue-400/30 bg-blue-400/5 hover:bg-blue-400/20 rounded-lg transition-all tracking-widest shadow-[0_0_15px_rgba(96,165,250,0.1)] hover:scale-105 active:scale-95"
                 >
                   [FIELD_MANUAL]
                 </button>
                 <button
-                  onClick={() => setShowAbandonConfirm(true)}
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    setShowAbandonConfirm(true);
+                  }}
                   className="px-6 py-2 font-mono text-xs text-black bg-[#cf6679] hover:bg-[#cf6679]/90 rounded-lg transition-all uppercase font-bold tracking-widest shadow-[0_0_20px_rgba(207,102,121,0.2)] hover:scale-105 active:scale-95"
                 >
                   SURRENDER
                 </button>
                 <button
-                  onClick={toggleOpen}
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    toggleOpen();
+                  }}
                   className="relative px-4 py-2 font-mono text-xs text-yellow-500 border border-yellow-500/30 bg-yellow-500/5 hover:bg-yellow-500/20 rounded-lg transition-all tracking-widest shadow-[0_0_15px_rgba(234,179,8,0.1)] hover:scale-105 active:scale-95 flex items-center gap-2"
                 >
                   [CHAT]
@@ -913,7 +925,10 @@ function GameView({
               const isLimitReached = hintsUsed >= maxHints;
               return (
                 <button
-                  onClick={onHint}
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    onHint();
+                  }}
                   disabled={isLimitReached}
                   className={`px-3 py-1.5 font-mono text-[10px] border rounded transition-all uppercase tracking-tighter ${isLimitReached ? "opacity-30 border-white/10 text-white/30" : "text-[#538d4e] border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/20"}`}
                 >
@@ -924,19 +939,28 @@ function GameView({
               );
             })()}
             <button
-              onClick={onShowHelp}
+              onClick={(e) => {
+                e.currentTarget.blur();
+                onShowHelp();
+              }}
               className="px-3 py-1.5 font-mono text-[10px] text-blue-400 border border-blue-400/30 bg-blue-400/5 hover:bg-blue-400/20 rounded transition-all tracking-tighter"
             >
               [FIELD_MANUAL]
             </button>
             <button
-              onClick={onExit}
+              onClick={(e) => {
+                e.currentTarget.blur();
+                onExit();
+              }}
               className="px-4 py-1.5 font-mono text-[10px] text-black bg-[#cf6679] hover:bg-[#cf6679]/90 rounded transition-all uppercase font-bold tracking-tighter shadow-[0_0_15px_rgba(207,102,121,0.2)]"
             >
               SURRENDER
             </button>
             <button
-              onClick={toggleChat}
+              onClick={(e) => {
+                e.currentTarget.blur();
+                toggleChat();
+              }}
               className="relative px-3 py-1.5 font-mono text-[10px] text-yellow-500 border border-yellow-500/30 bg-yellow-500/5 hover:bg-yellow-500/20 rounded transition-all uppercase font-bold tracking-tighter shadow-[0_0_15px_rgba(234,179,8,0.1)] flex items-center gap-1"
             >
               CHAT

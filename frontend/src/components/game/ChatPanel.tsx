@@ -77,7 +77,10 @@ export default function ChatPanel({
                 </h3>
               </div>
               <button
-                onClick={() => setOpen(false)}
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  setOpen(false);
+                }}
                 className="p-1 hover:bg-white/10 rounded-lg transition-colors text-[#565758] hover:text-white"
               >
                 <X size={20} />
@@ -140,13 +143,14 @@ export default function ChatPanel({
                 {VALID_EMOJIS.map((emoji) => (
                   <button
                     key={emoji}
-                    onClick={() =>
+                    onClick={(e) => {
+                      e.currentTarget.blur();
                       onSendEmoji({
                         emoji,
                         sender_id: player_id,
                         sender_username: username,
-                      })
-                    }
+                      });
+                    }}
                     className="p-2 hover:bg-white/10 rounded-lg transition-all hover:scale-110 active:scale-90"
                   >
                     <span className="text-lg">{emoji}</span>
@@ -164,7 +168,10 @@ export default function ChatPanel({
                   className="flex-1 bg-transparent outline-none text-sm px-2 font-mono placeholder:opacity-30"
                 />
                 <button
-                  onClick={handleSend}
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    handleSend();
+                  }}
                   disabled={!inputText.trim()}
                   className="p-2 bg-[#538d4e] text-black rounded-lg hover:bg-[#58a352] disabled:opacity-30 disabled:scale-100 transition-all active:scale-95"
                 >
