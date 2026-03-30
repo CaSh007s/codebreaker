@@ -4,17 +4,28 @@ import { useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import { useChatStore, ChatMessage } from "@/store/useChatStore";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8000";
+const SOCKET_URL =
+  process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8000";
 
 export const useSocket = (room?: string) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [lastMessage, setLastMessage] = useState<Record<string, unknown> | null>(null);
-  const [lastRoomData, setLastRoomData] = useState<Record<string, unknown> | null>(null);
-  const [lastError, setLastError] = useState<Record<string, unknown> | null>(null);
-  
+  const [lastMessage, setLastMessage] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [lastRoomData, setLastRoomData] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [lastError, setLastError] = useState<Record<string, unknown> | null>(
+    null,
+  );
+
   const addChatMessage = useChatStore((state) => state.addMessage);
-  const clearSystemMessages = useChatStore((state) => state.clearSystemMessages);
+  const clearSystemMessages = useChatStore(
+    (state) => state.clearSystemMessages,
+  );
 
   useEffect(() => {
     // Initialize socket connection
@@ -74,7 +85,18 @@ export const useSocket = (room?: string) => {
       });
     });
 
+    // Render Keep-Alive: Ping the backend every 5 minutes
+    const keepAliveInterval = setInterval(
+      () => {
+        fetch(`${SOCKET_URL}/health`).catch(() => {
+          // Silently ignore ping errors
+        });
+      },
+      5 * 60 * 1000,
+    ); // 5 minutes
+
     return () => {
+      clearInterval(keepAliveInterval);
       if (room) {
         socket.emit("leave_room", { room_id: room });
       }
@@ -82,13 +104,21 @@ export const useSocket = (room?: string) => {
     };
   }, [room, addChatMessage, clearSystemMessages]);
 
-  const sendMessage = (data: { text: string; sender_id: string; sender_username: string }) => {
+  const sendMessage = (data: {
+    text: string;
+    sender_id: string;
+    sender_username: string;
+  }) => {
     if (socket && room) {
       socket.emit("chat_message", { room_id: room, ...data });
     }
   };
-  
-  const sendEmoji = (data: { emoji: string; sender_id: string; sender_username: string }) => {
+
+  const sendEmoji = (data: {
+    emoji: string;
+    sender_id: string;
+    sender_username: string;
+  }) => {
     if (socket && room) {
       socket.emit("send_emoji", { room_id: room, ...data });
     }
