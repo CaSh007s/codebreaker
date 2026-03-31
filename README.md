@@ -23,9 +23,9 @@
 
 ## 🎯 Executive Overview
 
-Codebreaker is a high-stakes, tactical logic engine designed for intellectuals who thrive under pressure. It reimagines the classic Mastermind (Cows & Bulls) mechanic within a modern, military-grade interface. 
+**Codebreaker** is a tactical logic-warfare platform engineered for high-performance, real-time competition. By reimagining the classic 'Cows & Bulls' (Mastermind) mechanic through a "military-intelligence" lens, it transforms a simple puzzle into a high-pressure strategic operation. 
 
-Engineered for performance and real-time competition, the platform orchestrates complex game states across a distributed architecture, ensuring millisecond-precision feedback. Whether engaging in classified single-player missions or escalating to global multiplayer operations, Codebreaker delivers a premium, immersive experience where every guess is a strategic maneuver.
+The engine utilizes an asynchronous FastAPI backend and a low-latency Socket.IO bridge to synchronize global multiplayer states with millisecond precision. Every guess is more than a move—it's a calculated maneuver executed within a high-fidelity, responsive UI designed for the modern logical operative. Whether engaging in classified single-player missions or escalating to global multiplayer operations, Codebreaker delivers a premium, immersive experience where every byte counts.
 
 <hr style="border: 0; border-top: 1px solid #222; margin: 40px 0;" />
 
