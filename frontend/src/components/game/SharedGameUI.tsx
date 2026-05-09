@@ -40,7 +40,7 @@ export function DigitTile({
         scale: { type: "spring", stiffness: 400, damping: 17 }
       }}
       className={`
-                w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-xl sm:text-2xl font-mono font-bold border-2 transition-all duration-200 rounded
+                w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center text-xl sm:text-2xl font-mono font-bold border-2 transition-all duration-200 rounded
                 ${isHint ? "border-[#538d4e]/50 bg-[#538d4e]/10 text-[#538d4e] shadow-[0_0_10px_rgba(83,141,78,0.2)] cursor-default" : 
                   digit ? "border-[#565758] bg-[#121213] text-white" : "border-[#3a3a3c] bg-[#121213] text-[#3a3a3c]"}
                 ${isActive ? "border-[#818384]" : ""}
@@ -112,7 +112,7 @@ export function GuessRow({
     <motion.div
       ref={innerRef}
       layout
-      className={`flex items-center gap-3 w-full p-1 rounded-lg transition-colors ${isActive ? "bg-[#3a3a3c]/10 border border-[#3a3a3c]/30" : "border border-transparent"}`}
+      className={`flex items-center gap-3 w-full p-1 rounded-lg shrink-0 transition-colors ${isActive ? "bg-[#3a3a3c]/10 border border-[#3a3a3c]/30" : "border border-transparent"}`}
     >
       <div className="flex gap-1.5 grow justify-center">
         {placeholders.map((_, i) => {
@@ -129,7 +129,7 @@ export function GuessRow({
           );
         })}
       </div>
-      <div className="flex flex-wrap gap-1.5 w-16 justify-center">
+      <div className="flex flex-wrap gap-1.5 w-16 justify-center shrink-0">
         <FeedbackDots feedback={feedback} codeLength={codeLength} />
       </div>
     </motion.div>
