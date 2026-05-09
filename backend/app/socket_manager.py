@@ -89,14 +89,14 @@ async def connect(sid, environ):
 async def disconnect(sid):
     room_id = sid_to_room.get(sid)
     if room_id:
-        room_before = multiplayer_service.get_room(room_id)
+        room_before = await multiplayer_service.get_room(room_id)
         username = _get_player_username(room_before, sid)
         
         # We still notify the room even if leave_room doesn't change anything
         # as the player is still physically gone from the socket.
         await emit_system_message(room_id, f"{username} lost connection")
         
-        room = multiplayer_service.leave_room(room_id, sid)
+        room = await multiplayer_service.leave_room(room_id, sid)
         if room:
             await sio.emit('room_update', room, room=room_id)
             
@@ -109,7 +109,7 @@ async def init_room(sid, data):
     config = data.get('config')
     if room_id and config:
         # Check if room already exists — don't overwrite!
-        existing = multiplayer_service.get_room(room_id)
+        existing = await multiplayer_service.get_room(room_id)
         if existing:
             # Identity-based "Room Full" check
             player_info = data.get('player_info', {})
@@ -125,7 +125,7 @@ async def init_room(sid, data):
             
             # Host Refresh Recovery: If info is present, update SID
             if is_returning:
-                room = multiplayer_service.join_room(room_id, sid, player_info)
+                room = await multiplayer_service.join_room(room_id, sid, player_info)
                 if room:
                     existing = room # Use the updated state
                     # System message: reconnected
@@ -135,7 +135,7 @@ async def init_room(sid, data):
             await sio.emit('room_update', existing, to=sid)
         else:
             # Create a brand new room
-            room = multiplayer_service.create_room(room_id, config)
+            room = await multiplayer_service.create_room(room_id, config)
             await sio.enter_room(sid, room_id)
             sid_to_room[sid] = room_id
             await sio.emit('room_update', room, room=room_id)
@@ -144,7 +144,7 @@ async def init_room(sid, data):
 async def join_room(sid, data):
     room_id = data.get('room_id')
     if room_id:
-        room = multiplayer_service.get_room(room_id)
+        room = await multiplayer_service.get_room(room_id)
         if not room:
             # Silent skip if room doesn't exist yet to avoid race conditions with init_room
             return
@@ -163,7 +163,7 @@ async def join_room(sid, data):
         
         # If client sent player_info, try to re-join/update SID
         if player_info and player_id:
-            updated_room = multiplayer_service.join_room(room_id, sid, player_info)
+            updated_room = await multiplayer_service.join_room(room_id, sid, player_info)
             if updated_room and "error" not in updated_room:
                 await sio.emit('room_update', updated_room, room=room_id)
                 
@@ -183,7 +183,7 @@ async def setup_player(sid, data):
     room_id = data.get('room_id')
     player_info = data.get('player_info')
     if room_id and player_info:
-        room = multiplayer_service.register_player(room_id, sid, player_info)
+        room = await multiplayer_service.register_player(room_id, sid, player_info)
         if room and "error" in room:
             await sio.emit('error', room, to=sid)
         elif room:
@@ -197,7 +197,7 @@ async def toggle_ready(sid, data):
     room_id = data.get('room_id')
     is_ready = data.get('is_ready', False)
     if room_id:
-        room = multiplayer_service.update_player_ready(room_id, sid, is_ready)
+        room = await multiplayer_service.update_player_ready(room_id, sid, is_ready)
         if room:
             await sio.emit('room_update', room, room=room_id)
             if room["status"] == "playing":
@@ -215,7 +215,7 @@ async def submit_guess(sid, data):
     room_id = data.get('room_id')
     guess = data.get('guess')
     if room_id and guess:
-        room = multiplayer_service.submit_guess(room_id, sid, guess)
+        room = await multiplayer_service.submit_guess(room_id, sid, guess)
         if room:
             await sio.emit('room_update', room, room=room_id)
             if room["status"] == "finished":
@@ -232,9 +232,9 @@ async def submit_guess(sid, data):
 async def surrender(sid, data):
     room_id = data.get('room_id')
     if room_id:
-        room_before = multiplayer_service.get_room(room_id)
+        room_before = await multiplayer_service.get_room(room_id)
         username = _get_player_username(room_before, sid)
-        room = multiplayer_service.surrender(room_id, sid)
+        room = await multiplayer_service.surrender(room_id, sid)
         if room:
             await sio.emit('room_update', room, room=room_id)
             await sio.emit('game_over', room, room=room_id)
@@ -300,9 +300,9 @@ async def send_emoji(sid, data):
 async def request_replay(sid, data):
     room_id = data.get('room_id')
     if room_id:
-        room_before = multiplayer_service.get_room(room_id)
+        room_before = await multiplayer_service.get_room(room_id)
         username = _get_player_username(room_before, sid)
-        room = multiplayer_service.request_replay(room_id, sid)
+        room = await multiplayer_service.request_replay(room_id, sid)
         if room:
             await sio.emit('room_update', room, room=room_id)
             if room["status"] == "playing":
@@ -317,10 +317,10 @@ async def get_hint(sid, data):
     room_id = data.get('room_id')
     revealed_indices = data.get('revealed_indices', [])
     if room_id:
-        hint = multiplayer_service.get_hint(room_id, sid, revealed_indices)
+        hint = await multiplayer_service.get_hint(room_id, sid, revealed_indices)
         if hint:
             await sio.emit('hint_received', hint, to=sid)
             # System message: hint used
-            room = multiplayer_service.get_room(room_id)
+            room = await multiplayer_service.get_room(room_id)
             username = _get_player_username(room, sid)
             await emit_system_message(room_id, f"{username} used an intel hint")

@@ -256,10 +256,11 @@ export default function MultiplayerRoom() {
   };
 
   const submitGuess = (guess: string) => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
     emitEvent("submit_guess", { room_id: roomId, guess });
-    // Safety timeout to clear submitting state if no update comes
-    setTimeout(() => setIsSubmitting(false), 2000);
+    // Safety timeout to clear submitting state if no update comes (increased for latency)
+    setTimeout(() => setIsSubmitting(false), 5000);
   };
 
   const handleGetHint = () => {

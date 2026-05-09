@@ -92,10 +92,10 @@ export default function LoadingOverlay() {
           filter: "blur(20px) contrast(1.2)",
           transition: { duration: 0.8, ease: "circIn" }
         }}
-        className="fixed inset-0 z-[9999] bg-[#0a0a0b] flex flex-col items-center justify-center overflow-hidden"
+        className="fixed inset-0 z-9999 bg-[#0a0a0b] flex flex-col items-center justify-center overflow-hidden"
       >
         {/* Background Grid */}
-        <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[radial-gradient(#538d4e_1px,transparent_1px)] bg-[length:24px_24px]" />
+        <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[radial-gradient(#538d4e_1px,transparent_1px)] bg-size-[24px_24px]" />
         
         {/* Viewport Corners */}
         <div className="absolute top-8 left-8 w-12 h-12 border-t-2 border-l-2 border-[#538d4e]/20" />
