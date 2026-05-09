@@ -57,7 +57,7 @@ export default function ChatPanel({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setOpen(false)}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-200 lg:hidden"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] lg:hidden"
           />
 
           {/* Chat Container */}
@@ -66,7 +66,7 @@ export default function ChatPanel({
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 h-full w-full max-w-sm bg-[#0a0a0b] border-l border-[#3a3a3c] shadow-2xl z-201 flex flex-col pt-safe"
+            className="fixed right-0 top-0 h-full w-full max-w-sm bg-[#0a0a0b] border-l border-[#3a3a3c] shadow-2xl z-[201] flex flex-col pt-safe"
           >
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-[#3a3a3c] bg-white/5">

@@ -9,9 +9,10 @@ from app.models.game import (
 )
 from app.services.game_service import GameService
 from typing import Dict, List
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import os
+import random
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -51,7 +52,7 @@ async def root():
         "message": "Codebreaker API - Tactical Uplink Active",
         "status": "online",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/wakeup"
     }
 
 @app.post("/game/new", response_model=NewGameResponse)
@@ -69,7 +70,7 @@ async def create_game(request: Request, game_req: NewGameRequest):
         attempts=0,
         max_attempts=game_req.max_attempts,
         feedback_map=feedback_map,
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
     
     games[game_id] = game
@@ -95,7 +96,7 @@ async def submit_guess(game_id: str, request: GuessRequest):
         raise HTTPException(status_code=400, detail=f"Guess must be {len(game.secret_code)} digits long")
 
     game.attempts += 1
-    game.last_guess_at = datetime.utcnow()
+    game.last_guess_at = datetime.now(timezone.utc)
     
     bulls, cows, gray = GameService.evaluate_guess(game.secret_code, request.guess)
     # Static Scramble Protocol: use fixed feedback_map for positional feedback
@@ -155,7 +156,6 @@ async def get_hint(game_id: str, request: HintRequest):
             raise HTTPException(status_code=400, detail="Index already revealed")
         target_idx = request.target_index
     else:
-        import random
         target_idx = random.choice(available_indices)
     
     return HintResponse(
@@ -195,11 +195,11 @@ async def add_to_leaderboard(request: Request, lb_req: LeaderboardRequest):
         score=lb_req.score,
         timer_mode=lb_req.timer_mode,
         infinite_mode=lb_req.infinite_mode,
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
     leaderboard.append(entry)
     return entry
 
-@app.get("/health")
-async def health_check():
+@app.get("/wakeup")
+async def wakeup_check():
     return {"status": "ok"}

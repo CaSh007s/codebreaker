@@ -88,7 +88,7 @@ export const useSocket = (room?: string) => {
     // Render Keep-Alive: Ping the backend every 5 minutes
     const keepAliveInterval = setInterval(
       () => {
-        fetch(`${SOCKET_URL}/health`).catch(() => {
+        fetch(`${SOCKET_URL}/wakeup`).catch(() => {
           // Silently ignore ping errors
         });
       },
