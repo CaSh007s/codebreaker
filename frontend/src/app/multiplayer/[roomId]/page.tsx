@@ -87,6 +87,7 @@ export default function MultiplayerRoom() {
   const [playerId, setPlayerId] = useState<string>("");
   const mode = searchParams.get("mode") || "standard";
   const level = parseInt(searchParams.get("level") || "4"); // Default mission length is 4
+  const repeats = searchParams.get("repeats") === "true";
 
   // Session Management
   useEffect(() => {
@@ -129,7 +130,7 @@ export default function MultiplayerRoom() {
       if (searchParams.has("mode")) {
         emitEvent("init_room", {
           room_id: roomId,
-          config: { mode, level },
+          config: { mode, level, allow_repeats: repeats },
           player_info: playerInfo, // Send player info too in case we are re-initializing
         });
       } else {
@@ -145,6 +146,7 @@ export default function MultiplayerRoom() {
     roomId,
     mode,
     level,
+    repeats,
     searchParams,
     emitEvent,
     playerId,

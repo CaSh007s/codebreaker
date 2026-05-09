@@ -152,11 +152,17 @@ class MultiplayerService:
     def start_game(self, room_id: str) -> Optional[Dict[str, Any]]:
         room = self.get_room(room_id)
         if room:
-            # Generate a target number (unique digits)
-            digits = room["config"].get("level", 4)
+            # Generate a target number
+            config = room.get("config", {})
+            digits = config.get("level", 4)
             if digits < 3: digits = 4 # Default to 4 if not set or too small
             
-            target = "".join(random.choices("0123456789", k=digits))
+            # Use allow_repeats from config if standard, or always True for overdrive
+            allow_repeats = config.get("allow_repeats", False)
+            if config.get("mode") == "overdrive":
+                allow_repeats = True
+                
+            target = GameService.generate_secret_code(length=digits, allow_repeats=allow_repeats)
             room["target"] = target
             room["feedback_map"] = GameService.generate_feedback_map(digits)
             room["status"] = "playing"

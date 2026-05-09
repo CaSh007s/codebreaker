@@ -11,6 +11,7 @@ export default function MultiplayerLanding() {
   const [category, setCategory] = useState<"standard" | "overdrive">(
     "standard",
   );
+  const [allowRepeats, setAllowRepeats] = useState(false);
 
   interface MissionLevel {
     label: string;
@@ -74,7 +75,7 @@ export default function MultiplayerLanding() {
     // Encode level params in URL or use room state on backend
     // For Phase 1, we just want to see the overview.
     router.push(
-      `/multiplayer/${roomId}?mode=${category}&level=${MISSION_LEVELS[category][selectedLevel].length}`,
+      `/multiplayer/${roomId}?mode=${category}&level=${MISSION_LEVELS[category][selectedLevel].length}&repeats=${category === "overdrive" ? "true" : allowRepeats}`,
     );
   };
 
@@ -133,6 +134,33 @@ export default function MultiplayerLanding() {
             </button>
           </div>
 
+          <AnimatePresence>
+            {category === "standard" && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <button
+                  onClick={() => setAllowRepeats(!allowRepeats)}
+                  className="w-full flex items-center justify-between p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-all group"
+                >
+                  <div className="flex flex-col text-left">
+                    <span className="font-mono text-[10px] font-bold text-slate-300 group-hover:text-[#538d4e] transition-colors">REPEAT_DIGITS</span>
+                    <span className="font-mono text-[8px] text-[#565758] uppercase">Allow multiple instances of same digit</span>
+                  </div>
+                  <div className={`w-10 h-5 rounded-full relative transition-colors ${allowRepeats ? "bg-[#538d4e]" : "bg-[#3a3a3c]"}`}>
+                    <motion.div 
+                      animate={{ x: allowRepeats ? 22 : 2 }}
+                      className="absolute top-1 w-3 h-3 rounded-full bg-white shadow-sm"
+                    />
+                  </div>
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <div className="flex flex-col gap-2 min-h-40 max-h-[30dvh] overflow-y-auto pr-1 custom-scrollbar">
             <AnimatePresence mode="wait">
               <motion.div
@@ -159,7 +187,7 @@ export default function MultiplayerLanding() {
                         {level.label}
                       </span>
                       <span className="text-[#565758] font-mono text-[9px] uppercase">
-                        {`${level.desc} // ${level.length}D // ${level.tries}T`}
+                        {`${level.desc} // ${level.length}D`}
                       </span>
                     </div>
                     {selectedLevel === i && (
