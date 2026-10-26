@@ -161,6 +161,7 @@ export default function ChatPanel({
               <div className="flex items-center gap-2 bg-black/40 border border-[#3a3a3c] rounded-xl p-2 focus-within:border-[#538d4e] transition-colors">
                 <input
                   type="text"
+                  maxLength={200}
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   onKeyDown={handleKeyPress}

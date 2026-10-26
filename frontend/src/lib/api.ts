@@ -1,4 +1,4 @@
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8000").replace(/\/$/, "");
 
 export type GameStatus = "active" | "solved" | "failed" | "surrendered";
 export type GameMode = "classic" | "timer" | "limited";
@@ -34,7 +34,7 @@ export interface LeaderboardEntry {
 }
 
 export const api = {
-  async createGame(mode: GameMode = "classic", length: number = 4, maxAttempts?: number, allowRepeats: boolean = true): Promise<NewGameResponse> {
+  async createGame(mode: GameMode = "classic", length: number = 4, maxAttempts?: number, allowRepeats: boolean = true, timeLimit?: number): Promise<NewGameResponse> {
     const response = await fetch(`${API_BASE_URL}/game/new`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -42,7 +42,8 @@ export const api = {
         mode, 
         code_length: length, 
         max_attempts: maxAttempts,
-        allow_repeats: allowRepeats
+        allow_repeats: allowRepeats,
+        time_limit: timeLimit
       }),
     });
     if (!response.ok) throw new Error("Failed to create game");
@@ -70,6 +71,12 @@ export const api = {
     return response.json();
   },
 
+  async expire(gameId: string): Promise<{ secret_code: string; status: GameStatus }> {
+    const response = await fetch(`${API_BASE_URL}/game/${gameId}/expire`, { method: "POST" });
+    if (!response.ok) throw new Error("Could not finalize expired game");
+    return response.json();
+  },
+
   async getHint(gameId: string, revealedIndices: number[], targetIndex?: number): Promise<{ position: number; digit: string }> {
     const response = await fetch(`${API_BASE_URL}/game/${gameId}/hint`, {
       method: "POST",
@@ -89,29 +96,34 @@ export const api = {
   async getLeaderboard(): Promise<LeaderboardEntry[]> {
     const response = await fetch(`${API_BASE_URL}/leaderboard`);
     if (!response.ok) throw new Error("Failed to fetch leaderboard");
-    return response.json();
+    const entries = await response.json();
+    return entries.map(normalizeEntry);
   },
 
   async postScore(score: Omit<LeaderboardEntry, "timestamp">): Promise<LeaderboardEntry> {
     const response = await fetch(`${API_BASE_URL}/leaderboard`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(score),
+      body: JSON.stringify({ ...score, timer_mode: score.timerMode, infinite_mode: score.infiniteMode }),
     });
     if (!response.ok) throw new Error("Failed to post score");
-    const entry = await response.json();
+    const entry = normalizeEntry(await response.json());
     // Also persist to localStorage
-    const stored = JSON.parse(localStorage.getItem('codebreaker_leaderboard') || '[]');
-    stored.push(entry);
-    localStorage.setItem('codebreaker_leaderboard', JSON.stringify(stored));
+    try {
+      const stored = api.getLocalLeaderboard();
+      localStorage.setItem('codebreaker_leaderboard', JSON.stringify([...stored, entry].slice(-100)));
+    } catch { /* A storage restriction must not turn a successful upload into a failure. */ }
     return entry;
   },
 
   getLocalLeaderboard(): LeaderboardEntry[] {
     if (typeof window === 'undefined') return [];
-    const stored = localStorage.getItem('codebreaker_leaderboard');
-    if (!stored) return [];
-    const entries: LeaderboardEntry[] = JSON.parse(stored);
+    let entries: LeaderboardEntry[];
+    try {
+      const stored = JSON.parse(localStorage.getItem('codebreaker_leaderboard') || '[]');
+      if (!Array.isArray(stored)) return [];
+      entries = stored.filter(e => e && typeof e.username === "string").map(normalizeEntry);
+    } catch { return []; }
     const statusPriority: Record<string, number> = { solved: 0, surrendered: 1, failed: 2, active: 3 };
     return entries.sort((a, b) => {
       const sp = (statusPriority[a.status] ?? 99) - (statusPriority[b.status] ?? 99);
@@ -126,3 +138,7 @@ export const api = {
     }
   }
 };
+
+function normalizeEntry(entry: LeaderboardEntry & { timer_mode?: boolean; infinite_mode?: boolean }): LeaderboardEntry {
+  return { ...entry, timerMode: entry.timer_mode ?? entry.timerMode ?? false, infiniteMode: entry.infinite_mode ?? entry.infiniteMode ?? false };
+}

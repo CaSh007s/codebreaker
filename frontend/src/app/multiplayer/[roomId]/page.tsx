@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSocket } from "@/hooks/useSocket";
@@ -17,7 +17,7 @@ import { useChatStore } from "@/store/useChatStore";
 
 interface Player {
   player_id: string; // Persistent ID
-  sid: string; // Current socket session ID
+  connected: boolean;
   username: string;
   avatar: string;
   is_ready: boolean;
@@ -46,6 +46,7 @@ interface RoomData {
     level: number;
   };
   status: string;
+  started_at?: string;
   replay_requests: string[]; // IDs of players who want a rematch
   winner_sid?: string;
   winner_pid?: string;
@@ -67,6 +68,7 @@ export default function MultiplayerRoom() {
     emitEvent,
     sendMessage,
     sendEmoji,
+    hintsRevealed,
   } = useSocket(roomId);
 
   const { toggleOpen, unreadCount } = useChatStore();
@@ -80,10 +82,10 @@ export default function MultiplayerRoom() {
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const pendingGuess = useRef(false);
   const [copied, setCopied] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
-  const [hintsRevealed, setHintsRevealed] = useState<Hint[]>([]);
   const [playerId, setPlayerId] = useState<string>("");
   const mode = searchParams.get("mode") || "standard";
   const level = parseInt(searchParams.get("level") || "4"); // Default mission length is 4
@@ -91,16 +93,16 @@ export default function MultiplayerRoom() {
 
   // Session Management
   useEffect(() => {
-    let pid = localStorage.getItem("codebreaker_player_id");
+    let pid = sessionStorage.getItem("codebreaker_player_id");
     if (!pid) {
-      pid = `OP_${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
-      localStorage.setItem("codebreaker_player_id", pid);
+      pid = `OP_${crypto.randomUUID()}`;
+      sessionStorage.setItem("codebreaker_player_id", pid);
     }
     setTimeout(() => setPlayerId(pid), 0);
 
     // Try to recover codename/avatar
-    const savedCodename = localStorage.getItem(`cb_codename_${roomId}`);
-    const savedAvatar = localStorage.getItem(`cb_avatar_${roomId}`);
+    const savedCodename = sessionStorage.getItem(`cb_codename_${roomId}`);
+    const savedAvatar = sessionStorage.getItem(`cb_avatar_${roomId}`);
     if (savedCodename || savedAvatar) {
       setTimeout(() => {
         if (savedCodename) setUsername(savedCodename);
@@ -113,18 +115,19 @@ export default function MultiplayerRoom() {
   }, [roomId]);
 
   const getAvatarUrl = (seed: string) =>
-    `https://api.dicebear.com/7.x/pixel-art/svg?seed=${seed}`;
+    `https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(seed)}`;
 
   // Initialize room or join existing
   useEffect(() => {
     if (isConnected && socket && playerId) {
-      const savedCodename = localStorage.getItem(`cb_codename_${roomId}`);
-      const savedAvatar = localStorage.getItem(`cb_avatar_${roomId}`);
+      const savedCodename = sessionStorage.getItem(`cb_codename_${roomId}`);
+      const savedAvatar = sessionStorage.getItem(`cb_avatar_${roomId}`);
 
       const playerInfo = {
         player_id: playerId,
-        username: savedCodename || username,
-        avatar: savedAvatar || getAvatarUrl(avatarSeed || username),
+        token: getSessionToken(),
+        username: savedCodename || "",
+        avatar: savedAvatar || "",
       };
 
       if (searchParams.has("mode")) {
@@ -150,8 +153,6 @@ export default function MultiplayerRoom() {
     searchParams,
     emitEvent,
     playerId,
-    avatarSeed,
-    username,
   ]);
 
   // Handle room updates and view transitions
@@ -164,7 +165,6 @@ export default function MultiplayerRoom() {
     ) {
       const data = lastRoomData as unknown as RoomData;
       requestAnimationFrame(() => {
-        const prevStatus = roomData?.status;
         setRoomData(data);
 
         // Auto-transition view if we are already in the player list
@@ -176,16 +176,9 @@ export default function MultiplayerRoom() {
           }
         }
 
-        // Reset hints locally when a new game starts
-        if (data.status === "playing" && prevStatus !== "playing") {
-          setHintsRevealed([]);
-        }
-        
-        // Clear isSubmitting when room data updates (presumably with new guess)
-        setIsSubmitting(false);
       });
     }
-  }, [lastRoomData, roomId, roomData?.status, playerId]);
+  }, [lastRoomData, roomId, playerId]);
 
   // Sync Ready Status after refresh
   useEffect(() => {
@@ -221,6 +214,10 @@ export default function MultiplayerRoom() {
   }, [lastError, router]);
 
   const handleSetupComplete = () => {
+    if (!isConnected || !roomData || !playerId) {
+      setError("WAITING_FOR_CONNECTION");
+      return;
+    }
     if (!username.trim()) {
       setError("ENTER_OPERATIVE_CODENAME");
       return;
@@ -228,72 +225,71 @@ export default function MultiplayerRoom() {
     const finalAvatar = getAvatarUrl(avatarSeed || username);
 
     // Persist identity for this room
-    localStorage.setItem(`cb_codename_${roomId}`, username);
-    localStorage.setItem(`cb_avatar_${roomId}`, finalAvatar);
+    sessionStorage.setItem(`cb_codename_${roomId}`, username);
+    sessionStorage.setItem(`cb_avatar_${roomId}`, finalAvatar);
 
     emitEvent("setup_player", {
       room_id: roomId,
       player_info: {
         player_id: playerId,
+        token: getSessionToken(),
         username,
         avatar: finalAvatar,
       },
     });
-    setView("lobby");
+    setError("");
   };
 
   const toggleReady = () => {
     const nextReady = !isReady;
-    setIsReady(nextReady);
     emitEvent("toggle_ready", { room_id: roomId, is_ready: nextReady });
   };
 
-  const copyLink = () => {
+  const copyLink = async () => {
     const cleanUrl = `${window.location.origin}/multiplayer/${roomId}`;
-    navigator.clipboard.writeText(cleanUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(cleanUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Could not copy link. Copy the room URL from your address bar.");
+    }
   };
 
   const submitGuess = (guess: string) => {
-    if (isSubmitting) return;
+    if (pendingGuess.current || !socket?.connected || roomData?.status !== "playing") return;
+    pendingGuess.current = true;
     setIsSubmitting(true);
-    emitEvent("submit_guess", { room_id: roomId, guess });
-    // Safety timeout to clear submitting state if no update comes (increased for latency)
-    setTimeout(() => setIsSubmitting(false), 5000);
+    socket.timeout(10_000).emit("submit_guess", { room_id: roomId, guess }, (err: Error | null) => {
+      pendingGuess.current = false;
+      setIsSubmitting(false);
+      if (err) setError("Could not confirm guess. Check your connection before retrying.");
+    });
   };
 
   const handleGetHint = () => {
     const targetLength = roomData?.config.level || 4;
     const maxHints = Math.floor(targetLength / 2);
-    const mySid = socket?.id || "";
-    const me = roomData?.players[mySid];
+    const me = roomData?.players[playerId];
     const hintsUsed = me?.progress.hints_used || 0;
 
-    if (hintsUsed >= maxHints) return;
+    if (hintsUsed >= maxHints || !isConnected || roomData?.status !== "playing") return;
     emitEvent("get_hint", {
       room_id: roomId,
       revealed_indices: hintsRevealed.map((h) => h.position),
     });
   };
 
-  // Socket listener for hints
-  useEffect(() => {
-    if (!socket) return;
-    const onHintReceived = (hint: Hint) => {
-      setHintsRevealed((prev) => [...prev, hint]);
-    };
-    socket.on("hint_received", onHintReceived);
-    return () => {
-      socket.off("hint_received", onHintReceived);
-    };
-  }, [socket]);
-
   return (
     <main
-      className={`relative flex h-dvh w-full flex-col bg-[#0a0a0b] text-slate-100 items-center overflow-hidden selection:bg-[#538d4e]/30 p-2 sm:p-4 ${view === "game" ? "justify-start" : "justify-center"}`}
+      className={`relative flex h-dvh w-full flex-col bg-[#0a0a0b] text-slate-100 items-center selection:bg-[#538d4e]/30 p-2 sm:p-4 ${view === "game" ? "justify-start overflow-hidden" : "overflow-y-auto"}`}
     >
       <BinaryBackground />
+      {(!isConnected || (error && view !== "setup")) && (
+        <div role="status" className="fixed top-2 z-150 rounded bg-black/90 px-4 py-2 text-xs text-amber-300">
+          {!isConnected ? "Connecting to game server…" : error}
+        </div>
+      )}
 
       <AnimatePresence>
         {showHowToPlay && (
@@ -317,7 +313,7 @@ export default function MultiplayerRoom() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="z-10 w-full max-w-sm"
+            className="z-10 w-full max-w-sm my-auto shrink-0 py-4"
           >
             <UserSetup
               username={username}
@@ -327,6 +323,7 @@ export default function MultiplayerRoom() {
               onComplete={handleSetupComplete}
               error={error}
               getAvatarUrl={getAvatarUrl}
+              disabled={!isConnected || !roomData || !playerId}
             />
           </motion.div>
         )}
@@ -337,7 +334,7 @@ export default function MultiplayerRoom() {
             initial={{ opacity: 0, scale: 1.1 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, y: -20 }}
-            className="z-10 w-full max-w-sm"
+            className="z-10 w-full max-w-sm my-auto shrink-0 py-4"
           >
             <Lobby
               roomData={roomData}
@@ -423,17 +420,17 @@ export default function MultiplayerRoom() {
               className="w-full max-w-5xl mx-auto flex-1 flex flex-col min-h-0"
             >
               <GameView
+                key={roomData.started_at}
                 roomData={roomData}
                 mySid={playerId} // Use persistent playerId for identification in UI
                 onSubmitGuess={submitGuess}
                 onExit={() => setShowAbandonConfirm(true)}
                 onShowHelp={() => setShowHowToPlay(true)}
                 hintsRevealed={hintsRevealed}
-                setHintsRevealed={setHintsRevealed}
                 onHint={handleGetHint}
                 toggleChat={toggleOpen}
                 unreadCount={unreadCount}
-                isSubmitting={isSubmitting}
+                isSubmitting={isSubmitting || !isConnected || showHowToPlay || showAbandonConfirm}
               />
             </motion.div>
           </div>
@@ -447,7 +444,7 @@ export default function MultiplayerRoom() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-100 flex items-center justify-center bg-[#0a0a0b]/90 backdrop-blur-xl p-4 sm:p-8"
+            className="fixed inset-0 z-100 overflow-y-auto flex items-start justify-center bg-[#0a0a0b]/90 backdrop-blur-xl p-4 sm:p-8"
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -630,6 +627,15 @@ export default function MultiplayerRoom() {
 
 // --- Components ---
 
+function getSessionToken() {
+  let token = sessionStorage.getItem("codebreaker_session_token");
+  if (!token) {
+    token = crypto.randomUUID();
+    sessionStorage.setItem("codebreaker_session_token", token);
+  }
+  return token;
+}
+
 interface UserSetupProps {
   username: string;
   setUsername: (val: string) => void;
@@ -638,6 +644,7 @@ interface UserSetupProps {
   onComplete: () => void;
   error: string;
   getAvatarUrl: (seed: string) => string;
+  disabled: boolean;
 }
 
 function UserSetup({
@@ -648,6 +655,7 @@ function UserSetup({
   onComplete,
   error,
   getAvatarUrl,
+  disabled,
 }: UserSetupProps) {
   const currentSeed = avatarSeed || username || "default";
   const refreshAvatar = () =>
@@ -721,6 +729,7 @@ function UserSetup({
 
         <button
           onClick={onComplete}
+          disabled={disabled}
           className="w-full py-4 bg-[#538d4e] hover:bg-[#58a352] text-black text-lg font-bold rounded-xl transition-all active:scale-[0.98]"
         >
           INITIALIZE_LINK
@@ -785,7 +794,7 @@ function Lobby({
                   <div
                     className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-tighter ${player.is_ready ? "bg-[#538d4e] text-black font-bold" : "bg-white/10 text-slate-400"}`}
                   >
-                    {player.is_ready ? "READY" : "PENDING"}
+            {!player.connected ? "RECONNECTING" : player.is_ready ? "READY" : "PENDING"}
                   </div>
                 </>
               ) : (
@@ -813,7 +822,7 @@ function Lobby({
       <div className="space-y-4">
         <button
           onClick={toggleReady}
-          disabled={players.length < 2}
+          disabled={players.length < 2 || players.some(p => !p.connected)}
           className={`w-full py-4 text-lg font-bold rounded-xl transition-all active:scale-[0.98] ${isReady ? "bg-white/10 text-white" : "bg-[#538d4e] text-black disabled:opacity-30"}`}
         >
           {isReady ? "CANCEL_READY" : "READY_TO_DEPLOY"}
@@ -845,7 +854,6 @@ interface GameViewProps {
   onExit: () => void;
   onShowHelp: () => void;
   hintsRevealed: Hint[];
-  setHintsRevealed: React.Dispatch<React.SetStateAction<Hint[]>>;
   onHint: () => void;
   toggleChat: () => void;
   unreadCount: number;
@@ -859,7 +867,6 @@ function GameView({
   onExit,
   onShowHelp,
   hintsRevealed,
-  setHintsRevealed,
   onHint,
   toggleChat,
   unreadCount,
@@ -882,22 +889,28 @@ function GameView({
   };
 
   const handleKeyPress = (num: string) => {
-    if (isGameOver) return;
+    if (isGameOver || isSubmitting) return;
     if (currentGuess.length < targetLength) {
       setCurrentGuess((prev) => prev + num);
     }
   };
 
   const handleBackspace = () => {
+    if (isGameOver || isSubmitting) return;
     setCurrentGuess((prev) => prev.slice(0, -1));
   };
 
   const handleSubmit = () => {
-    if (currentGuess.length === targetLength) {
+    if (!isGameOver && !isSubmitting && currentGuess.length === targetLength) {
       onSubmitGuess(currentGuess);
-      setCurrentGuess("");
     }
   };
+
+  // Only clear a submitted guess once the server has recorded it.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setCurrentGuess(""));
+    return () => cancelAnimationFrame(frame);
+  }, [me?.progress.attempts]);
 
   // Reset input buffer when a new match starts
   useEffect(() => {
@@ -906,22 +919,12 @@ function GameView({
     }
   }, [roomData.status]);
 
-  // Mission Policy: Clear hints once they are utilized in the active cipher buffer
-  useEffect(() => {
-    const remainingHints = hintsRevealed.filter(
-      (h) => currentGuess[h.position] !== h.digit,
-    );
-    if (remainingHints.length !== hintsRevealed.length) {
-      setHintsRevealed(remainingHints);
-    }
-  }, [currentGuess, hintsRevealed, setHintsRevealed]);
-
   return (
     <div className="flex flex-col h-full w-full gap-2 max-h-screen overflow-hidden">
       {/* Top Utility Navbar (Optimized for Mobile, Hidden on Desktop where Buttons are below Heading) */}
       <div className="w-full bg-black/40 backdrop-blur-md border-b border-[#3a3a3c] shrink-0 z-20 sm:hidden">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-center">
-          <div className="flex items-center gap-4">
+        <div className="max-w-4xl mx-auto px-1 min-h-14 flex items-center justify-center">
+          <div className="flex flex-wrap justify-center items-center gap-1 py-1">
             {(() => {
               const maxHints = Math.floor(targetLength / 2);
               const hintsUsed = me?.progress.hints_used || 0;
@@ -1106,7 +1109,7 @@ function BinaryBackground() {
     { value: number; duration: number; delay: number }[]
   >([]);
   useEffect(() => {
-    const p = Array.from({ length: 200 }).map(() => ({
+    const p = Array.from({ length: 80 }).map(() => ({
       value: Math.round(Math.random()),
       duration: Math.random() * 3 + 2,
       delay: Math.random() * 5,
@@ -1115,20 +1118,15 @@ function BinaryBackground() {
   }, []);
 
   return (
-    <div className="absolute inset-0 opacity-[0.03] pointer-events-none font-mono text-[10px] flex flex-wrap gap-4 leading-none">
+    <div aria-hidden="true" className="absolute inset-0 opacity-[0.03] pointer-events-none font-mono text-[10px] flex flex-wrap gap-4 leading-none">
       {particles.map((p, i) => (
-        <motion.span
+        <span
           key={i}
-          animate={{ opacity: [0.1, 0.5, 0.1] }}
-          transition={{
-            duration: p.duration,
-            repeat: Infinity,
-            delay: p.delay,
-          }}
-          className="text-[#565758]"
+          style={{ animationDuration: `${p.duration}s`, animationDelay: `${p.delay}s` }}
+          className="binary-particle text-[#565758]"
         >
           {p.value}
-        </motion.span>
+        </span>
       ))}
     </div>
   );

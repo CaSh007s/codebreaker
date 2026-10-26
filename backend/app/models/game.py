@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
@@ -16,9 +16,10 @@ class GameMode(Enum):
 
 class NewGameRequest(BaseModel):
     mode: GameMode = GameMode.CLASSIC
-    code_length: int = 4
-    max_attempts: Optional[int] = None
+    code_length: int = Field(default=4, ge=3, le=6)
+    max_attempts: Optional[int] = Field(default=None, ge=1, le=1000)
     allow_repeats: bool = True
+    time_limit: Optional[int] = Field(default=None, ge=1, le=3600)
 
 class NewGameResponse(BaseModel):
     game_id: str
@@ -27,7 +28,7 @@ class NewGameResponse(BaseModel):
     max_attempts: Optional[int]
 
 class GuessRequest(BaseModel):
-    guess: str
+    guess: str = Field(pattern=r"^[0-9]{3,6}$")
 
 class GuessResponse(BaseModel):
     bulls: int
@@ -49,6 +50,8 @@ class GameState(BaseModel):
     feedback_map: List[int]
     created_at: datetime
     last_guess_at: Optional[datetime] = None
+    time_limit: Optional[int] = None
+    revealed_indices: List[int] = Field(default_factory=list)
 
 class HintRequest(BaseModel):
     revealed_indices: List[int]
@@ -70,11 +73,11 @@ class LeaderboardEntry(BaseModel):
     infinite_mode: bool = False
 
 class LeaderboardRequest(BaseModel):
-    username: str
-    level: str
-    tries: int
-    time_seconds: int
+    username: str = Field(min_length=1, max_length=64)
+    level: str = Field(min_length=1, max_length=32)
+    tries: int = Field(ge=0, le=99999)
+    time_seconds: int = Field(ge=0)
     status: GameStatus = GameStatus.SOLVED
-    score: int = 0
+    score: int = Field(default=0, ge=0, le=1000000)
     timer_mode: bool = False
     infinite_mode: bool = False

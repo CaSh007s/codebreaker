@@ -1,143 +1,89 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import { useChatStore, ChatMessage } from "@/store/useChatStore";
+import { API_BASE_URL } from "@/lib/api";
 
-const SOCKET_URL =
-  process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8000";
+const SOCKET_URL = (process.env.NEXT_PUBLIC_SOCKET_URL || API_BASE_URL).replace(/\/$/, "");
+type Hint = { position: number; digit: string };
 
 export const useSocket = (room?: string) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [lastMessage, setLastMessage] = useState<Record<
-    string,
-    unknown
-  > | null>(null);
-  const [lastRoomData, setLastRoomData] = useState<Record<
-    string,
-    unknown
-  > | null>(null);
-  const [lastError, setLastError] = useState<Record<string, unknown> | null>(
-    null,
-  );
-
-  const addChatMessage = useChatStore((state) => state.addMessage);
-  const clearSystemMessages = useChatStore(
-    (state) => state.clearSystemMessages,
-  );
+  const [lastRoomData, setLastRoomData] = useState<Record<string, unknown> | null>(null);
+  const [lastError, setLastError] = useState<{ message: string } | null>(null);
+  const [hintsRevealed, setHintsRevealed] = useState<Hint[]>([]);
 
   useEffect(() => {
-    // Initialize socket connection
-    const socket = io(SOCKET_URL, {
+    useChatStore.getState().clearMessages();
+    const connection = io(SOCKET_URL, {
       path: "/socket.io",
-      transports: ["websocket"],
-      autoConnect: true,
+      transports: ["websocket", "polling"],
+      tryAllTransports: true,
+      autoConnect: false,
     });
-
-    requestAnimationFrame(() => {
-      setSocket(socket);
-    });
-
-    socket.on("connect", () => {
-      setIsConnected(true);
-      console.log("Connected to socket server");
-    });
-
-    socket.on("disconnect", () => {
-      setIsConnected(false);
-      console.log("Disconnected from socket server");
-    });
-
-    socket.on("message", (data) => {
-      requestAnimationFrame(() => {
-        setLastMessage(data);
-      });
-    });
-
-    socket.on("chat_message", (data: ChatMessage) => {
-      addChatMessage(data);
-    });
-
-    socket.on("room_update", (data) => {
-      requestAnimationFrame(() => {
-        setLastRoomData(data);
-      });
-    });
-
-    socket.on("game_start", (data) => {
-      console.log("Game started!", data);
-      clearSystemMessages();
-    });
-
-    socket.on("game_over", (data) => {
-      console.log("Game over!", data);
-    });
-
-    socket.on("status", (data) => {
-      console.log("Status update:", data);
-    });
-
-    socket.on("error", (err) => {
-      console.error("Socket error:", err);
-      requestAnimationFrame(() => {
-        setLastError(err);
-      });
-    });
-
-    // Render Keep-Alive: Ping the backend every 5 minutes
-    const keepAliveInterval = setInterval(
-      () => {
-        fetch(`${SOCKET_URL}/wakeup`).catch(() => {
-          // Silently ignore ping errors
-        });
-      },
-      5 * 60 * 1000,
-    ); // 5 minutes
-
-    return () => {
-      clearInterval(keepAliveInterval);
-      if (room) {
-        socket.emit("leave_room", { room_id: room });
+    let revision = -1;
+    let startedAt: unknown;
+    const receiveRoom = (data: Record<string, unknown>) => {
+      if (data.room_id !== room || Number(data.revision) < revision) return;
+      revision = Number(data.revision);
+      if (data.started_at !== startedAt) {
+        startedAt = data.started_at;
+        setHintsRevealed([]);
       }
-      socket.disconnect();
+      setLastRoomData(data);
     };
-  }, [room, addChatMessage, clearSystemMessages]);
+    connection.on("connect", () => {
+      setSocket(connection);
+      setIsConnected(true);
+      setLastError(null);
+    });
+    connection.on("disconnect", () => setIsConnected(false));
+    connection.on("connect_error", () => {
+      setIsConnected(false);
+      setLastError({ message: "Connection unavailable. Retrying…" });
+    });
+    connection.on("room_update", receiveRoom);
+    connection.on("game_start", (data) => {
+      receiveRoom(data);
+      useChatStore.getState().clearSystemMessages();
+    });
+    connection.on("game_over", receiveRoom);
+    connection.on("hint_history", setHintsRevealed);
+    connection.on("hint_received", (hint: Hint) => {
+      setHintsRevealed((previous) => [...previous.filter(h => h.position !== hint.position), hint]);
+    });
+    connection.on("chat_message", (data: ChatMessage) => useChatStore.getState().addMessage(data));
+    connection.on("error", (error) => {
+      setLastError({ message: typeof error === "string" ? error : error.message || error.error || "AN_ERROR_OCCURRED" });
+    });
+    connection.connect();
+    const heartbeat = setInterval(() => {
+      if (connection.connected) connection.emit("room_heartbeat", { room_id: room });
+    }, 60_000);
+    return () => {
+      clearInterval(heartbeat);
+      connection.removeAllListeners();
+      connection.disconnect();
+    };
+  }, [room]);
 
-  const sendMessage = (data: {
-    text: string;
-    sender_id: string;
-    sender_username: string;
-  }) => {
-    if (socket && room) {
-      socket.emit("chat_message", { room_id: room, ...data });
+  const emitEvent = useCallback((event: string, data: unknown) => {
+    if (!socket?.connected) {
+      setLastError({ message: "Connection unavailable. Please wait for reconnection." });
+      return false;
     }
-  };
+    socket.emit(event, data);
+    return true;
+  }, [socket]);
 
-  const sendEmoji = (data: {
-    emoji: string;
-    sender_id: string;
-    sender_username: string;
-  }) => {
-    if (socket && room) {
-      socket.emit("send_emoji", { room_id: room, ...data });
-    }
-  };
+  const sendMessage = useCallback((data: { text: string; sender_id: string; sender_username: string }) => {
+    emitEvent("chat_message", { room_id: room, ...data });
+  }, [emitEvent, room]);
+  const sendEmoji = useCallback((data: { emoji: string; sender_id: string; sender_username: string }) => {
+    emitEvent("send_emoji", { room_id: room, ...data });
+  }, [emitEvent, room]);
 
-  const emitEvent = (event: string, data: unknown) => {
-    if (socket) {
-      socket.emit(event, data);
-    }
-  };
-
-  return {
-    socket,
-    isConnected,
-    lastMessage,
-    lastRoomData,
-    lastError,
-    sendMessage,
-    sendEmoji,
-    emitEvent,
-  };
+  return { socket, isConnected, lastRoomData, lastError, hintsRevealed, emitEvent, sendMessage, sendEmoji };
 };

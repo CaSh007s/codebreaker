@@ -29,12 +29,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 
   addMessage: (msg) => {
     set((state) => ({
-      messages: [...state.messages, msg],
+      messages: [...state.messages.slice(-199), msg],
       unreadCount: state.isOpen ? 0 : state.unreadCount + 1,
     }));
   },
 
-  clearMessages: () => set({ messages: [], unreadCount: 0 }),
+  clearMessages: () => set({ messages: [], unreadCount: 0, isOpen: false }),
   
   clearSystemMessages: () => set((state) => ({
     messages: state.messages.filter(m => m.type !== "system"),

@@ -2,7 +2,9 @@ import json
 import redis.asyncio as redis
 import os
 import random
-from datetime import datetime, timedelta, timezone
+import secrets
+from datetime import datetime, timezone
+from functools import wraps
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 
@@ -11,6 +13,14 @@ load_dotenv()
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 from app.services.game_service import GameService
 ROOM_EXPIRY = 15 * 60  # 15 minutes in seconds
+
+def room_transaction(method):
+    """Serialize read/modify/write operations across all backend workers."""
+    @wraps(method)
+    async def wrapped(self, room_id, *args, **kwargs):
+        async with self.redis_client.lock(f"room_lock:{room_id}", timeout=15, blocking_timeout=10):
+            return await method(self, room_id, *args, **kwargs)
+    return wrapped
 
 class MultiplayerService:
     def __init__(self):
@@ -25,29 +35,22 @@ class MultiplayerService:
 
     async def save_room(self, room_id: str, room_data: Dict[str, Any]):
         key = self._get_room_key(room_id)
-        
-        # Room Lifecycle: The room expires in 15 mins if abandoned (no 'connected' players)
-        # We only refresh/set TTL if at least one player is physically connected.
-        has_connected_player = any(p.get("connected", True) for p in room_data.get("players", {}).values())
-        
-        serialized = json.dumps(room_data)
-        if has_connected_player:
-            await self.redis_client.setex(key, ROOM_EXPIRY, serialized)
-        else:
-            # If no one is connected, we still save it but don't refresh the 15min timer
-            # unless it's already expiring or doesn't exist.
-            # Actually, the user requirement is: "even if there's one player left in the room, it won't be cleared"
-            # This implies "left in the room" means "exists in the players dict".
-            # "Clear the room in case there are no players after every 15 mins"
-            # So if room["players"] is empty, it should expire.
-            if len(room_data.get("players", {})) > 0:
-                await self.redis_client.setex(key, ROOM_EXPIRY, serialized)
-            else:
-                await self.redis_client.set(key, serialized, ex=ROOM_EXPIRY)
+        room_data["revision"] = room_data.get("revision", 0) + 1
+        # Connected clients renew this lease via room_heartbeat, including idle lobbies.
+        await self.redis_client.setex(key, ROOM_EXPIRY, json.dumps(room_data))
 
+    @room_transaction
     async def create_room(self, room_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
+        existing = await self.get_room(room_id)
+        if existing:
+            return existing
         digits = config.get("level", 4)
-        if digits < 3: digits = 4
+        if type(digits) is not int or not 3 <= digits <= 6:
+            return {"error": "Code length must be between 3 and 6"}
+        if config.get("mode") not in ("standard", "overdrive"):
+            return {"error": "Invalid game mode"}
+        config = {"mode": config["mode"], "level": digits,
+                  "allow_repeats": config.get("allow_repeats") is True or config["mode"] == "overdrive"}
         
         room_data = {
             "room_id": room_id,
@@ -61,6 +64,7 @@ class MultiplayerService:
         await self.save_room(room_id, room_data)
         return room_data
 
+    @room_transaction
     async def join_room(self, room_id: str, sid: str, player_info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Handles session recovery and SID updates for existing players.
@@ -76,6 +80,8 @@ class MultiplayerService:
 
         # If player already exists (session recovery), update their SID
         if player_id in room["players"]:
+            if not secrets.compare_digest(room["players"][player_id].get("token", ""), player_info.get("token", "")):
+                return {"error": "Invalid player session"}
             room["players"][player_id]["sid"] = sid
             room["players"][player_id]["connected"] = True
             await self.save_room(room_id, room)
@@ -85,6 +91,13 @@ class MultiplayerService:
         # (The frontend will see the player is NOT in room['players'] and stay in setup)
         return room
 
+    @room_transaction
+    async def keep_alive(self, room_id: str, sid: str):
+        room = await self.get_room(room_id)
+        if room and any(p["sid"] == sid and p.get("connected") for p in room["players"].values()):
+            await self.redis_client.expire(self._get_room_key(room_id), ROOM_EXPIRY)
+
+    @room_transaction
     async def register_player(self, room_id: str, sid: str, player_info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Explicitly adds a new player to the room during setup.
@@ -97,8 +110,18 @@ class MultiplayerService:
         if not player_id:
             return {"error": "Missing player_id"}
 
+        token = player_info.get("token")
+        if not isinstance(token, str) or not 16 <= len(token) <= 128:
+            return {"error": "Invalid player session"}
+        username = player_info.get("username", "")
+        if not isinstance(username, str) or not 1 <= len(username.strip()) <= 15:
+            return {"error": "Codename must contain 1 to 15 characters"}
+        player_info = {**player_info, "username": username.strip()}
+
         # Recovery if they already exist
         if player_id in room["players"]:
+            if not secrets.compare_digest(room["players"][player_id].get("token", ""), token):
+                return {"error": "Invalid player session"}
             room["players"][player_id]["sid"] = sid
             room["players"][player_id]["connected"] = True
             room["players"][player_id]["username"] = player_info.get("username", room["players"][player_id]["username"])
@@ -111,6 +134,7 @@ class MultiplayerService:
 
         room["players"][player_id] = {
             "player_id": player_id,
+            "token": token,
             "sid": sid,
             "username": player_info.get("username", "Anonymous"),
             "avatar": player_info.get("avatar", ""),
@@ -122,6 +146,7 @@ class MultiplayerService:
         await self.save_room(room_id, room)
         return room
 
+    @room_transaction
     async def leave_room(self, room_id: str, sid: str):
         room = await self.get_room(room_id)
         if room:
@@ -130,27 +155,29 @@ class MultiplayerService:
             if player_id:
                 # Mark as disconnected but keep in dict for recovery
                 room["players"][player_id]["connected"] = False
+                if room["status"] == "waiting":
+                    room["players"][player_id]["is_ready"] = False
                 await self.save_room(room_id, room)
             return room
         return None
 
+    @room_transaction
     async def update_player_ready(self, room_id: str, sid: str, is_ready: bool) -> Optional[Dict[str, Any]]:
         room = await self.get_room(room_id)
-        if room:
+        if room and room["status"] == "waiting" and type(is_ready) is bool:
             player_id = next((pid for pid, p in room["players"].items() if p["sid"] == sid), None)
             if player_id:
                 room["players"][player_id]["is_ready"] = is_ready
                 
                 # Check if all players (2) are ready
-                if len(room["players"]) == 2 and all(p["is_ready"] for p in room["players"].values()):
-                    return await self.start_game(room_id)
+                if len(room["players"]) == 2 and all(p["is_ready"] and p.get("connected", False) for p in room["players"].values()):
+                    return await self._start_game(room_id, room)
                     
                 await self.save_room(room_id, room)
                 return room
         return None
 
-    async def start_game(self, room_id: str) -> Optional[Dict[str, Any]]:
-        room = await self.get_room(room_id)
+    async def _start_game(self, room_id: str, room: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if room:
             # Generate a target number
             config = room.get("config", {})
@@ -168,6 +195,8 @@ class MultiplayerService:
             room["status"] = "playing"
             room["replay_requests"] = [] # Reset for next time
             room["started_at"] = datetime.now(timezone.utc).isoformat()
+            for key in ("winner_pid", "winner_sid", "resigned_pid", "resigned_sid", "end_reason", "finished_at"):
+                room.pop(key, None)
             
             # Reset player progress but keep hints_used and points tracking
             for pid in room["players"]:
@@ -178,6 +207,7 @@ class MultiplayerService:
                     "attempts": 0, 
                     "guesses": [], 
                     "hints_used": 0, # Reset hints for new game
+                    "hints": [],
                     "last_points_earned": 0
                 }
                 # room["players"][sid]["is_ready"] = False # Optional: reset ready status?
@@ -186,6 +216,7 @@ class MultiplayerService:
             return room
         return None
 
+    @room_transaction
     async def submit_guess(self, room_id: str, sid: str, guess: str) -> Optional[Dict[str, Any]]:
         room = await self.get_room(room_id)
         if not room or room["status"] != "playing":
@@ -198,6 +229,8 @@ class MultiplayerService:
             
         # Calculate bulls, cows and gray using the Static Scramble Protocol
         target = room["target"]
+        if not isinstance(guess, str) or len(guess) != len(target) or any(c not in "0123456789" for c in guess):
+            return {"error": f"Guess must be {len(target)} digits long"}
         feedback_map = room.get("feedback_map")
         
         # Fallback for rooms created before the map was mandatory
@@ -222,6 +255,7 @@ class MultiplayerService:
         if bulls == len(target):
             room["status"] = "finished"
             room["winner_pid"] = player_id
+            room["end_reason"] = "solved"
             room["finished_at"] = datetime.now(timezone.utc).isoformat()
             
             # Calculate points for the winner
@@ -246,6 +280,7 @@ class MultiplayerService:
         await self.save_room(room_id, room)
         return room
 
+    @room_transaction
     async def get_hint(self, room_id: str, sid: str, revealed_indices: list) -> Optional[Dict[str, Any]]:
         room = await self.get_room(room_id)
         if not room or room["status"] != "playing":
@@ -266,7 +301,8 @@ class MultiplayerService:
         if hints_used >= max_hints:
             return {"error": f"MAXIMUM_HINTS_REACHED: ONLY {max_hints} HINTS ALLOWED"}
             
-        available_indices = list(set(range(code_len)) - set(revealed_indices))
+        hints = room["players"][player_id]["progress"].setdefault("hints", [])
+        available_indices = list(set(range(code_len)) - {h["position"] for h in hints})
         
         if not available_indices:
             return {"error": "No more hints available"}
@@ -275,12 +311,14 @@ class MultiplayerService:
         
         # Increment hints used
         room["players"][player_id]["progress"]["hints_used"] = hints_used + 1
+        hints.append({"position": target_idx, "digit": target[target_idx]})
         await self.save_room(room_id, room)
         
         return {
             "position": target_idx,
             "digit": target[target_idx]
         }
+    @room_transaction
     async def request_replay(self, room_id: str, sid: str) -> Optional[Dict[str, Any]]:
         room = await self.get_room(room_id)
         if not room or room["status"] != "finished":
@@ -295,20 +333,23 @@ class MultiplayerService:
             await self.save_room(room_id, room)
 
         # If all players (2) requested replay, start new game
-        if len(room["replay_requests"]) >= len(room["players"]):
-            return await self.start_game(room_id)
+        if len(room["players"]) == 2 and len(room["replay_requests"]) == 2 and all(p.get("connected", False) for p in room["players"].values()):
+            return await self._start_game(room_id, room)
 
         return room
 
+    @room_transaction
     async def surrender(self, room_id: str, sid: str) -> Optional[Dict[str, Any]]:
         room = await self.get_room(room_id)
         if not room or room["status"] != "playing":
             return None
             
-        room["status"] = "finished"
-        room["resigned_sid"] = sid
         # Find player_id of the person who resigned
         resigned_pid = next((pid for pid, p in room["players"].items() if p["sid"] == sid), None)
+        if not resigned_pid:
+            return None
+        room["status"] = "finished"
+        room["resigned_sid"] = sid
         room["resigned_pid"] = resigned_pid
         # The other player is the winner
         winner = [p for p in room["players"].values() if p["sid"] != sid]

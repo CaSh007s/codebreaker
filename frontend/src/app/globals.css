@@ -44,3 +44,17 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+.binary-particle {
+  animation: binary-pulse 4s ease-in-out infinite;
+}
+
+@keyframes binary-pulse {
+  0%, 100% { opacity: 0.1; }
+  50% { opacity: 0.5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .binary-particle { animation: none; }
+  .scroll-smooth { scroll-behavior: auto; }
+}

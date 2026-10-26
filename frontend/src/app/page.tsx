@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGameStore } from "@/store/useGameStore";
 import { api, LeaderboardEntry } from "@/lib/api";
@@ -23,7 +23,7 @@ export default function Home() {
       <TopHeader />
 
       <div
-        className={`flex-1 w-full flex flex-col items-center relative z-10 px-4 min-h-0 overflow-hidden ${view === "landing" ? "justify-center" : ""}`}
+        className={`flex-1 w-full flex flex-col items-center relative z-10 px-4 min-h-0 ${view === "landing" ? "overflow-y-auto" : "overflow-hidden"}`}
       >
         <AnimatePresence mode="wait">
           {view === "landing" ? (
@@ -156,7 +156,7 @@ const MISSION_LEVELS: Record<string, MissionLevel[]> = {
 
 function LandingView() {
   const router = useRouter();
-  const { startNewGame, menuState, setMenuState } = useGameStore();
+   const { startNewGame, menuState, setMenuState, error } = useGameStore();
   const [category, setCategory] = useState<"standard" | "overdrive">(
     "standard",
   );
@@ -170,9 +170,10 @@ function LandingView() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="relative flex flex-col items-center justify-center py-4 w-full max-w-sm gap-6 sm:gap-8"
+      className="relative flex flex-col items-center justify-center my-auto shrink-0 py-4 w-full max-w-sm gap-6 sm:gap-8"
     >
       <BinaryBackground />
+      {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
 
       <AnimatePresence>
         {showHowToPlay && (
@@ -470,6 +471,8 @@ function ModifierPanel() {
 
 function GameView() {
   const {
+    gameId,
+    startedAt,
     startNewGame,
     status,
     error,
@@ -488,28 +491,21 @@ function GameView() {
     calculateScore,
     revealedCode,
   } = useGameStore();
-  const [isUploading, setIsUploading] = useState(false);
-  const [hasUploaded, setHasUploaded] = useState(false);
+  const uploadedGames = useRef(new Set<string>());
   const [showHelp, setShowHelp] = useState(false);
 
   // Timer logic
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (status === "active") {
-      interval = setInterval(() => {
-        const nextTime = timer + 1;
+    if (status !== "active" || !startedAt) return;
+    const interval = setInterval(() => {
+        const nextTime = Math.floor((Date.now() - startedAt) / 1000);
         setTimer(nextTime);
-
-        // Auto-fail if timer limit reached
         if (timerLimit && nextTime >= timerLimit) {
-          // Need a way to set status to failed.
-          // For now, I'll rely on the UI to handle it or I can add a surrender call.
-          // Actually, let's just use the timer value in UI to block actions.
+          void useGameStore.getState().expireGame();
         }
       }, 1000);
-    }
     return () => clearInterval(interval);
-  }, [status, timer, setTimer, timerLimit]);
+  }, [status, startedAt, setTimer, timerLimit]);
 
   const timeRemaining = timerLimit ? Math.max(0, timerLimit - timer) : null;
   const isTimeUp = timerLimit !== null && timeRemaining === 0;
@@ -523,9 +519,9 @@ function GameView() {
 
   // Auto-upload score on win
   useEffect(() => {
-    if (status === "solved" && !hasUploaded && !isUploading) {
+    if (status === "solved" && gameId && !uploadedGames.current.has(gameId)) {
+      uploadedGames.current.add(gameId);
       const upload = async () => {
-        setIsUploading(true);
         try {
           await api.postScore({
             username,
@@ -537,19 +533,15 @@ function GameView() {
             timerMode: timerLimit !== null,
             infiniteMode: useGameStore.getState().infiniteMode,
           });
-          setHasUploaded(true);
         } catch (e) {
           console.error(e);
-        } finally {
-          setIsUploading(false);
         }
       };
       upload();
     }
   }, [
     status,
-    hasUploaded,
-    isUploading,
+    gameId,
     username,
     currentLevelLabel,
     guesses.length,
@@ -660,7 +652,7 @@ function GameView() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="absolute inset-0 flex items-center justify-center bg-[#0a0a0b]/90 backdrop-blur-md z-50 p-4"
+              className="absolute inset-0 overflow-y-auto flex items-start justify-center bg-[#0a0a0b]/90 backdrop-blur-md z-50 p-4"
             >
               <motion.div
                 initial={{ scale: 0.9, y: 20, opacity: 0 }}
@@ -845,7 +837,7 @@ function GameView() {
           codeLength={codeLength}
           status={status}
           isLoading={isLoading}
-          timerActionBlocked={isTimeUp}
+          timerActionBlocked={isTimeUp || showHelp}
           struckKeys={useGameStore.getState().struckKeys}
           onToggleStruckKey={(k) => useGameStore.getState().toggleStruckKey(k)}
         />
@@ -867,7 +859,7 @@ function BinaryBackground() {
     // Use requestAnimationFrame to avoid "synchronous setState in effect" lint error
     // and ensure we only generate these on the client.
     requestAnimationFrame(() => {
-      const p = Array.from({ length: 400 }).map(() => ({
+      const p = Array.from({ length: 100 }).map(() => ({
         value: Math.round(Math.random()),
         duration: Math.random() * 3 + 2,
         delay: Math.random() * 5,
@@ -877,22 +869,15 @@ function BinaryBackground() {
   }, []);
 
   return (
-    <div className="absolute inset-0 overflow-hidden opacity-[0.03] pointer-events-none select-none font-mono text-[10px] flex flex-wrap gap-4 leading-none">
+    <div aria-hidden="true" className="absolute inset-0 overflow-hidden opacity-[0.03] pointer-events-none select-none font-mono text-[10px] flex flex-wrap gap-4 leading-none">
       {particles.map((p, i) => (
-        <motion.span
+        <span
           key={i}
-          animate={{
-            opacity: [0.1, 0.5, 0.1],
-          }}
-          transition={{
-            duration: p.duration,
-            repeat: Infinity,
-            delay: p.delay,
-          }}
-          className="text-[#565758]"
+          style={{ animationDuration: `${p.duration}s`, animationDelay: `${p.delay}s` }}
+          className="binary-particle text-[#565758]"
         >
           {p.value}
-        </motion.span>
+        </span>
       ))}
     </div>
   );

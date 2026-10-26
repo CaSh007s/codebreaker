@@ -25,6 +25,7 @@ export default function LoadingOverlay() {
   const [logs, setLogs] = useState<string[]>([]);
   const [show, setShow] = useState(false);
   const [complete, setComplete] = useState(false);
+  const [delayed, setDelayed] = useState(false);
 
   const addLog = useCallback((msg: string) => {
     setLogs(prev => [...prev.slice(-4), `>> [SYSTEM]: ${msg}`]);
@@ -37,47 +38,58 @@ export default function LoadingOverlay() {
     }
     setShow(true);
 
+    let stopped = false;
+    let finished = false;
     let logIndex = 0;
+    let retry: ReturnType<typeof setTimeout>;
+    let dismiss: ReturnType<typeof setTimeout>;
+    let controller: AbortController | undefined;
+    const delayedTimer = setTimeout(() => setDelayed(true), 15000);
     const logInterval = setInterval(() => {
-      if (logIndex < BOOT_LOGS.length && !complete) {
+      if (logIndex < BOOT_LOGS.length && !finished) {
         addLog(BOOT_LOGS[logIndex]);
         logIndex++;
       }
     }, 1200);
 
     const checkHealth = async () => {
-      if (complete) return;
+      if (stopped || finished) return;
+      controller = new AbortController();
+      const timeoutId = setTimeout(() => controller?.abort(), 10000);
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
         
         const res = await fetch(`${BACKEND_URL}/wakeup`, { 
             signal: controller.signal,
             mode: 'cors' 
         });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
+        if (res.ok && !stopped) {
+          finished = true;
           setComplete(true);
           sessionStorage.setItem("cb_backend_woken", "true");
           addLog("HANDSHAKE COMPLETE. WELCOME OPERATIVE.");
           clearInterval(logInterval);
           // If was already up, disappear faster
-          setTimeout(() => setShow(false), logIndex === 0 ? 500 : 1500);
+          dismiss = setTimeout(() => setShow(false), logIndex === 0 ? 500 : 1500);
         }
-      } catch (err) {
-        console.warn(`[DIAGNOSTIC]: Handshake failed for ${BACKEND_URL}/health`, err);
+      } catch {
+        // Cold starts and temporary network failures are retried sequentially.
+      } finally {
+        clearTimeout(timeoutId);
+        if (!stopped && !finished) retry = setTimeout(checkHealth, 3000);
       }
     };
 
-    const healthInterval = setInterval(checkHealth, 3000);
     checkHealth();
 
     return () => {
+      stopped = true;
+      controller?.abort();
       clearInterval(logInterval);
-      clearInterval(healthInterval);
+      clearTimeout(retry);
+      clearTimeout(dismiss);
+      clearTimeout(delayedTimer);
     };
-  }, [complete, addLog]);
+  }, [addLog]);
 
   if (!show) return null;
 
@@ -178,6 +190,11 @@ export default function LoadingOverlay() {
         </div>
 
         {/* Tactical Console Logs */}
+        {delayed && !complete && (
+          <button onClick={() => setShow(false)} className="absolute bottom-40 rounded border border-white/20 px-4 py-2 text-xs text-slate-300">
+            Server is taking longer. Continue to menu
+          </button>
+        )}
         <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-[90%] max-w-md h-24 flex flex-col justify-end">
             <div className="space-y-1.5">
                 <AnimatePresence initial={false}>

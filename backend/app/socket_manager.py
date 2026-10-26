@@ -1,5 +1,8 @@
 import socketio
 import os
+from copy import deepcopy
+from functools import wraps
+from redis.exceptions import RedisError
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
@@ -32,6 +35,29 @@ VALID_EMOJIS = ["🎯", "💀", "🔥", "👀", "🤯"]
 CHAT_LIMIT = 10
 GUESS_LIMIT = 30
 RATE_LIMIT_WINDOW = 10
+
+
+def game_event(handler):
+    """Validate socket envelopes and report datastore failures to the client."""
+    @wraps(handler)
+    async def wrapped(sid, data):
+        if not isinstance(data, dict) or not isinstance(data.get("room_id"), str) or not 1 <= len(data["room_id"]) <= 128:
+            await sio.emit("error", {"message": "Invalid room request"}, to=sid)
+            return
+        info = data.get("player_info")
+        if info is not None and (not isinstance(info, dict) or
+                not isinstance(info.get("player_id"), str) or not 1 <= len(info["player_id"]) <= 128 or
+                not isinstance(info.get("token"), str) or not 16 <= len(info["token"]) <= 128):
+            await sio.emit("error", {"message": "Invalid player session"}, to=sid)
+            return
+        if "config" in data and not isinstance(data["config"], dict):
+            await sio.emit("error", {"message": "Invalid room configuration"}, to=sid)
+            return
+        try:
+            return await handler(sid, data)
+        except RedisError:
+            await sio.emit("error", {"message": "Game service temporarily unavailable. Please retry."}, to=sid)
+    return sio.event(wrapped)
 
 
 # --- Helper: Simple HTML Sanitization ---
@@ -81,6 +107,32 @@ def _get_player_username(room, sid):
     return "UNKNOWN"
 
 
+async def publish_room(event, room, *, to=None):
+    """Never send the answer, mapping, session IDs or private hints during play."""
+    public = deepcopy(room)
+    public.pop("feedback_map", None)
+    if room.get("status") != "finished":
+        public.pop("target", None)
+    for player in public.get("players", {}).values():
+        player.pop("sid", None)
+        player.pop("token", None)
+        player["progress"].pop("hints", None)
+    await sio.emit(event, public, to=to, room=None if to else room["room_id"])
+
+
+async def send_hint_history(room, sid):
+    player = next((p for p in room["players"].values() if p["sid"] == sid), None)
+    if player:
+        await sio.emit("hint_history", player["progress"].get("hints", []), to=sid)
+
+
+async def chat_player(sid, room_id):
+    if sid_to_room.get(sid) != room_id:
+        return None
+    room = await multiplayer_service.get_room(room_id)
+    return next((p for p in (room or {}).get("players", {}).values() if p["sid"] == sid), None)
+
+
 @sio.event
 async def connect(sid, environ):
     print(f"Client connected: {sid}")
@@ -98,12 +150,12 @@ async def disconnect(sid):
         
         room = await multiplayer_service.leave_room(room_id, sid)
         if room:
-            await sio.emit('room_update', room, room=room_id)
+            await publish_room('room_update', room)
             
-        del sid_to_room[sid]
+        sid_to_room.pop(sid, None)
     print(f"Client disconnected: {sid}")
 
-@sio.event
+@game_event
 async def init_room(sid, data):
     room_id = data.get('room_id')
     config = data.get('config')
@@ -120,33 +172,39 @@ async def init_room(sid, data):
                 await sio.emit('error', {'message': 'Room is full'}, to=sid)
                 return
             
-            await sio.enter_room(sid, room_id)
-            sid_to_room[sid] = room_id
-            
             # Host Refresh Recovery: If info is present, update SID
             if is_returning:
                 room = await multiplayer_service.join_room(room_id, sid, player_info)
+                if room and "error" in room:
+                    await sio.emit('error', {'message': room['error']}, to=sid)
+                    return
                 if room:
                     existing = room # Use the updated state
                     # System message: reconnected
                     username = player_info.get("username", "UNKNOWN")
                     await emit_system_message(room_id, f"{username} re-established uplink")
 
-            await sio.emit('room_update', existing, to=sid)
+            await sio.enter_room(sid, room_id)
+            sid_to_room[sid] = room_id
+            await publish_room('room_update', existing)
+            await send_hint_history(existing, sid)
         else:
             # Create a brand new room
             room = await multiplayer_service.create_room(room_id, config)
+            if "error" in room:
+                await sio.emit('error', {'message': room['error']}, to=sid)
+                return
             await sio.enter_room(sid, room_id)
             sid_to_room[sid] = room_id
-            await sio.emit('room_update', room, room=room_id)
+            await publish_room('room_update', room)
 
-@sio.event
+@game_event
 async def join_room(sid, data):
     room_id = data.get('room_id')
     if room_id:
         room = await multiplayer_service.get_room(room_id)
         if not room:
-            # Silent skip if room doesn't exist yet to avoid race conditions with init_room
+            await sio.emit('error', {'message': 'Room not found'}, to=sid)
             return
 
         # Identity-based "Room Full" check
@@ -158,14 +216,14 @@ async def join_room(sid, data):
             await sio.emit('error', {'message': 'Room is full'}, to=sid)
             return
  
-        await sio.enter_room(sid, room_id)
-        sid_to_room[sid] = room_id
-        
         # If client sent player_info, try to re-join/update SID
         if player_info and player_id:
             updated_room = await multiplayer_service.join_room(room_id, sid, player_info)
             if updated_room and "error" not in updated_room:
-                await sio.emit('room_update', updated_room, room=room_id)
+                await sio.enter_room(sid, room_id)
+                sid_to_room[sid] = room_id
+                await publish_room('room_update', updated_room)
+                await send_hint_history(updated_room, sid)
                 
                 # System message: reconnected
                 if is_returning:
@@ -173,53 +231,64 @@ async def join_room(sid, data):
                     await emit_system_message(room_id, f"{username} re-established uplink")
                 return
             elif updated_room:
-                 room = updated_room
+                await sio.emit('error', {'message': updated_room['error']}, to=sid)
+                return
  
         # Otherwise just send the current room state
-        await sio.emit('room_update', room, to=sid)
+        await sio.enter_room(sid, room_id)
+        sid_to_room[sid] = room_id
+        await publish_room('room_update', room, to=sid)
 
-@sio.event
+@game_event
 async def setup_player(sid, data):
     room_id = data.get('room_id')
     player_info = data.get('player_info')
     if room_id and player_info:
+        if sid_to_room.get(sid) != room_id:
+            await sio.emit('error', {'message': 'Join the room before setup'}, to=sid)
+            return
         room = await multiplayer_service.register_player(room_id, sid, player_info)
         if room and "error" in room:
-            await sio.emit('error', room, to=sid)
+            await sio.emit('error', {'message': room['error']}, to=sid)
         elif room:
-            await sio.emit('room_update', room, room=room_id)
+            await publish_room('room_update', room)
             # System message: player joined
             username = player_info.get("username", "UNKNOWN")
             await emit_system_message(room_id, f"{username} joined the uplink")
+        else:
+            await sio.emit('error', {'message': 'Room not found'}, to=sid)
 
-@sio.event
+@game_event
 async def toggle_ready(sid, data):
     room_id = data.get('room_id')
     is_ready = data.get('is_ready', False)
     if room_id:
         room = await multiplayer_service.update_player_ready(room_id, sid, is_ready)
         if room:
-            await sio.emit('room_update', room, room=room_id)
+            await publish_room('room_update', room)
             if room["status"] == "playing":
-                await sio.emit('game_start', room, room=room_id)
+                await publish_room('game_start', room)
                 # System message: mission started
                 await emit_system_message(room_id, "MISSION_INITIATED — Decode the cipher")
 
-@sio.event
+@game_event
 async def submit_guess(sid, data):
     # Rate limit: 5 guesses per 10 seconds
     if await _is_rate_limited(sid, "guess", GUESS_LIMIT):
         await sio.emit('error', 'TOO_MANY_GUESSES_RETRY_LATER', to=sid)
-        return
+        return {"ok": False}
 
     room_id = data.get('room_id')
     guess = data.get('guess')
     if room_id and guess:
         room = await multiplayer_service.submit_guess(room_id, sid, guess)
+        if room and "error" in room:
+            await sio.emit('error', {'message': room['error']}, to=sid)
+            return {"ok": False}
         if room:
-            await sio.emit('room_update', room, room=room_id)
+            await publish_room('room_update', room)
             if room["status"] == "finished":
-                await sio.emit('game_over', room, room=room_id)
+                await publish_room('game_over', room)
                 # System message: game over
                 winner_pid = room.get("winner_pid")
                 if winner_pid and winner_pid in room.get("players", {}):
@@ -227,8 +296,11 @@ async def submit_guess(sid, data):
                     await emit_system_message(room_id, f"MISSION_COMPLETE — {winner_name} cracked the cipher")
                 else:
                     await emit_system_message(room_id, "MISSION_COMPLETE — Cipher decoded")
+            return {"ok": True}
+    await sio.emit('error', {'message': 'Game is not active or player session has changed'}, to=sid)
+    return {"ok": False}
 
-@sio.event
+@game_event
 async def surrender(sid, data):
     room_id = data.get('room_id')
     if room_id:
@@ -236,12 +308,12 @@ async def surrender(sid, data):
         username = _get_player_username(room_before, sid)
         room = await multiplayer_service.surrender(room_id, sid)
         if room:
-            await sio.emit('room_update', room, room=room_id)
-            await sio.emit('game_over', room, room=room_id)
+            await publish_room('room_update', room)
+            await publish_room('game_over', room)
             # System message: surrender
             await emit_system_message(room_id, f"{username} has abandoned the mission")
 
-@sio.event
+@game_event
 async def chat_message(sid, data):
     """Handle player chat messages with validation."""
     # Rate limit: 10 messages per 10 seconds
@@ -251,10 +323,14 @@ async def chat_message(sid, data):
 
     room_id = data.get('room_id')
     raw_text = data.get('text', '')
+    player = await chat_player(sid, room_id)
+    if not player or not isinstance(raw_text, str):
+        await sio.emit('error', {'message': 'Invalid chat sender or message'}, to=sid)
+        return
     text = _sanitize_text(raw_text)
     
-    sender_id = data.get('sender_id', '')
-    sender_username = data.get('sender_username', 'UNKNOWN')
+    sender_id = player['player_id']
+    sender_username = player['username']
 
     # Validation
     if not room_id or not text:
@@ -275,13 +351,20 @@ async def chat_message(sid, data):
     # Broadcast to all in room including sender
     await sio.emit('chat_message', payload, room=room_id)
 
-@sio.event
+@game_event
 async def send_emoji(sid, data):
     """Handle quick emoji reactions."""
+    if await _is_rate_limited(sid, "chat", CHAT_LIMIT):
+        await sio.emit('error', {'message': 'TOO_MANY_MESSAGES_RETRY_LATER'}, to=sid)
+        return
     room_id = data.get('room_id')
     emoji = data.get('emoji', '')
-    sender_id = data.get('sender_id', '')
-    sender_username = data.get('sender_username', 'UNKNOWN')
+    player = await chat_player(sid, room_id)
+    if not player:
+        await sio.emit('error', {'message': 'Invalid chat sender'}, to=sid)
+        return
+    sender_id = player['player_id']
+    sender_username = player['username']
 
     if not room_id or emoji not in VALID_EMOJIS:
         await sio.emit('error', {'message': 'INVALID_EMOJI'}, to=sid)
@@ -296,7 +379,7 @@ async def send_emoji(sid, data):
     }
     await sio.emit('chat_message', payload, room=room_id)
 
-@sio.event
+@game_event
 async def request_replay(sid, data):
     room_id = data.get('room_id')
     if room_id:
@@ -304,23 +387,34 @@ async def request_replay(sid, data):
         username = _get_player_username(room_before, sid)
         room = await multiplayer_service.request_replay(room_id, sid)
         if room:
-            await sio.emit('room_update', room, room=room_id)
+            await publish_room('room_update', room)
             if room["status"] == "playing":
-                await sio.emit('game_start', room, room=room_id)
+                await publish_room('game_start', room)
                 await emit_system_message(room_id, "MISSION_INITIATED — Decode the cipher")
             else:
                 # System message: rematch request
                 await emit_system_message(room_id, f"{username} requested a rematch")
 
-@sio.event
+@game_event
 async def get_hint(sid, data):
     room_id = data.get('room_id')
     revealed_indices = data.get('revealed_indices', [])
     if room_id:
         hint = await multiplayer_service.get_hint(room_id, sid, revealed_indices)
         if hint:
+            if "error" in hint:
+                await sio.emit('error', {'message': hint['error']}, to=sid)
+                return
             await sio.emit('hint_received', hint, to=sid)
             # System message: hint used
             room = await multiplayer_service.get_room(room_id)
+            await publish_room('room_update', room)
             username = _get_player_username(room, sid)
             await emit_system_message(room_id, f"{username} used an intel hint")
+
+
+@game_event
+async def room_heartbeat(sid, data):
+    room_id = sid_to_room.get(sid)
+    if room_id:
+        await multiplayer_service.keep_alive(room_id, sid)

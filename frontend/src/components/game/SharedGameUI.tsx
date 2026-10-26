@@ -40,7 +40,7 @@ export function DigitTile({
         scale: { type: "spring", stiffness: 400, damping: 17 }
       }}
       className={`
-                w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center text-xl sm:text-2xl font-mono font-bold border-2 transition-all duration-200 rounded
+                w-7 h-9 min-[400px]:w-9 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center text-xl sm:text-2xl font-mono font-bold border-2 transition-all duration-200 rounded
                 ${isHint ? "border-[#538d4e]/50 bg-[#538d4e]/10 text-[#538d4e] shadow-[0_0_10px_rgba(83,141,78,0.2)] cursor-default" : 
                   digit ? "border-[#565758] bg-[#121213] text-white" : "border-[#3a3a3c] bg-[#121213] text-[#3a3a3c]"}
                 ${isActive ? "border-[#818384]" : ""}
@@ -120,16 +120,16 @@ export function GuessRow({
           return (
             <DigitTile
                 key={i}
-                digit={hint ? hint.digit : (digits[i] || "")}
+                 digit={digits[i] || hint?.digit || ""}
                 isActive={isActive && i === digits.length}
                 isCompleted={isCompleted}
-                isHint={!!hint}
+                 isHint={!!hint && !digits[i]}
                 delay={i * 0.1}
             />
           );
         })}
       </div>
-      <div className="flex flex-wrap gap-1.5 w-16 justify-center shrink-0">
+      <div className="flex flex-wrap gap-1.5 w-10 sm:w-16 justify-center shrink-0">
         <FeedbackDots feedback={feedback} codeLength={codeLength} />
       </div>
     </motion.div>
@@ -171,6 +171,8 @@ export function Board({
   return (
     <div
       ref={scrollRef}
+      role="region"
+      aria-label="Guess board"
       className="flex-1 min-h-0 w-full overflow-y-auto no-scrollbar scroll-smooth"
     >
       <div className="flex flex-col gap-1.5 py-2">
@@ -229,10 +231,14 @@ export function Keyboard({
   onToggleStruckKey: (key: string) => void;
 }) {
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
+  const disabled = !(status === "active" || status === "playing") || timerActionBlocked || isLoading;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest("input, textarea, select, [contenteditable=true]") || e.ctrlKey || e.metaKey || e.altKey) return;
       if (!(status === "active" || status === "playing") || timerActionBlocked || isLoading) return;
+      if (/^[0-9]$/.test(e.key) || e.key === "Backspace" || e.key === "Enter") e.preventDefault();
       if (e.key >= "0" && e.key <= "9") onAddDigit(e.key);
       if (e.key === "Backspace") onRemoveDigit();
       if (e.key === "Enter") onSubmitGuess();
@@ -248,6 +254,7 @@ export function Keyboard({
           <KeyButton 
             key={k} 
             label={k} 
+            disabled={disabled}
             onClick={() => onAddDigit(k)} 
             isStruck={struckKeys.includes(k)}
             onToggleStruck={() => onToggleStruckKey(k)}
@@ -259,6 +266,7 @@ export function Keyboard({
           <KeyButton 
             key={k} 
             label={k} 
+            disabled={disabled}
             onClick={() => onAddDigit(k)} 
             isStruck={struckKeys.includes(k)}
             onToggleStruck={() => onToggleStruckKey(k)}
@@ -268,6 +276,7 @@ export function Keyboard({
       <div className="grid grid-cols-7 gap-1.5 mt-1">
         <button
           onClick={onRemoveDigit}
+          disabled={disabled}
           onMouseDown={(e) => e.preventDefault()}
           className="col-span-2 h-10 sm:h-12 bg-[#cf6679] hover:bg-[#b15668] active:bg-[#934656] text-white font-bold rounded uppercase text-[10px] tracking-widest transition-all shadow-[0_0_15px_rgba(207,102,121,0.2)] active:scale-95"
         >
@@ -306,15 +315,20 @@ function KeyButton({
   label, 
   onClick, 
   isStruck, 
-  onToggleStruck 
+  onToggleStruck,
+  disabled,
 }: { 
   label: string; 
   onClick: () => void;
   isStruck: boolean;
   onToggleStruck: () => void;
+  disabled: boolean;
 }) {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const [longPressTriggered, setLongPressTriggered] = useState(false);
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
 
   const startLongPress = () => {
     setLongPressTriggered(false);
@@ -332,12 +346,14 @@ function KeyButton({
 
   return (
     <button
+      disabled={disabled}
       onClick={() => {
         if (!longPressTriggered) {
           onClick();
         }
       }}
-      onMouseDown={(e) => {
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
         e.preventDefault();
         startLongPress();
       }}
@@ -345,9 +361,9 @@ function KeyButton({
         e.preventDefault();
         onToggleStruck();
       }}
-      onTouchStart={startLongPress}
-      onTouchEnd={endLongPress}
-      onMouseUp={endLongPress}
+      onPointerUp={endLongPress}
+      onPointerLeave={endLongPress}
+      onPointerCancel={endLongPress}
       className={`
         relative h-10 sm:h-12 flex items-center justify-center font-bold font-mono text-lg rounded transition-all active:scale-90 select-none
         ${isStruck 

@@ -15,6 +15,7 @@ interface GameStore {
   codeLength: number;
   attemptsRemaining: number | null;
   timer: number;
+  startedAt: number | null;
   error: string | null;
   view: 'landing' | 'game';
   isLoading: boolean;
@@ -44,6 +45,7 @@ interface GameStore {
   calculateScore: () => number;
   toggleStruckKey: (key: string) => void;
   resignGame: () => Promise<void>;
+  expireGame: () => Promise<void>;
 }
 
 export const useGameStore = create<GameStore>()((set, get) => ({
@@ -55,6 +57,7 @@ export const useGameStore = create<GameStore>()((set, get) => ({
   codeLength: 4,
   attemptsRemaining: null,
   timer: 0,
+  startedAt: null,
   error: null,
   view: "landing",
   isLoading: false,
@@ -78,12 +81,19 @@ export const useGameStore = create<GameStore>()((set, get) => ({
   },
 
   startNewGame: async (mode = "classic", length = 4, maxAttempts = 20, allowRepeats = true, levelLabel = "ROOKIE") => {
-    const { infiniteMode } = get();
+    const { infiniteMode, timerLimit, isLoading } = get();
+    if (isLoading) return;
     set({ 
         isLoading: true, 
         error: null, 
         view: "game", 
         timer: 0, 
+        startedAt: null,
+        gameId: null,
+        status: "active",
+        guesses: [],
+        currentGuess: "",
+        codeLength: length,
         currentLevelLabel: levelLabel,
         revealedCode: null,
         hintsRevealed: [],
@@ -95,7 +105,8 @@ export const useGameStore = create<GameStore>()((set, get) => ({
         mode, 
         length, 
         infiniteMode ? undefined : maxAttempts, 
-        allowRepeats
+        allowRepeats,
+        timerLimit ?? undefined
       );
       set({
         gameId: data.game_id,
@@ -106,33 +117,34 @@ export const useGameStore = create<GameStore>()((set, get) => ({
         currentGuess: "",
         status: "active",
         isLoading: false,
+        startedAt: Date.now(),
       });
     } catch (err) {
-      set({ error: (err as Error).message, isLoading: false });
+      set({ error: (err as Error).message, isLoading: false, view: "landing" });
     }
   },
 
   addDigit: (digit: string) => {
-    const { currentGuess, codeLength, status } = get();
-    if (status !== "active" || currentGuess.length >= codeLength) return;
+    const { currentGuess, codeLength, status, isLoading, timer, timerLimit } = get();
+    if (status !== "active" || isLoading || (timerLimit !== null && timer >= timerLimit) || currentGuess.length >= codeLength || !/^[0-9]$/.test(digit)) return;
     set({ currentGuess: currentGuess + digit });
   },
 
   removeDigit: () => {
-    const { currentGuess, status } = get();
-    if (status !== "active" || currentGuess.length === 0) return;
+    const { currentGuess, status, isLoading } = get();
+    if (status !== "active" || isLoading || currentGuess.length === 0) return;
     set({ currentGuess: currentGuess.slice(0, -1) });
   },
 
   submitGuess: async () => {
-    const { gameId, currentGuess, codeLength, status, isLoading } = get();
-    if (status !== "active" || currentGuess.length !== codeLength || !gameId || isLoading) return;
+    const { gameId, currentGuess, codeLength, status, isLoading, timerLimit, timer } = get();
+    if (status !== "active" || currentGuess.length !== codeLength || !gameId || isLoading || (timerLimit !== null && timer >= timerLimit)) return;
 
     set({ isLoading: true, error: null });
     try {
       const data = await api.submitGuess(gameId, currentGuess);
       set((state: GameStore) => ({
-        guesses: [...state.guesses, { guess: currentGuess, feedback: data.shuffled_feedback }],
+        guesses: data.shuffled_feedback.length ? [...state.guesses, { guess: currentGuess, feedback: data.shuffled_feedback }] : state.guesses,
         currentGuess: "",
         status: data.status,
         revealedCode: data.secret_code || null,
@@ -196,6 +208,7 @@ export const useGameStore = create<GameStore>()((set, get) => ({
     set({ isLoading: true, error: null });
     try {
         const data = await api.surrender(gameId);
+        set({ status: "surrendered", revealedCode: data.secret_code, isLoading: false });
         // Post to leaderboard as resigned
         await api.postScore({
             username,
@@ -208,13 +221,20 @@ export const useGameStore = create<GameStore>()((set, get) => ({
             infiniteMode
         });
         
-        set({ 
-            status: "surrendered",
-            revealedCode: data.secret_code,
-            isLoading: false
-        });
     } catch (err) {
-        set({ error: (err as Error).message, isLoading: false });
+        if (get().gameId === gameId) set({ error: (err as Error).message, isLoading: false });
+    }
+  },
+
+  expireGame: async () => {
+    const { gameId, status, isLoading } = get();
+    if (!gameId || status !== "active" || isLoading) return;
+    set({ isLoading: true });
+    try {
+      const data = await api.expire(gameId);
+      set({ status: data.status, revealedCode: data.secret_code, isLoading: false });
+    } catch (err) {
+      set({ error: (err as Error).message, isLoading: false });
     }
   },
 
