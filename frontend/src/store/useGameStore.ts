@@ -1,5 +1,12 @@
 import { create } from "zustand";
 import { GameMode, GameStatus, api } from "@/lib/api";
+import {
+  createOfflineGame,
+  getOfflineHint,
+  isExpired,
+  OfflineGameState,
+  submitOfflineGuess,
+} from "@/lib/offlineGame";
 
 interface Guess {
   guess: string;
@@ -28,6 +35,7 @@ interface GameStore {
   hintsRevealed: { position: number; digit: string }[];
   hintsUsed: number;
   struckKeys: string[];
+  offlineGame: OfflineGameState | null;
 
   // Actions
   setView: (view: 'landing' | 'game') => void;
@@ -48,30 +56,62 @@ interface GameStore {
   expireGame: () => Promise<void>;
 }
 
+const OFFLINE_GAME_KEY = "codebreaker_offline_game";
+
+function readOfflineGame(): OfflineGameState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(OFFLINE_GAME_KEY);
+    return raw ? (JSON.parse(raw) as OfflineGameState) : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistOfflineGame(game: OfflineGameState | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (game) localStorage.setItem(OFFLINE_GAME_KEY, JSON.stringify(game));
+    else localStorage.removeItem(OFFLINE_GAME_KEY);
+  } catch {
+    // Gameplay remains available when browser storage is restricted.
+  }
+}
+
+const savedOfflineGame = readOfflineGame();
+
 export const useGameStore = create<GameStore>()((set, get) => ({
-  gameId: null,
-  status: "active",
+  gameId: savedOfflineGame?.gameId ?? null,
+  status: savedOfflineGame?.status ?? "active",
   mode: "classic",
-  guesses: [],
+  guesses: savedOfflineGame?.guesses ?? [],
   currentGuess: "",
-  codeLength: 4,
-  attemptsRemaining: null,
-  timer: 0,
-  startedAt: null,
+  codeLength: savedOfflineGame?.codeLength ?? 4,
+  attemptsRemaining: savedOfflineGame?.maxAttempts === null || !savedOfflineGame ? null : Math.max(0, savedOfflineGame.maxAttempts - savedOfflineGame.attempts),
+  timer: savedOfflineGame ? Math.floor((Date.now() - savedOfflineGame.createdAt) / 1000) : 0,
+  startedAt: savedOfflineGame?.createdAt ?? null,
   error: null,
-  view: "landing",
+  view: savedOfflineGame ? "game" : "landing",
   isLoading: false,
   username: "OPERATIVE_GHOST",
   currentLevelLabel: "ROOKIE",
   timerLimit: null,
   infiniteMode: false,
   menuState: 'main',
-  revealedCode: null,
-  hintsRevealed: [],
-  hintsUsed: 0,
+  revealedCode: savedOfflineGame?.status === "active" ? null : savedOfflineGame?.secretCode ?? null,
+  hintsRevealed: savedOfflineGame?.revealedIndices.map((position) => ({ position, digit: savedOfflineGame.secretCode[position] })) ?? [],
+  hintsUsed: savedOfflineGame?.revealedIndices.length ?? 0,
   struckKeys: [],
+  offlineGame: savedOfflineGame,
 
-  setView: (view) => set({ view }),
+  setView: (view) => {
+    if (view === "landing") {
+      persistOfflineGame(null);
+      set({ view, offlineGame: null });
+      return;
+    }
+    set({ view });
+  },
 
   setUsername: (username) => {
     set({ username });
@@ -98,7 +138,8 @@ export const useGameStore = create<GameStore>()((set, get) => ({
         revealedCode: null,
         hintsRevealed: [],
         hintsUsed: 0,
-        struckKeys: []
+        struckKeys: [],
+        offlineGame: null,
     });
     try {
       const data = await api.createGame(
@@ -109,6 +150,7 @@ export const useGameStore = create<GameStore>()((set, get) => ({
         timerLimit ?? undefined
       );
       set({
+        offlineGame: null,
         gameId: data.game_id,
         codeLength: data.code_length,
         mode: data.mode as GameMode,
@@ -119,8 +161,23 @@ export const useGameStore = create<GameStore>()((set, get) => ({
         isLoading: false,
         startedAt: Date.now(),
       });
-    } catch (err) {
-      set({ error: (err as Error).message, isLoading: false, view: "landing" });
+    } catch {
+      const offlineGame = createOfflineGame(
+        length,
+        infiniteMode ? undefined : maxAttempts,
+        allowRepeats,
+        timerLimit ?? undefined,
+      );
+      persistOfflineGame(offlineGame);
+      set({
+        gameId: offlineGame.gameId,
+        offlineGame,
+        attemptsRemaining: offlineGame.maxAttempts,
+        isLoading: false,
+        error: "OFFLINE_MODE // LOCAL_MISSION_ACTIVE",
+        view: "game",
+        startedAt: offlineGame.createdAt,
+      });
     }
   },
 
@@ -142,13 +199,33 @@ export const useGameStore = create<GameStore>()((set, get) => ({
 
     set({ isLoading: true, error: null });
     try {
-      const data = await api.submitGuess(gameId, currentGuess);
+      const offlineGame = get().offlineGame;
+      let feedback: string[];
+      let status: GameStatus;
+      let revealedCode: string | undefined;
+      let attemptsRemaining: number | null | undefined;
+      if (offlineGame) {
+        const result = submitOfflineGuess(offlineGame, currentGuess);
+        feedback = result.feedback;
+        status = result.status;
+        revealedCode = result.secretCode;
+        attemptsRemaining = result.attemptsRemaining;
+      } else {
+        const result = await api.submitGuess(gameId, currentGuess);
+        feedback = result.shuffled_feedback;
+        status = result.status;
+        revealedCode = result.secret_code;
+        attemptsRemaining = result.attempts_remaining;
+      }
+      if (offlineGame) persistOfflineGame(offlineGame);
       set((state: GameStore) => ({
-        guesses: data.shuffled_feedback.length ? [...state.guesses, { guess: currentGuess, feedback: data.shuffled_feedback }] : state.guesses,
+        guesses: offlineGame
+          ? offlineGame.guesses
+          : (feedback.length ? [...state.guesses, { guess: currentGuess, feedback }] : state.guesses),
         currentGuess: "",
-        status: data.status,
-        revealedCode: data.secret_code || null,
-        attemptsRemaining: data.attempts_remaining ?? null,
+        status,
+        revealedCode: revealedCode || null,
+        attemptsRemaining: attemptsRemaining ?? null,
         isLoading: false,
       }));
     } catch (err) {
@@ -179,9 +256,13 @@ export const useGameStore = create<GameStore>()((set, get) => ({
     }
 
     set({ isLoading: true, error: null });
-    try {
+      try {
         const revealedIndices = hintsRevealed.map(h => h.position);
-        const data = await api.getHint(gameId, revealedIndices, position);
+        const offlineGame = get().offlineGame;
+        const data = offlineGame
+          ? getOfflineHint(offlineGame)
+          : await api.getHint(gameId, revealedIndices, position);
+        if (offlineGame) persistOfflineGame(offlineGame);
         set((state: GameStore) => ({
             hintsRevealed: [...state.hintsRevealed, data],
             hintsUsed: state.hintsUsed + 1,
@@ -207,7 +288,10 @@ export const useGameStore = create<GameStore>()((set, get) => ({
 
     set({ isLoading: true, error: null });
     try {
-        const data = await api.surrender(gameId);
+        const offlineGame = get().offlineGame;
+        const data = offlineGame
+          ? (offlineGame.status = "surrendered", persistOfflineGame(offlineGame), { secret_code: offlineGame.secretCode })
+          : await api.surrender(gameId);
         set({ status: "surrendered", revealedCode: data.secret_code, isLoading: false });
         // Post to leaderboard as resigned
         await api.postScore({
@@ -231,8 +315,19 @@ export const useGameStore = create<GameStore>()((set, get) => ({
     if (!gameId || status !== "active" || isLoading) return;
     set({ isLoading: true });
     try {
-      const data = await api.expire(gameId);
-      set({ status: data.status, revealedCode: data.secret_code, isLoading: false });
+      const offlineGame = get().offlineGame;
+      if (offlineGame) {
+        if (!isExpired(offlineGame)) {
+          set({ isLoading: false });
+          return;
+        }
+        offlineGame.status = "failed";
+        persistOfflineGame(offlineGame);
+        set({ status: "failed", revealedCode: offlineGame.secretCode, isLoading: false });
+      } else {
+        const data = await api.expire(gameId);
+        set({ status: data.status, revealedCode: data.secret_code, isLoading: false });
+      }
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
     }

@@ -49,9 +49,9 @@ test("two tabs register, play, chat, refresh, reconnect and rematch", async ({ p
   await expect(page.getByText("01", { exact: true })).toBeVisible();
 
   await context.setOffline(true);
-  await expect(page.getByRole("status")).toContainText("Connecting");
+  await expect(page.getByText("Connecting to game server…", { exact: true })).toBeVisible();
   await context.setOffline(false);
-  await expect(page.getByRole("status")).toBeHidden({ timeout: 15000 });
+  await expect(page.getByText("Connecting to game server…", { exact: true })).toBeHidden({ timeout: 15000 });
 
   await page.getByRole("button", { name: "SURRENDER", exact: true }).click();
   await page.getByRole("button", { name: "CONFIRM_RESIGNATION" }).click();
@@ -130,7 +130,7 @@ test("single-player completes a real API guess, hint and surrender flow", async 
   await page.getByRole("button", { name: "DEPLOY_MODULE" }).click();
   await expect(page.getByRole("button", { name: "SUBMIT", exact: true })).toBeVisible();
   // Standard rookie codes have unique digits, so 000 cannot accidentally win.
-  await page.keyboard.type("000");
+  await page.getByRole("button", { name: "0", exact: true }).click({ clickCount: 3 });
   await page.getByRole("button", { name: "SUBMIT", exact: true }).click();
   await expect(page.getByText("24", { exact: true })).toBeVisible();
   const hintResponse = page.waitForResponse(response => response.url().endsWith("/hint"));
@@ -139,4 +139,46 @@ test("single-player completes a real API guess, hint and surrender flow", async 
   await page.getByRole("button", { name: "[SURRENDER]", exact: true }).click();
   await expect(page.getByText("MISSION_FAILED", { exact: true })).toBeVisible();
   await expect(page.getByText("Target Cipher", { exact: true })).toBeVisible();
+});
+
+test("single-player falls back to a persistent offline mission", async ({ page }) => {
+  await page.addInitScript(() => {
+    Math.random = () => 0.999;
+  });
+  await page.route("**/game/new", route => route.abort("failed").catch(() => undefined));
+  await page.goto("/");
+  await page.getByRole("button", { name: /SINGLE_PLAYER/ }).click();
+  await page.getByRole("button", { name: /STANDARD_LEVELS/ }).click();
+  await page.getByRole("button", { name: "DEPLOY_MODULE" }).click();
+  await expect(page.getByText(/OFFLINE_MODE/)).toBeVisible();
+  await page.getByRole("button", { name: "0", exact: true }).click({ clickCount: 3 });
+  await page.getByRole("button", { name: "SUBMIT", exact: true }).click();
+  await expect(page.getByText("24", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "[GET_HINT]", exact: true })).toBeEnabled();
+
+  await page.reload();
+  await expect(page.getByText("24", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "[SURRENDER]", exact: true }).click();
+  await expect(page.getByText("MISSION_FAILED", { exact: true })).toBeVisible();
+  await expect(page.getByText("Target Cipher", { exact: true })).toBeVisible();
+});
+
+test("PWA manifest and service worker are available", async ({ page, request }) => {
+  const manifest = await request.get("/manifest.webmanifest");
+  expect(manifest.ok()).toBe(true);
+  const manifestJson = await manifest.json();
+  expect(manifestJson.display).toBe("standalone");
+  expect(manifestJson.icons[0].src).toBe("/app-icon.png");
+  const worker = await request.get("/sw.js");
+  expect(worker.ok()).toBe(true);
+  expect(await worker.text()).toContain("codebreaker-pwa-v1");
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await page.evaluate(async () => {
+    if ("serviceWorker" in navigator) await navigator.serviceWorker.ready;
+  });
+  await page.reload();
+  await page.context().setOffline(true);
+  await page.reload();
+  await expect(page.getByText("CODEBREAKER", { exact: true }).first()).toBeVisible();
 });

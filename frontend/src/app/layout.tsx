@@ -16,8 +16,16 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Codebreaker",
   description: "A logic puzzle game similar to Mastermind",
+  applicationName: "Codebreaker",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Codebreaker",
+  },
+  formatDetection: { telephone: false },
   icons: {
-    icon: "/icon.png",
+    icon: "/app-icon.png",
+    apple: "/app-icon.png",
   },
 };
 

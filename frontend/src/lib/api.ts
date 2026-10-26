@@ -33,6 +33,17 @@ export interface LeaderboardEntry {
   timestamp: string;
 }
 
+function saveLocalScore(score: Omit<LeaderboardEntry, "timestamp">): LeaderboardEntry {
+  const entry: LeaderboardEntry = { ...score, timestamp: new Date().toISOString() };
+  if (typeof window !== "undefined") {
+    try {
+      const stored = api.getLocalLeaderboard();
+      localStorage.setItem("codebreaker_leaderboard", JSON.stringify([...stored, entry].slice(-100)));
+    } catch { /* Private browsing may deny storage; the completed game is still shown. */ }
+  }
+  return entry;
+}
+
 export const api = {
   async createGame(mode: GameMode = "classic", length: number = 4, maxAttempts?: number, allowRepeats: boolean = true, timeLimit?: number): Promise<NewGameResponse> {
     const response = await fetch(`${API_BASE_URL}/game/new`, {
@@ -101,13 +112,18 @@ export const api = {
   },
 
   async postScore(score: Omit<LeaderboardEntry, "timestamp">): Promise<LeaderboardEntry> {
-    const response = await fetch(`${API_BASE_URL}/leaderboard`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...score, timer_mode: score.timerMode, infinite_mode: score.infiniteMode }),
-    });
-    if (!response.ok) throw new Error("Failed to post score");
-    const entry = normalizeEntry(await response.json());
+    let entry: LeaderboardEntry;
+    try {
+      const response = await fetch(`${API_BASE_URL}/leaderboard`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...score, timer_mode: score.timerMode, infinite_mode: score.infiniteMode }),
+      });
+      if (!response.ok) return saveLocalScore(score);
+      entry = normalizeEntry(await response.json());
+    } catch {
+      return saveLocalScore(score);
+    }
     // Also persist to localStorage
     try {
       const stored = api.getLocalLeaderboard();
