@@ -22,10 +22,12 @@ import random
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from app.socket_manager import app_sio
+from app.socket_manager import app_sio, configure_socket_manager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await multiplayer_service.initialize()
+    configure_socket_manager(multiplayer_service.storage_backend == "redis")
     yield
     await multiplayer_service.redis_client.aclose()
 
@@ -64,7 +66,8 @@ async def root():
         "message": "Codebreaker API - Tactical Uplink Active",
         "status": "online",
         "docs": "/docs",
-        "health": "/wakeup"
+        "health": "/health",
+        "readiness": "/ready"
     }
 
 @app.post("/game/new", response_model=NewGameResponse)
@@ -207,3 +210,20 @@ async def wakeup_check():
 async def health_check():
     """Render health probe; deliberately does not depend on Redis."""
     return {"status": "ok"}
+
+
+@app.get("/ready")
+async def readiness_check():
+    """Report whether durable Redis-backed features are available."""
+    if multiplayer_service.storage_backend != "redis":
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "storage": "memory", "detail": "Redis is unavailable"},
+        )
+    return {"status": "ready", "storage": "redis"}
+
+
+@app.get("/v1/models")
+async def models_probe():
+    """Compatibility response for generic service monitors."""
+    return {"object": "list", "data": []}

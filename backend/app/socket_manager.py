@@ -13,13 +13,22 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 from app.services.multiplayer_service import multiplayer_service
 
-# Create a Socket.IO AsyncServer
-mgr = socketio.AsyncRedisManager(REDIS_URL)
+# Start with an in-process manager. The application lifespan upgrades this to
+# Redis pub/sub when Redis is available, which keeps local startup quiet.
+mgr = socketio.AsyncManager()
 sio = socketio.AsyncServer(
     async_mode='asgi',
     cors_allowed_origins='*',
     client_manager=mgr
 )
+
+
+def configure_socket_manager(use_redis: bool):
+    """Select cross-process Redis rooms or the local single-process manager."""
+    global mgr
+    mgr = socketio.AsyncRedisManager(REDIS_URL) if use_redis else socketio.AsyncManager()
+    mgr.set_server(sio)
+    sio.manager = mgr
 
 # Combine Socket.IO server with the FastAPI app
 app_sio = socketio.ASGIApp(sio)
@@ -74,9 +83,9 @@ async def _is_rate_limited(sid: str, action: str, limit: int) -> bool:
     """Check if an action is rate limited for a specific SID using Redis."""
     key = f"rate_limit:{action}:{sid}"
     try:
-        current = await mgr.redis.incr(key)
+        current = await multiplayer_service.redis_client.incr(key)
         if current == 1:
-            await mgr.redis.expire(key, RATE_LIMIT_WINDOW)
+            await multiplayer_service.redis_client.expire(key, RATE_LIMIT_WINDOW)
         
         return current > limit
     except Exception as e:

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from functools import wraps
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
+from app.services.memory_store import MemoryStore
 
 load_dotenv()
 
@@ -25,6 +26,19 @@ def room_transaction(method):
 class MultiplayerService:
     def __init__(self):
         self.redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+        self.memory_client = MemoryStore()
+        self.storage_backend = "redis"
+
+    async def initialize(self):
+        """Use Redis when available and a safe local fallback otherwise."""
+        try:
+            await self.redis_client.ping()
+            self.storage_backend = "redis"
+        except Exception as exc:
+            await self.redis_client.aclose()
+            self.redis_client = self.memory_client
+            self.storage_backend = "memory"
+            print(f"Redis unavailable; using process-local storage: {exc}")
 
     def _get_room_key(self, room_id: str) -> str:
         return f"room:{room_id}"

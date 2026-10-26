@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 
 from app.main import app, limiter
 from app.services.game_service import GameService
+from app.services.memory_store import MemoryStore
+from app.services.multiplayer_service import multiplayer_service
 
 
 @pytest.fixture
@@ -41,6 +43,39 @@ def test_health_probe(client):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_readiness_and_models_probes(client):
+    assert client.get("/ready").status_code == 200
+    response = client.get("/v1/models")
+    assert response.status_code == 200
+    assert response.json() == {"object": "list", "data": []}
+
+
+def test_readiness_reports_degraded_memory_storage(client):
+    original_backend = multiplayer_service.storage_backend
+    multiplayer_service.storage_backend = "memory"
+    try:
+        response = client.get("/ready")
+        assert response.status_code == 503
+        assert response.json()["storage"] == "memory"
+    finally:
+        multiplayer_service.storage_backend = original_backend
+
+
+def test_game_api_works_with_memory_storage(client):
+    original_client = multiplayer_service.redis_client
+    original_backend = multiplayer_service.storage_backend
+    multiplayer_service.redis_client = MemoryStore()
+    multiplayer_service.storage_backend = "memory"
+    try:
+        game_id = new_game(client)
+        response = client.post(f"/game/{game_id}/guess", json={"guess": "1123"})
+        assert response.status_code == 200
+        assert response.json()["status"] == "solved"
+    finally:
+        multiplayer_service.redis_client = original_client
+        multiplayer_service.storage_backend = original_backend
 
 
 @pytest.mark.parametrize("config", [{"code_length": 0}, {"code_length": 11}, {"max_attempts": 0}, {"time_limit": -1}])
