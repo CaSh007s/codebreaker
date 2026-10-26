@@ -25,7 +25,7 @@ test("two tabs register, play, chat, refresh, reconnect and rematch", async ({ p
     page.getByRole("button", { name: "READY_TO_DEPLOY" }).click(),
     opponent.getByRole("button", { name: "READY_TO_DEPLOY" }).click(),
   ]);
-  await expect(page.getByText("LOCAL_OPERATIVE")).toBeVisible();
+  await expect(page.getByText(/LOCAL_OPERATIVE|RECONNECTED/).first()).toBeVisible();
   await expect(page.getByText("REMOTE_ENTITY")).toBeVisible();
   await expect(opponent.getByText("LOCAL_OPERATIVE")).toBeVisible();
   expect(sent.filter(frame => frame.includes('"init_room"'))).toHaveLength(1);
@@ -43,7 +43,7 @@ test("two tabs register, play, chat, refresh, reconnect and rematch", async ({ p
   expect(sent.filter(frame => frame.includes('"submit_guess"'))).toHaveLength(submissions);
 
   await page.reload();
-  await expect(page.getByText("LOCAL_OPERATIVE")).toBeVisible();
+  await expect(page.getByText(/LOCAL_OPERATIVE|RECONNECTED/).first()).toBeVisible();
   await expect(page.getByText("Bravo", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /HINT_LIMIT_REACHED/ })).toBeDisabled();
   await expect(page.getByText("01", { exact: true })).toBeVisible();
@@ -62,6 +62,26 @@ test("two tabs register, play, chat, refresh, reconnect and rematch", async ({ p
   await expect(page.getByText("MISSION_ABANDONED", { exact: true })).toBeHidden();
   await expect(page.getByRole("button", { name: /GET_HINT/ })).toBeEnabled();
   expect(errors).toEqual([]);
+});
+
+test("lobby and player profiles show disconnect and reconnect states", async ({ page }) => {
+  const room = `presence-${Date.now()}`;
+  await page.goto(`/multiplayer/${room}?mode=standard&level=3&repeats=false`);
+  await setup(page, "Host");
+
+  const remoteContext = await page.context().browser()!.newContext();
+  const remote = await remoteContext.newPage();
+  await remote.goto(`/multiplayer/${room}`);
+  await setup(remote, "Remote");
+  await expect(page.getByText("Remote", { exact: true })).toBeVisible();
+  await expect(page.getByText("CONNECTED", { exact: true }).first()).toBeVisible();
+
+  await remoteContext.setOffline(true);
+  await expect(page.getByText("DISCONNECTED", { exact: true })).toBeVisible({ timeout: 15000 });
+
+  await remoteContext.setOffline(false);
+  await expect(page.getByText("RECONNECTED", { exact: true })).toBeVisible({ timeout: 15000 });
+  await remoteContext.close();
 });
 
 test("single-player timer ends the game and shows its answer", async ({ page }) => {
@@ -171,7 +191,7 @@ test("PWA manifest and service worker are available", async ({ page, request }) 
   expect(manifestJson.icons[0].src).toBe("/app-icon.png");
   const worker = await request.get("/sw.js");
   expect(worker.ok()).toBe(true);
-  expect(await worker.text()).toContain("codebreaker-pwa-v1");
+  expect(await worker.text()).toContain("codebreaker-pwa-v2");
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await page.evaluate(async () => {

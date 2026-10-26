@@ -116,6 +116,7 @@ async def publish_room(event, room, *, to=None):
     for player in public.get("players", {}).values():
         player.pop("sid", None)
         player.pop("token", None)
+        player.setdefault("connection_status", "connected" if player.get("connected", False) else "disconnected")
         player["progress"].pop("hints", None)
     await sio.emit(event, public, to=to, room=None if to else room["room_id"])
 
@@ -141,15 +142,10 @@ async def connect(sid, environ):
 async def disconnect(sid):
     room_id = sid_to_room.get(sid)
     if room_id:
-        room_before = await multiplayer_service.get_room(room_id)
-        username = _get_player_username(room_before, sid)
-        
-        # We still notify the room even if leave_room doesn't change anything
-        # as the player is still physically gone from the socket.
-        await emit_system_message(room_id, f"{username} lost connection")
-        
         room = await multiplayer_service.leave_room(room_id, sid)
         if room:
+            username = _get_player_username(room, sid)
+            await emit_system_message(room_id, f"{username} lost connection")
             await publish_room('room_update', room)
             
         sid_to_room.pop(sid, None)
@@ -180,12 +176,12 @@ async def init_room(sid, data):
                     return
                 if room:
                     existing = room # Use the updated state
-                    # System message: reconnected
-                    username = player_info.get("username", "UNKNOWN")
-                    await emit_system_message(room_id, f"{username} re-established uplink")
 
             await sio.enter_room(sid, room_id)
             sid_to_room[sid] = room_id
+            if is_returning:
+                username = player_info.get("username", "UNKNOWN")
+                await emit_system_message(room_id, f"{username} re-established uplink")
             await publish_room('room_update', existing)
             await send_hint_history(existing, sid)
         else:

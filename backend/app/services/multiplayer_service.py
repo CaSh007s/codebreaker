@@ -37,7 +37,7 @@ class MultiplayerService:
         key = self._get_room_key(room_id)
         room_data["revision"] = room_data.get("revision", 0) + 1
         # Connected clients renew this lease via room_heartbeat, including idle lobbies.
-        await self.redis_client.setex(key, ROOM_EXPIRY, json.dumps(room_data))
+        await self.redis_client.set(key, json.dumps(room_data), ex=ROOM_EXPIRY)
 
     @room_transaction
     async def create_room(self, room_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -83,7 +83,9 @@ class MultiplayerService:
             if not secrets.compare_digest(room["players"][player_id].get("token", ""), player_info.get("token", "")):
                 return {"error": "Invalid player session"}
             room["players"][player_id]["sid"] = sid
+            was_connected = room["players"][player_id].get("connected", False)
             room["players"][player_id]["connected"] = True
+            room["players"][player_id]["connection_status"] = "reconnected" if not was_connected else "connected"
             await self.save_room(room_id, room)
             return room
 
@@ -123,7 +125,9 @@ class MultiplayerService:
             if not secrets.compare_digest(room["players"][player_id].get("token", ""), token):
                 return {"error": "Invalid player session"}
             room["players"][player_id]["sid"] = sid
+            was_connected = room["players"][player_id].get("connected", False)
             room["players"][player_id]["connected"] = True
+            room["players"][player_id]["connection_status"] = "reconnected" if not was_connected else "connected"
             room["players"][player_id]["username"] = player_info.get("username", room["players"][player_id]["username"])
             room["players"][player_id]["avatar"] = player_info.get("avatar", room["players"][player_id]["avatar"])
             await self.save_room(room_id, room)
@@ -140,6 +144,7 @@ class MultiplayerService:
             "avatar": player_info.get("avatar", ""),
             "is_ready": False,
             "connected": True,
+            "connection_status": "connected",
             "progress": {"bulls": 0, "cows": 0, "attempts": 0, "guesses": [], "hints_used": 0, "last_points_earned": 0},
             "points": 0
         }
@@ -152,12 +157,14 @@ class MultiplayerService:
         if room:
             # Find the player by SID
             player_id = next((pid for pid, p in room["players"].items() if p["sid"] == sid), None)
-            if player_id:
-                # Mark as disconnected but keep in dict for recovery
-                room["players"][player_id]["connected"] = False
-                if room["status"] == "waiting":
-                    room["players"][player_id]["is_ready"] = False
-                await self.save_room(room_id, room)
+            if not player_id:
+                return None
+            # A stale socket must never mark a newer connection as disconnected.
+            room["players"][player_id]["connected"] = False
+            room["players"][player_id]["connection_status"] = "disconnected"
+            if room["status"] == "waiting":
+                room["players"][player_id]["is_ready"] = False
+            await self.save_room(room_id, room)
             return room
         return None
 
@@ -200,6 +207,7 @@ class MultiplayerService:
             
             # Reset player progress but keep hints_used and points tracking
             for pid in room["players"]:
+                room["players"][pid]["connection_status"] = "connected" if room["players"][pid].get("connected", False) else "disconnected"
                 # Initialize hints_used if missing
                 room["players"][pid]["progress"] = {
                     "bulls": 0, 

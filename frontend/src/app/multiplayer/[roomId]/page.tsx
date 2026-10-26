@@ -18,6 +18,7 @@ import { useChatStore } from "@/store/useChatStore";
 interface Player {
   player_id: string; // Persistent ID
   connected: boolean;
+  connection_status?: "connected" | "disconnected" | "reconnected";
   username: string;
   avatar: string;
   is_ready: boolean;
@@ -420,7 +421,7 @@ export default function MultiplayerRoom() {
               className="w-full max-w-5xl mx-auto flex-1 flex flex-col min-h-0"
             >
               <GameView
-                key={roomData.started_at}
+                key={`${roomData.started_at ?? "unknown-round"}-${roomData.status}`}
                 roomData={roomData}
                 mySid={playerId} // Use persistent playerId for identification in UI
                 onSubmitGuess={submitGuess}
@@ -776,9 +777,12 @@ function Lobby({
         {[0, 1].map((idx) => {
           const player = players[idx];
           return (
-            <div
-              key={idx}
-              className={`relative aspect-square border-2 rounded-2xl flex flex-col items-center justify-center p-4 transition-all gap-3 ${player ? "border-[#538d4e] bg-[#538d4e]/5" : "border-[#3a3a3c] border-dashed opacity-50"}`}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.2 }}
+              key={player?.player_id ?? `empty-${idx}`}
+                    className={`relative aspect-square border-2 rounded-2xl flex flex-col items-center justify-center p-4 transition-all gap-3 ${player ? player.connected ? "border-[#538d4e] bg-[#538d4e]/5" : "border-red-500/50 bg-red-500/5 grayscale" : "border-[#3a3a3c] border-dashed opacity-50"}`}
             >
               {player ? (
                 <>
@@ -792,9 +796,9 @@ function Lobby({
                     {player.player_id === myPlayerId ? "YOU" : player.username}
                   </span>
                   <div
-                    className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-tighter ${player.is_ready ? "bg-[#538d4e] text-black font-bold" : "bg-white/10 text-slate-400"}`}
+                    className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-tighter ${!player.connected ? "bg-red-500/20 text-red-300" : player.connection_status === "reconnected" ? "bg-blue-400 text-black font-bold" : player.is_ready ? "bg-[#538d4e] text-black font-bold" : "bg-white/10 text-slate-400"}`}
                   >
-            {!player.connected ? "RECONNECTING" : player.is_ready ? "READY" : "PENDING"}
+                    {!player.connected ? "DISCONNECTED" : player.connection_status === "reconnected" ? "RECONNECTED" : player.is_ready ? "READY" : "CONNECTED"}
                   </div>
                 </>
               ) : (
@@ -814,7 +818,7 @@ function Lobby({
                   </svg>
                 </div>
               )}
-            </div>
+            </motion.div>
           );
         })}
       </div>
@@ -1013,9 +1017,9 @@ function GameView({
 
           return (
             <motion.div
-              key={idx}
+              key={p.player_id}
               layout
-              className={`relative p-4 rounded-2xl border-2 transition-all duration-500 bg-[#121213] ${glowClass}`}
+              className={`relative p-4 rounded-2xl border-2 transition-all duration-500 bg-[#121213] ${glowClass} ${!p.connected ? "border-red-500/60 opacity-70 grayscale" : ""}`}
             >
               <div className="flex items-center gap-3 mb-3">
                 <div className="relative">
@@ -1032,7 +1036,7 @@ function GameView({
                     {p.username}
                   </p>
                   <p className="text-[#565758] font-mono text-[8px] uppercase tracking-widest">
-                    {p.player_id === mySid ? "LOCAL_OPERATIVE" : "REMOTE_ENTITY"}
+                    {!p.connected ? "DISCONNECTED" : p.connection_status === "reconnected" ? "RECONNECTED" : p.player_id === mySid ? "LOCAL_OPERATIVE" : "REMOTE_ENTITY"}
                   </p>
                 </div>
               </div>

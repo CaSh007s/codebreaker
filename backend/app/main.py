@@ -201,3 +201,9 @@ async def add_to_leaderboard(request: Request, lb_req: LeaderboardRequest):
 @app.get("/wakeup")
 async def wakeup_check():
     return {"status": "ok"}
+
+
+@app.get("/health")
+async def health_check():
+    """Render health probe; deliberately does not depend on Redis."""
+    return {"status": "ok"}

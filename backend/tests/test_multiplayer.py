@@ -85,9 +85,12 @@ async def test_disconnect_refresh_and_heartbeat(match):
     await start_pair(service, room_id)
     hint = await service.get_hint(room_id, "sid-0", [])
     await service.leave_room(room_id, "sid-0")
+    disconnected = await service.get_room(room_id)
+    assert disconnected["players"]["player-0"]["connection_status"] == "disconnected"
     assert "error" in await service.join_room(room_id, "intruder", {"player_id": "player-0", "token": "wrong-token"})
     room = await service.join_room(room_id, "new-sid", {"player_id": "player-0", "token": "test-session-token-0"})
     assert room["players"]["player-0"]["connected"]
+    assert room["players"]["player-0"]["connection_status"] == "reconnected"
     assert room["players"]["player-0"]["progress"]["hints"] == [hint]
     await service.leave_room(room_id, "sid-0")
     assert (await service.get_room(room_id))["players"]["player-0"]["connected"]

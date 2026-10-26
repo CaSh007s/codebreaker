@@ -24,8 +24,14 @@ export const metadata: Metadata = {
   },
   formatDetection: { telephone: false },
   icons: {
-    icon: "/app-icon.png",
-    apple: "/app-icon.png",
+    icon: [
+      { url: "/app-icon.png", sizes: "512x512", type: "image/png" },
+      { url: "/icon.png", type: "image/png" },
+    ],
+    apple: [
+      { url: "/app-icon.png", sizes: "512x512", type: "image/png" },
+      { url: "/icon.png", type: "image/png" },
+    ],
   },
 };
 

@@ -37,6 +37,12 @@ def test_duplicate_digit_feedback():
     assert GameService.evaluate_positional("1123", "2111", [2, 0, 3, 1]) == ["cow", "cow", "gray", "bull"]
 
 
+def test_health_probe(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 @pytest.mark.parametrize("config", [{"code_length": 0}, {"code_length": 11}, {"max_attempts": 0}, {"time_limit": -1}])
 def test_invalid_game_configuration(client, config):
     assert client.post("/game/new", json=config).status_code == 422
@@ -66,7 +72,7 @@ def test_timer_expiry_reveals_code_and_blocks_late_win(client):
     game = stored_game(game_id)
     game["created_at"] = (datetime.now(timezone.utc) - timedelta(seconds=121)).isoformat()
     with redis.from_url(os.environ["REDIS_URL"]) as connection:
-        connection.setex(f"game:{game_id}", 60, json.dumps(game))
+        connection.set(f"game:{game_id}", json.dumps(game), ex=60)
     response = client.post(f"/game/{game_id}/guess", json={"guess": "1123"}).json()
     assert response["status"] == "failed"
     assert not response["solved"]

@@ -1,11 +1,11 @@
-const VERSION = "codebreaker-pwa-v1";
+const VERSION = "codebreaker-pwa-v2";
 const SHELL_CACHE = `${VERSION}-shell`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE).then((cache) =>
-      Promise.all(["/", "/multiplayer", "/app-icon.png"].map((asset) => cache.add(asset).catch(() => undefined))),
+      Promise.all(["/", "/multiplayer", "/app-icon.png", "/icon.png"].map((asset) => cache.add(asset).catch(() => undefined))),
     )
       .then(() => self.skipWaiting()),
   );
@@ -30,22 +30,32 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
+          if (!response.ok) throw new Error(`Navigation failed: ${response.status}`);
           const copy = response.clone();
           caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
           return response;
         })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match("/"))),
+        .catch(() => caches.match(request).then((cached) => cached || caches.match("/") || offlineResponse())),
     );
     return;
   }
 
   event.respondWith(
-    caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-      if (response.ok && response.type === "basic") {
-        const copy = response.clone();
-        caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
-      }
-      return response;
-    })),
+    caches.match(request)
+      .then((cached) => cached || fetch(request).then((response) => {
+        if (response.ok && response.type === "basic") {
+          const copy = response.clone();
+          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      }))
+      .catch(() => offlineResponse()),
   );
 });
+
+function offlineResponse() {
+  return new Response("Offline", {
+    status: 503,
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
+}

@@ -11,7 +11,7 @@ LEADERBOARD_KEY = "codebreaker:leaderboard"
 
 
 async def save_game(game: GameState):
-    await multiplayer_service.redis_client.setex(f"game:{game.id}", GAME_EXPIRY, game.model_dump_json())
+    await multiplayer_service.redis_client.set(f"game:{game.id}", game.model_dump_json(), ex=GAME_EXPIRY)
 
 
 @asynccontextmanager
