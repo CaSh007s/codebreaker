@@ -1,11 +1,18 @@
-const VERSION = "codebreaker-pwa-v2";
+const VERSION = "codebreaker-pwa-v3";
 const SHELL_CACHE = `${VERSION}-shell`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE).then((cache) =>
-      Promise.all(["/", "/multiplayer", "/app-icon.png", "/icon.png"].map((asset) => cache.add(asset).catch(() => undefined))),
+      Promise.all([
+        "/",
+        "/multiplayer",
+        "/app-icon.png",
+        "/app-icon-192.png",
+        "/app-icon-512.png",
+        "/icon.png",
+      ].map((asset) => cache.add(asset).catch(() => undefined))),
     )
       .then(() => self.skipWaiting()),
   );

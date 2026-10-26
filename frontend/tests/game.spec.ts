@@ -188,10 +188,15 @@ test("PWA manifest and service worker are available", async ({ page, request }) 
   expect(manifest.ok()).toBe(true);
   const manifestJson = await manifest.json();
   expect(manifestJson.display).toBe("standalone");
-  expect(manifestJson.icons[0].src).toBe("/app-icon.png");
+  expect(manifestJson.icons.map((icon: { src: string }) => icon.src)).toEqual(
+    expect.arrayContaining(["/app-icon-192.png", "/app-icon-512.png"]),
+  );
+  for (const iconPath of ["/app-icon-192.png", "/app-icon-512.png"]) {
+    expect((await request.get(iconPath)).ok()).toBe(true);
+  }
   const worker = await request.get("/sw.js");
   expect(worker.ok()).toBe(true);
-  expect(await worker.text()).toContain("codebreaker-pwa-v2");
+  expect(await worker.text()).toContain("codebreaker-pwa-v3");
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await page.evaluate(async () => {
