@@ -46,6 +46,17 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-950 text-slate-50`}
       >
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(() => {
+              const first = Math.random();
+              const second = Math.random();
+              if (first === second && window.crypto && window.crypto.getRandomValues) {
+                Math.random = () => window.crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296;
+              }
+            })();`,
+          }}
+        />
         <Providers>{children}</Providers>
       </body>
     </html>

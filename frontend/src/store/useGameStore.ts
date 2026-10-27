@@ -94,9 +94,9 @@ export const useGameStore = create<GameStore>()((set, get) => ({
   view: savedOfflineGame ? "game" : "landing",
   isLoading: false,
   username: "OPERATIVE_GHOST",
-  currentLevelLabel: "ROOKIE",
-  timerLimit: null,
-  infiniteMode: false,
+  currentLevelLabel: savedOfflineGame?.levelLabel ?? "ROOKIE",
+  timerLimit: savedOfflineGame?.timeLimit ?? null,
+  infiniteMode: savedOfflineGame?.infiniteMode ?? savedOfflineGame?.maxAttempts === null,
   menuState: 'main',
   revealedCode: savedOfflineGame?.status === "active" ? null : savedOfflineGame?.secretCode ?? null,
   hintsRevealed: savedOfflineGame?.revealedIndices.map((position) => ({ position, digit: savedOfflineGame.secretCode[position] })) ?? [],
@@ -123,23 +123,24 @@ export const useGameStore = create<GameStore>()((set, get) => ({
   startNewGame: async (mode = "classic", length = 4, maxAttempts = 20, allowRepeats = true, levelLabel = "ROOKIE") => {
     const { infiniteMode, timerLimit, isLoading } = get();
     if (isLoading) return;
-    set({ 
-        isLoading: true, 
-        error: null, 
-        view: "game", 
-        timer: 0, 
-        startedAt: null,
-        gameId: null,
-        status: "active",
-        guesses: [],
-        currentGuess: "",
-        codeLength: length,
-        currentLevelLabel: levelLabel,
-        revealedCode: null,
-        hintsRevealed: [],
-        hintsUsed: 0,
-        struckKeys: [],
-        offlineGame: null,
+    set({
+      isLoading: true,
+      error: null,
+      view: "game",
+      timer: 0,
+      startedAt: null,
+      gameId: null,
+      status: "active",
+      attemptsRemaining: null,
+      guesses: [],
+      currentGuess: "",
+      codeLength: length,
+      currentLevelLabel: levelLabel,
+      revealedCode: null,
+      hintsRevealed: [],
+      hintsUsed: 0,
+      struckKeys: [],
+      offlineGame: null,
     });
     try {
       const data = await api.createGame(
@@ -167,6 +168,8 @@ export const useGameStore = create<GameStore>()((set, get) => ({
         infiniteMode ? undefined : maxAttempts,
         allowRepeats,
         timerLimit ?? undefined,
+        levelLabel,
+        infiniteMode,
       );
       persistOfflineGame(offlineGame);
       set({
@@ -260,7 +263,7 @@ export const useGameStore = create<GameStore>()((set, get) => ({
         const revealedIndices = hintsRevealed.map(h => h.position);
         const offlineGame = get().offlineGame;
         const data = offlineGame
-          ? getOfflineHint(offlineGame)
+          ? getOfflineHint(offlineGame, position)
           : await api.getHint(gameId, revealedIndices, position);
         if (offlineGame) persistOfflineGame(offlineGame);
         set((state: GameStore) => ({

@@ -13,6 +13,9 @@ export interface OfflineGameState {
   feedbackMap: number[];
   revealedIndices: number[];
   guesses: { guess: string; feedback: string[] }[];
+  /** Display/scoring metadata needed when a mission is restored after reload. */
+  levelLabel?: string;
+  infiniteMode?: boolean;
 }
 
 export function createOfflineGame(
@@ -20,6 +23,8 @@ export function createOfflineGame(
   maxAttempts: number | undefined,
   allowRepeats: boolean,
   timeLimit: number | undefined,
+  levelLabel = "ROOKIE",
+  infiniteMode = false,
 ): OfflineGameState {
   const digits = "0123456789";
   const available = digits.split("");
@@ -42,6 +47,8 @@ export function createOfflineGame(
     feedbackMap: shuffle(Array.from({ length: codeLength }, (_, i) => i)),
     revealedIndices: [],
     guesses: [],
+    levelLabel,
+    infiniteMode,
   };
 }
 
@@ -106,7 +113,7 @@ export function submitOfflineGuess(game: OfflineGameState, guess: string) {
   };
 }
 
-export function getOfflineHint(game: OfflineGameState) {
+export function getOfflineHint(game: OfflineGameState, targetIndex?: number) {
   if (game.status !== "active") throw new Error("Game is no longer active");
   if (isExpired(game)) {
     game.status = "failed";
@@ -118,7 +125,10 @@ export function getOfflineHint(game: OfflineGameState) {
   const available = Array.from({ length: game.codeLength }, (_, i) => i).filter(
     (index) => !game.revealedIndices.includes(index),
   );
-  const position = available[Math.floor(Math.random() * available.length)];
+  if (targetIndex !== undefined && !available.includes(targetIndex)) {
+    throw new Error("Invalid or already revealed index");
+  }
+  const position = targetIndex ?? available[Math.floor(Math.random() * available.length)];
   game.revealedIndices.push(position);
   return { position, digit: game.secretCode[position] };
 }

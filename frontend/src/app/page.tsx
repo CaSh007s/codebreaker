@@ -92,7 +92,7 @@ function TopHeader() {
         )}
       </AnimatePresence>
 
-      <OperativeIdentity />
+      {view === "game" ? <OperativeIdentity /> : <div className="w-10" />}
     </header>
   );
 }
@@ -156,7 +156,7 @@ const MISSION_LEVELS: Record<string, MissionLevel[]> = {
 
 function LandingView() {
   const router = useRouter();
-   const { startNewGame, menuState, setMenuState, error } = useGameStore();
+  const { startNewGame, menuState, setMenuState, error } = useGameStore();
   const [category, setCategory] = useState<"standard" | "overdrive">(
     "standard",
   );
@@ -192,6 +192,8 @@ function LandingView() {
             : "SELECT_MISSION_PARAMETERS"}
         </p>
       </div>
+
+      {menuState === "main" && <OperativeIdentity prominent />}
 
       <div className="w-full relative min-h-75 flex items-center">
         <AnimatePresence mode="wait">
@@ -860,9 +862,9 @@ function BinaryBackground() {
     // and ensure we only generate these on the client.
     requestAnimationFrame(() => {
       const p = Array.from({ length: 100 }).map(() => ({
-        value: Math.round(Math.random()),
-        duration: Math.random() * 3 + 2,
-        delay: Math.random() * 5,
+        value: Math.round(randomUnit()),
+        duration: randomUnit() * 3 + 2,
+        delay: randomUnit() * 5,
       }));
       setParticles(p);
     });
@@ -883,14 +885,23 @@ function BinaryBackground() {
   );
 }
 
+function randomUnit() {
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    return crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32;
+  }
+  return Math.random();
+}
+
 // Redundant HowToPlayModal removed
 
 // Redundant AbandonMissionModal removed
 
-function OperativeIdentity() {
+function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
   const { username, setUsername, view, menuState } = useGameStore();
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(username);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
-  // Only editable on the main landing page
   const isEditable = view === "landing" && menuState === "main";
 
   const generateNewAlias = () => {
@@ -903,6 +914,18 @@ function OperativeIdentity() {
       "SIGNAL",
       "DECODER",
       "PROXY",
+      "NEON",
+      "QUANTUM",
+      "VECTOR",
+      "PHANTOM",
+      "NEXUS",
+      "STATIC",
+      "CIRCUIT",
+      "SHADOW",
+      "BYTE",
+      "RUNTIME",
+      "MATRIX",
+      "SPECTER",
     ];
     const suffixes = [
       "WALKER",
@@ -912,44 +935,116 @@ function OperativeIdentity() {
       "REAPER",
       "PULSE",
       "BREAKER",
+      "HUNTER",
+      "RAVEN",
+      "FALCON",
+      "DRIFT",
+      "ECHO",
+      "FLUX",
+      "NIGHT",
+      "SPARK",
+      "VECTOR",
+      "SHIFT",
+      "TRACE",
+      "SCOUT",
     ];
     const randomNum = Math.floor(Math.random() * 900) + 100;
     const newAlias = `${prefixes[Math.floor(Math.random() * prefixes.length)]}_${suffixes[Math.floor(Math.random() * suffixes.length)]}_${randomNum}`;
-    setUsername(newAlias);
+    setDraft(newAlias);
+    setValidationError(null);
+  };
+
+  const openEditor = () => {
+    if (!isEditable) return;
+    setDraft(username);
+    setValidationError(null);
+    setIsEditing(true);
+  };
+
+  const saveUsername = () => {
+    const normalized = draft.trim().replace(/\s+/g, "_");
+    if (normalized.length < 2) {
+      setValidationError("CALLSIGN_MUST_BE_AT_LEAST_2_CHARACTERS");
+      return;
+    }
+    if (normalized.length > 24) {
+      setValidationError("CALLSIGN_LIMIT_IS_24_CHARACTERS");
+      return;
+    }
+    setUsername(normalized.toUpperCase());
+    setIsEditing(false);
   };
 
   return (
-    <div className="flex flex-col items-end gap-1 p-2 border border-[#3a3a3c] rounded-lg bg-black/40 backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.5)] border-t-[#565758]/30">
-      <span className="text-[#565758] font-mono text-[7px] uppercase tracking-widest">
-        OPERATIVE_ID
-      </span>
-      <div className="flex items-center gap-3">
-        <span className="text-[#538d4e] font-mono text-[11px] font-bold tracking-tight drop-shadow-[0_0_5px_rgba(83,141,78,0.3)]">
-          {username}
+    <>
+      <button
+        type="button"
+        onClick={openEditor}
+        disabled={!isEditable}
+        className={`flex flex-col gap-1 border border-[#3a3a3c] rounded-lg bg-black/40 backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.5)] border-t-[#565758]/30 text-left transition-all ${
+          prominent
+            ? "w-full max-w-sm p-4 hover:border-[#538d4e]/60 hover:bg-[#538d4e]/5"
+            : "items-end p-2"
+        } ${isEditable ? "cursor-pointer" : "cursor-default"}`}
+      >
+        <span className="text-[#565758] font-mono text-[7px] uppercase tracking-widest">
+          {prominent ? "PLAY_AS // CALLSIGN" : "OPERATIVE_ID"}
         </span>
-        {isEditable && (
-          <button
-            onClick={generateNewAlias}
-            className="p-1 hover:bg-[#538d4e]/10 rounded transition-colors group"
-            title="Regenerate Alias"
+        <div className={`flex items-center gap-3 ${prominent ? "justify-between" : ""}`}>
+          <span className={`text-[#538d4e] font-mono font-bold tracking-tight drop-shadow-[0_0_5px_rgba(83,141,78,0.3)] ${prominent ? "text-lg" : "text-[11px]"}`}>
+            {username}
+          </span>
+          {isEditable && (
+            <span className="text-[#565758] font-mono text-[8px] uppercase">
+              {prominent ? "EDIT" : "CHANGE"}
+            </span>
+          )}
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {isEditing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsEditing(false)}
+            className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
           >
-            <svg
-              className="w-3.5 h-3.5 text-[#565758] group-hover:text-[#538d4e] transition-all group-hover:rotate-180 duration-500"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              onClick={(event) => event.stopPropagation()}
+              className="w-full max-w-sm rounded-2xl border border-[#3a3a3c] bg-[#121213] p-6 shadow-[0_0_50px_rgba(0,0,0,0.8)]"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              <div className="mb-5">
+                <p className="text-[#538d4e] font-mono text-xs font-bold tracking-widest">CALLSIGN_CONFIGURATION</p>
+                <p className="mt-2 text-[#565758] font-mono text-[9px] uppercase">This name appears on your local records and future missions.</p>
+              </div>
+              <input
+                autoFocus
+                value={draft}
+                maxLength={24}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  setValidationError(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") saveUsername();
+                }}
+                placeholder="ENTER_CALLSIGN"
+                className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 text-sm font-mono text-slate-100 outline-none focus:border-[#538d4e]"
               />
-            </svg>
-          </button>
+              {validationError && <p role="alert" className="mt-2 text-[9px] font-mono uppercase text-red-400">{validationError}</p>}
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <button type="button" onClick={generateNewAlias} className="rounded-lg border border-[#3a3a3c] py-3 text-[10px] font-mono uppercase text-slate-300 hover:border-[#538d4e] hover:text-[#538d4e]">GENERATE_ALIAS</button>
+                <button type="button" onClick={saveUsername} className="rounded-lg bg-[#538d4e] py-3 text-[10px] font-mono font-bold uppercase text-black hover:bg-[#58a352]">SAVE_CALLSIGN</button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
-      </div>
-    </div>
+      </AnimatePresence>
+    </>
   );
 }
 

@@ -25,7 +25,6 @@ export default function LoadingOverlay() {
   const [logs, setLogs] = useState<string[]>([]);
   const [show, setShow] = useState(false);
   const [complete, setComplete] = useState(false);
-  const [delayed, setDelayed] = useState(false);
 
   const addLog = useCallback((msg: string) => {
     setLogs(prev => [...prev.slice(-4), `>> [SYSTEM]: ${msg}`]);
@@ -44,7 +43,9 @@ export default function LoadingOverlay() {
     let retry: ReturnType<typeof setTimeout>;
     let dismiss: ReturnType<typeof setTimeout>;
     let controller: AbortController | undefined;
-    const delayedTimer = setTimeout(() => setDelayed(true), 15000);
+    // The backend may be cold, but single-player has a local fallback and
+    // should never be blocked by the wake-up animation.
+    const dismissTimer = setTimeout(() => setShow(false), 4000);
     const logInterval = setInterval(() => {
       if (logIndex < BOOT_LOGS.length && !finished) {
         addLog(BOOT_LOGS[logIndex]);
@@ -87,7 +88,7 @@ export default function LoadingOverlay() {
       clearInterval(logInterval);
       clearTimeout(retry);
       clearTimeout(dismiss);
-      clearTimeout(delayedTimer);
+      clearTimeout(dismissTimer);
     };
   }, [addLog]);
 
@@ -104,7 +105,7 @@ export default function LoadingOverlay() {
           filter: "blur(20px) contrast(1.2)",
           transition: { duration: 0.8, ease: "circIn" }
         }}
-        className="fixed inset-0 z-9999 bg-[#0a0a0b] flex flex-col items-center justify-center overflow-hidden"
+        className="fixed inset-0 z-9999 pointer-events-none bg-[#0a0a0b] flex flex-col items-center justify-center overflow-hidden"
       >
         {/* Background Grid */}
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[radial-gradient(#538d4e_1px,transparent_1px)] bg-size-[24px_24px]" />
@@ -190,11 +191,6 @@ export default function LoadingOverlay() {
         </div>
 
         {/* Tactical Console Logs */}
-        {delayed && !complete && (
-          <button onClick={() => setShow(false)} className="absolute bottom-40 rounded border border-white/20 px-4 py-2 text-xs text-slate-300">
-            Server is taking longer. Continue to menu
-          </button>
-        )}
         <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-[90%] max-w-md h-24 flex flex-col justify-end">
             <div className="space-y-1.5">
                 <AnimatePresence initial={false}>
