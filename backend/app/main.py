@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from redis.exceptions import RedisError
@@ -23,12 +23,21 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from app.socket_manager import app_sio, configure_socket_manager
+from app.models.account import AccountCredentials, AccountResponse, AuthResponse
+from app.services.account_service import (
+    AccountUnavailableError,
+    InvalidCredentialsError,
+    UsernameTakenError,
+    account_service,
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await multiplayer_service.initialize()
     configure_socket_manager(multiplayer_service.storage_backend == "redis")
+    await account_service.initialize()
     yield
+    await account_service.close()
     await multiplayer_service.redis_client.aclose()
 
 
@@ -60,6 +69,35 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+SESSION_COOKIE = "codebreaker_session"
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
+
+
+def set_session_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        SESSION_COOKIE,
+        token,
+        max_age=60 * 60 * 24 * 30,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+        path="/",
+    )
+
+
+def account_response(user: dict) -> AuthResponse:
+    return AuthResponse(user=AccountResponse(**user))
+
+
+def account_http_error(error: Exception) -> HTTPException:
+    if isinstance(error, AccountUnavailableError):
+        return HTTPException(status_code=503, detail="Account service is not configured")
+    if isinstance(error, UsernameTakenError):
+        return HTTPException(status_code=409, detail=str(error))
+    if isinstance(error, InvalidCredentialsError):
+        return HTTPException(status_code=401, detail=str(error))
+    return HTTPException(status_code=503, detail="Account service temporarily unavailable")
+
 # Mount Socket.IO app
 app.mount("/socket.io", app_sio)
 
@@ -72,6 +110,50 @@ async def root():
         "health": "/health",
         "readiness": "/ready"
     }
+
+
+@app.post("/auth/register", response_model=AuthResponse)
+@limiter.limit("5/minute")
+async def register_account(request: Request, credentials: AccountCredentials, response: Response):
+    try:
+        user, token = await account_service.register(credentials.username, credentials.password)
+    except (AccountUnavailableError, UsernameTakenError) as error:
+        raise account_http_error(error) from error
+    set_session_cookie(response, token)
+    return account_response(user)
+
+
+@app.post("/auth/login", response_model=AuthResponse)
+@limiter.limit("10/minute")
+async def login_account(request: Request, credentials: AccountCredentials, response: Response):
+    try:
+        user, token = await account_service.login(credentials.username, credentials.password)
+    except (AccountUnavailableError, InvalidCredentialsError) as error:
+        raise account_http_error(error) from error
+    set_session_cookie(response, token)
+    return account_response(user)
+
+
+@app.get("/auth/me", response_model=AuthResponse)
+async def current_account(request: Request):
+    try:
+        user = await account_service.get_user(request.cookies.get(SESSION_COOKIE))
+    except AccountUnavailableError as error:
+        raise account_http_error(error) from error
+    if not user:
+        raise HTTPException(status_code=401, detail="No active account session")
+    return account_response(user)
+
+
+@app.post("/auth/logout", status_code=204)
+async def logout_account(request: Request, response: Response):
+    try:
+        await account_service.delete_session(request.cookies.get(SESSION_COOKIE))
+    except AccountUnavailableError:
+        pass
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    response.status_code = 204
+    return response
 
 @app.post("/game/new", response_model=NewGameResponse)
 @limiter.limit("5/minute")

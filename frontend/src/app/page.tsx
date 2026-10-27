@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGameStore } from "@/store/useGameStore";
-import { api, LeaderboardEntry } from "@/lib/api";
+import { api, AccountUser, LeaderboardEntry } from "@/lib/api";
 import {
   Board,
   Keyboard,
@@ -901,6 +901,12 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(username);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [accountMode, setAccountMode] = useState<"callsign" | "login" | "register">("callsign");
+  const [accountUsername, setAccountUsername] = useState(username);
+  const [accountPassword, setAccountPassword] = useState("");
+  const [accountUser, setAccountUser] = useState<AccountUser | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const [accountBusy, setAccountBusy] = useState(false);
 
   const isEditable = view === "landing" && menuState === "main";
 
@@ -957,7 +963,17 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
   const openEditor = () => {
     if (!isEditable) return;
     setDraft(username);
+    setAccountUsername(username);
+    setAccountPassword("");
     setValidationError(null);
+    setAccountError(null);
+    setAccountMode("callsign");
+    void api.getCurrentAccount().then((response) => {
+      if (response) {
+        setAccountUser(response.user);
+        setUsername(response.user.username);
+      }
+    }).catch(() => undefined);
     setIsEditing(true);
   };
 
@@ -975,6 +991,29 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
     setIsEditing(false);
   };
 
+  const submitAccount = async () => {
+    setAccountBusy(true);
+    setAccountError(null);
+    try {
+      const response = accountMode === "register"
+        ? await api.register(accountUsername.trim(), accountPassword)
+        : await api.login(accountUsername.trim(), accountPassword);
+      setAccountUser(response.user);
+      setUsername(response.user.username);
+      setIsEditing(false);
+    } catch (error) {
+      setAccountError((error as Error).message);
+    } finally {
+      setAccountBusy(false);
+    }
+  };
+
+  const logoutAccount = async () => {
+    await api.logout();
+    setAccountUser(null);
+    setAccountMode("callsign");
+  };
+
   return (
     <>
       <button
@@ -988,7 +1027,7 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
         } ${isEditable ? "cursor-pointer" : "cursor-default"}`}
       >
         <span className="text-[#565758] font-mono text-[7px] uppercase tracking-widest">
-          {prominent ? "PLAY_AS // CALLSIGN" : "OPERATIVE_ID"}
+          {accountUser ? "ACCOUNT // CALLSIGN" : prominent ? "PLAY_AS // CALLSIGN" : "OPERATIVE_ID"}
         </span>
         <div className={`flex items-center gap-3 ${prominent ? "justify-between" : ""}`}>
           <span className={`text-[#538d4e] font-mono font-bold tracking-tight drop-shadow-[0_0_5px_rgba(83,141,78,0.3)] ${prominent ? "text-lg" : "text-[11px]"}`}>
@@ -996,7 +1035,7 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
           </span>
           {isEditable && (
             <span className="text-[#565758] font-mono text-[8px] uppercase">
-              {prominent ? "EDIT" : "CHANGE"}
+              {accountUser ? "SIGNED_IN" : prominent ? "EDIT" : "CHANGE"}
             </span>
           )}
         </div>
@@ -1017,29 +1056,57 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
               onClick={(event) => event.stopPropagation()}
               className="w-full max-w-sm rounded-2xl border border-[#3a3a3c] bg-[#121213] p-6 shadow-[0_0_50px_rgba(0,0,0,0.8)]"
             >
-              <div className="mb-5">
-                <p className="text-[#538d4e] font-mono text-xs font-bold tracking-widest">CALLSIGN_CONFIGURATION</p>
-                <p className="mt-2 text-[#565758] font-mono text-[9px] uppercase">This name appears on your local records and future missions.</p>
-              </div>
-              <input
-                autoFocus
-                value={draft}
-                maxLength={24}
-                onChange={(event) => {
-                  setDraft(event.target.value);
-                  setValidationError(null);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") saveUsername();
-                }}
-                placeholder="ENTER_CALLSIGN"
-                className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 text-sm font-mono text-slate-100 outline-none focus:border-[#538d4e]"
-              />
-              {validationError && <p role="alert" className="mt-2 text-[9px] font-mono uppercase text-red-400">{validationError}</p>}
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                <button type="button" onClick={generateNewAlias} className="rounded-lg border border-[#3a3a3c] py-3 text-[10px] font-mono uppercase text-slate-300 hover:border-[#538d4e] hover:text-[#538d4e]">GENERATE_ALIAS</button>
-                <button type="button" onClick={saveUsername} className="rounded-lg bg-[#538d4e] py-3 text-[10px] font-mono font-bold uppercase text-black hover:bg-[#58a352]">SAVE_CALLSIGN</button>
-              </div>
+              {accountMode === "callsign" ? (
+                <>
+                  <div className="mb-5">
+                    <p className="text-[#538d4e] font-mono text-xs font-bold tracking-widest">CALLSIGN_CONFIGURATION</p>
+                    <p className="mt-2 text-[#565758] font-mono text-[9px] uppercase">Guest play is instant. An account keeps this identity across devices.</p>
+                  </div>
+                  <input
+                    autoFocus
+                    value={draft}
+                    maxLength={24}
+                    onChange={(event) => {
+                      setDraft(event.target.value);
+                      setValidationError(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") saveUsername();
+                    }}
+                    placeholder="ENTER_CALLSIGN"
+                    className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 text-sm font-mono text-slate-100 outline-none focus:border-[#538d4e]"
+                  />
+                  {validationError && <p role="alert" className="mt-2 text-[9px] font-mono uppercase text-red-400">{validationError}</p>}
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <button type="button" onClick={generateNewAlias} className="rounded-lg border border-[#3a3a3c] py-3 text-[10px] font-mono uppercase text-slate-300 hover:border-[#538d4e] hover:text-[#538d4e]">GENERATE_ALIAS</button>
+                    <button type="button" onClick={saveUsername} className="rounded-lg bg-[#538d4e] py-3 text-[10px] font-mono font-bold uppercase text-black hover:bg-[#58a352]">SAVE_CALLSIGN</button>
+                  </div>
+                  <div className="mt-6 border-t border-[#3a3a3c] pt-5">
+                    {accountUser ? (
+                      <button type="button" onClick={logoutAccount} className="w-full rounded-lg border border-[#cf6679]/40 py-3 text-[10px] font-mono uppercase text-[#cf6679] hover:bg-[#cf6679]/10">SIGN_OUT_OF_ACCOUNT</button>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3">
+                        <button type="button" onClick={() => setAccountMode("login")} className="rounded-lg border border-[#3a3a3c] py-3 text-[10px] font-mono uppercase text-slate-300 hover:border-[#538d4e] hover:text-[#538d4e]">SIGN_IN</button>
+                        <button type="button" onClick={() => setAccountMode("register")} className="rounded-lg border border-[#538d4e]/40 py-3 text-[10px] font-mono uppercase text-[#538d4e] hover:bg-[#538d4e]/10">CREATE_ACCOUNT</button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-[#538d4e] font-mono text-xs font-bold tracking-widest">{accountMode === "register" ? "CREATE_ACCOUNT" : "ACCOUNT_LOGIN"}</p>
+                    <p className="mt-2 text-[#565758] font-mono text-[9px] uppercase">Use a unique callsign and a password of at least 8 characters.</p>
+                  </div>
+                  <input value={accountUsername} maxLength={24} onChange={(event) => setAccountUsername(event.target.value)} placeholder="CALLSIGN" className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 text-sm font-mono text-slate-100 outline-none focus:border-[#538d4e]" />
+                  <input type="password" value={accountPassword} onChange={(event) => setAccountPassword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void submitAccount(); }} placeholder="PASSWORD" className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 text-sm font-mono text-slate-100 outline-none focus:border-[#538d4e]" />
+                  {accountError && <p role="alert" className="text-[9px] font-mono uppercase text-red-400">{accountError}</p>}
+                  <div className="grid grid-cols-2 gap-3">
+                    <button type="button" onClick={() => setAccountMode("callsign")} className="rounded-lg border border-[#3a3a3c] py-3 text-[10px] font-mono uppercase text-slate-300 hover:border-[#565758]">BACK</button>
+                    <button type="button" disabled={accountBusy} onClick={() => void submitAccount()} className="rounded-lg bg-[#538d4e] py-3 text-[10px] font-mono font-bold uppercase text-black hover:bg-[#58a352] disabled:opacity-50">{accountBusy ? "CONNECTING..." : accountMode === "register" ? "REGISTER" : "SIGN_IN"}</button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}

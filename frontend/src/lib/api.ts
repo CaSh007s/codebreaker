@@ -3,6 +3,16 @@ export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || process.env.NEXT
 export type GameStatus = "active" | "solved" | "failed" | "surrendered";
 export type GameMode = "classic" | "timer" | "limited";
 
+export interface AccountUser {
+  user_id: string;
+  username: string;
+  created_at: string;
+}
+
+export interface AuthResponse {
+  user: AccountUser;
+}
+
 export interface NewGameResponse {
   game_id: string;
   code_length: number;
@@ -45,6 +55,30 @@ function saveLocalScore(score: Omit<LeaderboardEntry, "timestamp">): Leaderboard
 }
 
 export const api = {
+  async register(username: string, password: string): Promise<AuthResponse> {
+    return authRequest("/auth/register", username, password);
+  },
+
+  async login(username: string, password: string): Promise<AuthResponse> {
+    return authRequest("/auth/login", username, password);
+  },
+
+  async logout(): Promise<void> {
+    await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+  },
+
+  async getCurrentAccount(): Promise<AuthResponse | null> {
+    const response = await fetch(`${API_BASE_URL}/auth/me`, {
+      credentials: "include",
+    });
+    if (response.status === 401) return null;
+    if (!response.ok) throw new Error("Could not load account");
+    return response.json();
+  },
+
   async createGame(mode: GameMode = "classic", length: number = 4, maxAttempts?: number, allowRepeats: boolean = true, timeLimit?: number): Promise<NewGameResponse> {
     const response = await fetch(`${API_BASE_URL}/game/new`, {
       method: "POST",
@@ -154,6 +188,20 @@ export const api = {
     }
   }
 };
+
+async function authRequest(path: string, username: string, password: string): Promise<AuthResponse> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ username, password }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => null);
+    throw new Error(error?.detail || "Account request failed");
+  }
+  return response.json();
+}
 
 function normalizeEntry(entry: LeaderboardEntry & { timer_mode?: boolean; infinite_mode?: boolean }): LeaderboardEntry {
   return { ...entry, timerMode: entry.timer_mode ?? entry.timerMode ?? false, infiniteMode: entry.infinite_mode ?? entry.infiniteMode ?? false };

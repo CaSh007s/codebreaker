@@ -31,6 +31,9 @@ next-env.d.ts
 .DS_Store
 *.pem
 .env*
+!.env.example
+!backend/.env.example
+!frontend/.env.example
 .vercel
 
 # IDEs
@@ -38,3 +41,4 @@ next-env.d.ts
 .idea/
 *.swp
 *.swo
+PRODUCT_ROADMAP.md
