@@ -86,7 +86,7 @@ export default function EntryPage() {
           <div className="w-full space-y-4 rounded-2xl border border-[#3a3a3c] bg-black/30 p-5 text-left shadow-[0_0_40px_rgba(0,0,0,0.35)]">
             <div>
               <p className="font-mono text-xs font-bold uppercase tracking-widest text-slate-100">{mode === "login" ? "ACCOUNT_LOGIN" : "CREATE_ACCOUNT"}</p>
-              <p className="mt-2 font-mono text-[9px] uppercase leading-relaxed text-[#565758]">{mode === "login" ? "Restore your callsign, friends, and notifications." : "Create a persistent callsign with an 8-character minimum password."}</p>
+              <p className="mt-2 font-mono text-[9px] uppercase leading-relaxed text-[#565758]">{mode === "login" ? "Restore your callsign, friends, and notifications." : "Create a persistent callsign with an 8-character minimum password."} If the API is unavailable, it stays on this browser.</p>
             </div>
             <input value={callsign} maxLength={24} onChange={(event) => { setCallsign(event.target.value); setError(null); }} placeholder="CALLSIGN" aria-label="Account callsign" className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 font-mono text-xs uppercase text-slate-100 outline-none focus:border-[#538d4e]" />
             <input type="password" value={password} onChange={(event) => { setPassword(event.target.value); setError(null); }} onKeyDown={(event) => { if (event.key === "Enter") void submitAccount(); }} placeholder="PASSWORD" aria-label="Account password" className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 font-mono text-xs text-slate-100 outline-none focus:border-[#538d4e]" />

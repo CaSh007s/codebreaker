@@ -73,22 +73,26 @@ class AccountService:
     def __init__(self) -> None:
         self.pool: asyncpg.Pool | None = None
         self.session_secret = os.getenv("SESSION_SECRET", "")
-        self.fallback_path = Path(os.getenv("FALLBACK_ACCOUNT_STORE", "./data/accounts.json")).expanduser()
+        fallback_path = os.getenv("FALLBACK_ACCOUNT_STORE", "").strip()
+        self.fallback_path: Path | None = Path(fallback_path).expanduser() if fallback_path else None
         self.fallback_accounts: dict[str, dict[str, Any]] = {}
         self.fallback_sessions: dict[str, dict[str, Any]] = {}
 
     @property
     def configured(self) -> bool:
-        return bool(self.session_secret and (self.pool or self.fallback_path))
+        return bool(self.session_secret)
 
     async def initialize(self) -> None:
         database_url = os.getenv("DATABASE_URL", "").strip()
         self.session_secret = os.getenv("SESSION_SECRET", "").strip()
-        self.fallback_path = Path(os.getenv("FALLBACK_ACCOUNT_STORE", "./data/accounts.json")).expanduser()
+        fallback_path = os.getenv("FALLBACK_ACCOUNT_STORE", "").strip()
+        self.fallback_path = Path(fallback_path).expanduser() if fallback_path else None
         self._load_fallback()
         if not database_url or not self.session_secret:
             logger.info("Neon account storage is not configured; guest mode remains available")
             return
+        if self.fallback_path is None:
+            logger.info("Server file account fallback is disabled; Neon remains the production account store")
         try:
             self.pool = await asyncpg.create_pool(database_url, min_size=1, max_size=5, command_timeout=10)
             await self.pool.execute(
@@ -153,6 +157,10 @@ class AccountService:
             self.pool = None
 
     def _load_fallback(self) -> None:
+        if self.fallback_path is None:
+            self.fallback_accounts = {}
+            self.fallback_sessions = {}
+            return
         try:
             raw = json.loads(self.fallback_path.read_text())
             self.fallback_accounts = raw.get("accounts", {})
@@ -162,6 +170,8 @@ class AccountService:
             self.fallback_sessions = {}
 
     def _save_fallback(self) -> None:
+        if self.fallback_path is None:
+            return
         try:
             self.fallback_path.parent.mkdir(parents=True, exist_ok=True)
             temporary = self.fallback_path.with_suffix(".tmp")

@@ -213,6 +213,41 @@ pnpm dev
 - **Node.js Runtime**: Version 20+ required for the field interface.
 - **Python Engine**: Version 3.11+ required for intelligence services.
 
+### Local account testing without Neon
+
+The frontend can be tested without a running backend or Neon database:
+
+```bash
+cd frontend
+pnpm install
+pnpm dev -- -p 13000
+```
+
+Create an account from the entry page. If the API is unavailable, Codebreaker stores the account in that browser's `localStorage` and hashes the password with PBKDF2 through Web Crypto. Local sessions, local friend requests, local notifications, offline missions, and the local leaderboard remain until the site's storage is cleared. Multiplayer still requires the backend and its realtime service.
+
+To reset local accounts, use the browser's site-data controls for `localhost:13000`, or run this in DevTools:
+
+```js
+localStorage.removeItem("codebreaker_local_accounts_v1");
+localStorage.removeItem("codebreaker_local_session_v1");
+localStorage.removeItem("codebreaker_local_friendships_v1");
+localStorage.removeItem("codebreaker_local_notifications_v1");
+```
+
+### Render storage behavior
+
+Neon is the production source of truth when `DATABASE_URL` and `SESSION_SECRET` are configured. The optional server fallback file stores only account records (`id`, callsign, scrypt password hash, creation time) and hashed session records (`token_hash`, user id, expiry); it does not store friends, notifications, push subscriptions, or game data.
+
+For the free-tier-compatible setup, do not attach a Render persistent disk. Leave `FALLBACK_ACCOUNT_STORE` unset or empty and keep Neon configured. Neon-backed account, friendship, notification, and push data then survives Render restarts. During a Neon outage, server-side fallback data is memory-only and can disappear if the instance restarts, while browser-local accounts remain on the user's device.
+
+If a server-side outage fallback must survive restarts, attach a Render persistent disk mounted at `/var/data` and set:
+
+```env
+FALLBACK_ACCOUNT_STORE=/var/data/accounts.json
+```
+
+Without that disk, only data created in the temporary server fallback during an outage can be lost; data already stored in Neon is not lost.
+
 <hr style="border: 0; border-top: 1px solid #222; margin: 60px 0;" />
 
 <div align="center">

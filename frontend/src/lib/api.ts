@@ -1,3 +1,19 @@
+import {
+  blockLocalUser,
+  getLocalCurrentAccount,
+  getLocalFriends,
+  getLocalNotifications,
+  hasLocalAccount,
+  hasLocalSession,
+  loginLocal,
+  logoutLocal,
+  markLocalNotificationRead,
+  registerLocal,
+  removeLocalFriend,
+  respondToLocalFriendRequest,
+  sendLocalFriendRequest,
+} from "./localStore";
+
 export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8000").replace(/\/$/, "");
 
 export type GameStatus = "active" | "solved" | "failed" | "surrendered";
@@ -82,13 +98,21 @@ export const api = {
   },
 
   async logout(): Promise<void> {
-    await fetch(`${API_BASE_URL}/auth/logout`, {
-      method: "POST",
-      credentials: "include",
-    });
+    const local = hasLocalSession();
+    logoutLocal();
+    try {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      if (!local) throw new Error("Could not sign out");
+    }
   },
 
   async getCurrentAccount(): Promise<AuthResponse | null> {
+    const local = getLocalCurrentAccount();
+    if (local) return local;
     const response = await fetch(`${API_BASE_URL}/auth/me`, {
       credentials: "include",
     });
@@ -98,10 +122,12 @@ export const api = {
   },
 
   async getFriends(): Promise<FriendRecord[]> {
+    if (hasLocalSession()) return getLocalFriends();
     return socialRequest<FriendRecord[]>("/social/friends");
   },
 
   async sendFriendRequest(username: string): Promise<FriendRecord> {
+    if (hasLocalSession()) return sendLocalFriendRequest(username);
     return socialRequest<FriendRecord>("/social/friends/requests", {
       method: "POST",
       body: JSON.stringify({ username }),
@@ -109,26 +135,44 @@ export const api = {
   },
 
   async respondToFriendRequest(userId: string, action: "accept" | "decline"): Promise<void> {
+    if (hasLocalSession()) {
+      respondToLocalFriendRequest(userId, action === "accept");
+      return;
+    }
     await socialRequest<void>(`/social/friends/requests/${encodeURIComponent(userId)}/${action}`, { method: "POST" });
   },
 
   async removeFriend(userId: string): Promise<void> {
+    if (hasLocalSession()) {
+      removeLocalFriend(userId);
+      return;
+    }
     await socialRequest<void>(`/social/friends/${encodeURIComponent(userId)}`, { method: "DELETE" });
   },
 
   async blockUser(userId: string): Promise<void> {
+    if (hasLocalSession()) {
+      blockLocalUser(userId);
+      return;
+    }
     await socialRequest<void>(`/social/blocks/${encodeURIComponent(userId)}`, { method: "POST" });
   },
 
   async getNotifications(): Promise<NotificationRecord[]> {
+    if (hasLocalSession()) return getLocalNotifications();
     return socialRequest<NotificationRecord[]>("/social/notifications");
   },
 
   async markNotificationRead(notificationId: string): Promise<void> {
+    if (hasLocalSession()) {
+      markLocalNotificationRead(notificationId);
+      return;
+    }
     await socialRequest<void>(`/social/notifications/${encodeURIComponent(notificationId)}/read`, { method: "POST" });
   },
 
   async savePushSubscription(subscription: PushSubscription): Promise<void> {
+    if (hasLocalSession()) return;
     const json = subscription.toJSON();
     await socialRequest<void>("/social/push-subscriptions", {
       method: "POST",
@@ -247,17 +291,34 @@ export const api = {
 };
 
 async function authRequest(path: string, username: string, password: string): Promise<AuthResponse> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ username, password }),
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => null);
-    throw new Error(error?.detail || "Account request failed");
+  // A browser-local account is authoritative for this browser. This lets a
+  // user keep testing when the API, Neon, or a hosted deployment is down.
+  if (path === "/auth/login" && hasLocalAccount(username)) {
+    return loginLocal(username, password);
   }
-  return response.json();
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ username, password }),
+    });
+  } catch {
+    return localAuthRequest(path, username, password);
+  }
+
+  if (response.ok) return response.json();
+  if (response.status >= 500) return localAuthRequest(path, username, password);
+  const error = await response.json().catch(() => null);
+  throw new Error(error?.detail || "Account request failed");
+}
+
+function localAuthRequest(path: string, username: string, password: string): Promise<AuthResponse> {
+  if (path === "/auth/register") return registerLocal(username, password);
+  if (path === "/auth/login") return loginLocal(username, password);
+  return Promise.reject(new Error("Account service is temporarily unavailable"));
 }
 
 async function socialRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
