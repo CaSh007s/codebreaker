@@ -26,6 +26,33 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+self.addEventListener("push", (event) => {
+  let payload = { title: "Codebreaker", body: "New transmission received.", data: {} };
+  try {
+    if (event.data) payload = { ...payload, ...event.data.json() };
+  } catch {
+    // Keep a useful notification even when a provider sends malformed data.
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: "/app-icon-192.png",
+      badge: "/app-icon-192.png",
+      data: payload.data,
+      tag: "codebreaker-social",
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+    const existing = clientList.find((client) => "focus" in client);
+    if (existing) return existing.focus();
+    return clients.openWindow("/");
+  }));
+});
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);

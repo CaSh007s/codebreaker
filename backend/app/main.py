@@ -23,7 +23,16 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from app.socket_manager import app_sio, configure_socket_manager
-from app.models.account import AccountCredentials, AccountResponse, AuthResponse
+from app.models.account import (
+    AccountCredentials,
+    AccountResponse,
+    AuthResponse,
+    FriendAction,
+    FriendRecord,
+    FriendTarget,
+    NotificationRecord,
+    PushSubscription,
+)
 from app.services.account_service import (
     AccountUnavailableError,
     InvalidCredentialsError,
@@ -47,6 +56,11 @@ app = FastAPI(title="Codebreaker API", lifespan=lifespan)
 @app.exception_handler(RedisError)
 async def storage_unavailable(request: Request, exc: RedisError):
     return JSONResponse(status_code=503, content={"detail": "Game service temporarily unavailable. Please retry."})
+
+
+@app.exception_handler(AccountUnavailableError)
+async def account_storage_unavailable(request: Request, exc: AccountUnavailableError):
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 # Enable CORS
 raw_origins = os.getenv(
@@ -98,6 +112,16 @@ def account_http_error(error: Exception) -> HTTPException:
         return HTTPException(status_code=401, detail=str(error))
     return HTTPException(status_code=503, detail="Account service temporarily unavailable")
 
+
+async def authenticated_user(request: Request) -> dict:
+    try:
+        user = await account_service.get_user(request.cookies.get(SESSION_COOKIE))
+    except AccountUnavailableError as error:
+        raise account_http_error(error) from error
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in to use social features")
+    return user
+
 # Mount Socket.IO app
 app.mount("/socket.io", app_sio)
 
@@ -136,12 +160,7 @@ async def login_account(request: Request, credentials: AccountCredentials, respo
 
 @app.get("/auth/me", response_model=AuthResponse)
 async def current_account(request: Request):
-    try:
-        user = await account_service.get_user(request.cookies.get(SESSION_COOKIE))
-    except AccountUnavailableError as error:
-        raise account_http_error(error) from error
-    if not user:
-        raise HTTPException(status_code=401, detail="No active account session")
+    user = await authenticated_user(request)
     return account_response(user)
 
 
@@ -154,6 +173,79 @@ async def logout_account(request: Request, response: Response):
     response.delete_cookie(SESSION_COOKIE, path="/")
     response.status_code = 204
     return response
+
+
+@app.get("/social/friends", response_model=List[FriendRecord])
+async def list_friends(request: Request):
+    user = await authenticated_user(request)
+    try:
+        return await account_service.list_friends(user["user_id"])
+    except AccountUnavailableError as error:
+        raise account_http_error(error) from error
+
+
+@app.post("/social/friends/requests", response_model=FriendRecord)
+@limiter.limit("20/minute")
+async def send_friend_request(request: Request, target: FriendTarget):
+    user = await authenticated_user(request)
+    try:
+        return await account_service.send_friend_request(user["user_id"], target.username)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/social/friends/requests/{other_user_id}/accept", status_code=204)
+async def accept_friend_request(request: Request, other_user_id: str):
+    user = await authenticated_user(request)
+    try:
+        await account_service.respond_friend_request(user["user_id"], other_user_id, True)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return Response(status_code=204)
+
+
+@app.post("/social/friends/requests/{other_user_id}/decline", status_code=204)
+async def decline_friend_request(request: Request, other_user_id: str):
+    user = await authenticated_user(request)
+    try:
+        await account_service.respond_friend_request(user["user_id"], other_user_id, False)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return Response(status_code=204)
+
+
+@app.delete("/social/friends/{other_user_id}", status_code=204)
+async def remove_friend(request: Request, other_user_id: str):
+    user = await authenticated_user(request)
+    await account_service.remove_friend(user["user_id"], other_user_id)
+    return Response(status_code=204)
+
+
+@app.post("/social/blocks/{other_user_id}", status_code=204)
+async def block_user(request: Request, other_user_id: str):
+    user = await authenticated_user(request)
+    await account_service.block_user(user["user_id"], other_user_id)
+    return Response(status_code=204)
+
+
+@app.get("/social/notifications", response_model=List[NotificationRecord])
+async def list_notifications(request: Request):
+    user = await authenticated_user(request)
+    return await account_service.list_notifications(user["user_id"])
+
+
+@app.post("/social/notifications/{notification_id}/read", status_code=204)
+async def mark_notification_read(request: Request, notification_id: str):
+    user = await authenticated_user(request)
+    await account_service.mark_notification_read(user["user_id"], notification_id)
+    return Response(status_code=204)
+
+
+@app.post("/social/push-subscriptions", status_code=204)
+async def save_push_subscription(request: Request, subscription: PushSubscription):
+    user = await authenticated_user(request)
+    await account_service.save_push_subscription(user["user_id"], subscription.endpoint, subscription.p256dh, subscription.auth)
+    return Response(status_code=204)
 
 @app.post("/game/new", response_model=NewGameResponse)
 @limiter.limit("5/minute")

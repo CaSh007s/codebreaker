@@ -34,6 +34,7 @@ next-env.d.ts
 !.env.example
 !backend/.env.example
 !frontend/.env.example
+backend/data/
 .vercel
 
 # IDEs

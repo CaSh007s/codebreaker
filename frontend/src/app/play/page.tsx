@@ -1,0 +1,1319 @@
+"use client";
+
+import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useGameStore } from "@/store/useGameStore";
+import { api, AccountUser, LeaderboardEntry } from "@/lib/api";
+import {
+  Board,
+  Keyboard,
+  AnimatedHeading,
+  HowToPlayModal,
+  AbandonMissionModal,
+} from "@/components/game/SharedGameUI";
+import LoadingOverlay from "@/components/ui/LoadingOverlay";
+import { FriendsCenter, NotificationCenter } from "@/components/social/SocialCenter";
+
+export default function Home() {
+  const router = useRouter();
+  const { view } = useGameStore();
+  const [entryReady, setEntryReady] = useState(false);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      if (sessionStorage.getItem("codebreaker_entry_access")) {
+        setEntryReady(true);
+      } else {
+        router.replace("/");
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [router]);
+
+  if (!entryReady) return null;
+
+  return (
+    <main className="relative flex h-dvh w-full flex-col bg-[#0a0a0b] text-slate-100 overflow-hidden selection:bg-[#538d4e]/30">
+      <LoadingOverlay />
+      <TopHeader />
+
+      <div
+        className={`flex-1 w-full flex flex-col items-center relative z-10 px-4 min-h-0 ${view === "landing" ? "overflow-y-auto" : "overflow-hidden"}`}
+      >
+        <AnimatePresence mode="wait">
+          {view === "landing" ? (
+            <LandingView key="landing" />
+          ) : (
+            <GameView key="game" />
+          )}
+        </AnimatePresence>
+      </div>
+    </main>
+  );
+}
+
+function TopHeader() {
+  const { view, setView, status } = useGameStore();
+  const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
+
+  const handleBack = () => {
+    if (status === "active") {
+      setShowAbandonConfirm(true);
+    } else {
+      setView("landing");
+    }
+  };
+
+  return (
+    <header className="w-full h-20 flex items-center justify-between px-6 sm:px-10 z-50 shrink-0">
+      <AnimatePresence mode="wait">
+        {view === "game" ? (
+          <motion.button
+            key="back"
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -10 }}
+            onClick={handleBack}
+            className="text-[#565758] hover:text-[#538d4e] transition-colors p-2 rounded-full hover:bg-[#538d4e]/5"
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
+            </svg>
+          </motion.button>
+        ) : (
+          <div key="spacer" className="w-10" />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showAbandonConfirm && (
+          <AbandonMissionModal
+            onClose={() => setShowAbandonConfirm(false)}
+            onConfirm={() => {
+              setShowAbandonConfirm(false);
+              useGameStore.getState().resignGame();
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <div className="flex items-center gap-3">
+        <NotificationCenter />
+        {view === "game" ? <OperativeIdentity /> : <div className="w-10" />}
+      </div>
+    </header>
+  );
+}
+
+interface MissionLevel {
+  label: string;
+  length: number;
+  tries: number;
+  repeats: boolean;
+  desc: string;
+}
+
+const MISSION_LEVELS: Record<string, MissionLevel[]> = {
+  standard: [
+    {
+      label: "ROOKIE",
+      length: 3,
+      tries: 25,
+      repeats: false,
+      desc: "Tactical Induction",
+    },
+    {
+      label: "EASY",
+      length: 4,
+      tries: 20,
+      repeats: false,
+      desc: "Standard Protocol",
+    },
+    {
+      label: "MEDIUM",
+      length: 5,
+      tries: 15,
+      repeats: false,
+      desc: "Advanced Recon",
+    },
+    {
+      label: "HARD",
+      length: 6,
+      tries: 10,
+      repeats: false,
+      desc: "Special Ops",
+    },
+  ],
+  overdrive: [
+    {
+      label: "ELITE",
+      length: 5,
+      tries: 15,
+      repeats: true,
+      desc: "Signal Noise Alert",
+    },
+    {
+      label: "MASTER",
+      length: 6,
+      tries: 10,
+      repeats: true,
+      desc: "Cryptographic Chaos",
+    },
+  ],
+};
+
+function LandingView() {
+  const router = useRouter();
+  const { startNewGame, menuState, setMenuState, error } = useGameStore();
+  const [category, setCategory] = useState<"standard" | "overdrive">(
+    "standard",
+  );
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+
+  const [selectedLevel, setSelectedLevel] = useState(0);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="relative flex flex-col items-center justify-center my-auto shrink-0 py-4 w-full max-w-sm gap-6 sm:gap-8"
+    >
+      <BinaryBackground />
+      {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
+
+      <AnimatePresence>
+        {showHowToPlay && (
+          <HowToPlayModal onClose={() => setShowHowToPlay(false)} />
+        )}
+        {showLeaderboard && (
+          <LeaderboardModal onClose={() => setShowLeaderboard(false)} />
+        )}
+      </AnimatePresence>
+
+      <div className="text-center space-y-3 mb-2">
+        <AnimatedHeading text="CODEBREAKER" />
+        <p className="text-[#538d4e] font-mono text-[9px] sm:text-[11px] uppercase tracking-[0.6em] animate-pulse drop-shadow-[0_0_8px_rgba(83,141,78,0.4)]">
+          {menuState === "main"
+            ? "INITIATING_CONNECTION..."
+            : "SELECT_MISSION_PARAMETERS"}
+        </p>
+      </div>
+
+      {menuState === "main" && <OperativeIdentity prominent />}
+
+      <div className="w-full relative min-h-75 flex items-center">
+        <AnimatePresence mode="wait">
+          {menuState === "main" && (
+            <motion.div
+              key="main"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.05 }}
+              className="w-full space-y-4"
+            >
+              <MenuButton
+                label="SINGLE_PLAYER"
+                desc="Local Decryption Environment"
+                onClick={() => setMenuState("single")}
+                primary
+              />
+              <MenuButton
+                label="MULTIPLAYER"
+                desc="Remote Uplink Authorized"
+                onClick={() => router.push("/multiplayer")}
+              />
+            </motion.div>
+          )}
+
+          {menuState === "single" && (
+            <motion.div
+              key="single"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="w-full space-y-4"
+            >
+              <MenuButton
+                label="STANDARD_LEVELS"
+                desc="Unique Digit Ciphers"
+                onClick={() => {
+                  setCategory("standard");
+                  setMenuState("category");
+                  setSelectedLevel(0);
+                }}
+              />
+              <MenuButton
+                label="OVERDRIVE_MODES"
+                desc="Repeating Digit Anomalies"
+                onClick={() => {
+                  setCategory("overdrive");
+                  setMenuState("category");
+                  setSelectedLevel(0);
+                }}
+              />
+              <button
+                onClick={() => setMenuState("main")}
+                className="w-full py-3 bg-[#cf6679] hover:bg-[#b15668] text-white font-mono text-xs font-bold rounded-lg transition-all active:scale-95 shadow-[0_0_15px_rgba(207,102,121,0.2)]"
+              >
+                BACK_TO_ROOT
+              </button>
+            </motion.div>
+          )}
+
+          {menuState === "category" && (
+            <motion.div
+              key="category"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="w-full space-y-3"
+            >
+              <div className="flex flex-col gap-2 max-h-[30dvh] overflow-y-auto pr-1 custom-scrollbar">
+                {MISSION_LEVELS[category].map((level, i) => (
+                  <button
+                    key={level.label}
+                    onClick={() => setSelectedLevel(i)}
+                    className={`
+                                            group relative p-4 rounded-lg border-2 transition-all flex items-center justify-between text-left
+                                            ${selectedLevel === i ? "border-[#6ca965] bg-[#6ca965]/5 shadow-[0_0_20px_rgba(108,169,101,0.1)]" : "border-[#3a3a3c] hover:border-[#565758]"}
+                                        `}
+                  >
+                    <div className="flex flex-col translate-x-0 group-hover:translate-x-1 transition-transform">
+                      <span
+                        className={`font-mono text-sm font-bold ${selectedLevel === i ? "text-[#538d4e]" : "text-slate-300"}`}
+                      >
+                        {level.label}
+                      </span>
+                      <span className="text-[#565758] font-mono text-[9px] uppercase">
+                        {`${level.desc} // ${level.length}D // ${level.tries}T`}
+                      </span>
+                    </div>
+                    {selectedLevel === i && (
+                      <motion.div
+                        layoutId="level-indicator"
+                        className="text-[#538d4e]"
+                      >
+                        <div className="w-2 h-2 rounded-full bg-[#538d4e] shadow-[0_0_10px_rgba(83,141,78,0.5)] animate-ping" />
+                      </motion.div>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              <ModifierPanel />
+
+              <button
+                onClick={() => {
+                  const l = MISSION_LEVELS[category][selectedLevel];
+                  startNewGame(
+                    "classic",
+                    l.length,
+                    l.tries,
+                    l.repeats,
+                    l.label,
+                  );
+                }}
+                className="w-full py-4 bg-[#538d4e] hover:bg-[#58a352] text-black text-lg font-bold rounded-lg transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(83,141,78,0.2)] hover:shadow-[0_0_25px_rgba(83,141,78,0.4)] mt-4"
+              >
+                DEPLOY_MODULE
+              </button>
+
+              <button
+                onClick={() => setMenuState("single")}
+                className="w-full py-3 bg-[#cf6679] hover:bg-[#b15668] text-white font-mono text-xs font-bold rounded-lg transition-all active:scale-95 shadow-[0_0_15px_rgba(207,102,121,0.2)]"
+              >
+                RECONFIGURE_MODE
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <div className="w-full flex justify-between gap-4 pt-4 px-2">
+        <button
+          onClick={() => setShowHowToPlay(true)}
+          className="flex-1 py-2 px-3 border border-[#3a3a3c] rounded text-[#565758] hover:text-[#538d4e] hover:border-[#538d4e]/50 font-mono text-[9px] transition-all tracking-tighter uppercase text-center bg-white/5"
+        >
+          FIELD_MANUAL.pdf
+        </button>
+        <button
+          onClick={() => setShowLeaderboard(true)}
+          className="flex-1 py-2 px-3 border border-[#3a3a3c] rounded text-[#565758] hover:text-slate-100 hover:border-slate-500 font-mono text-[9px] transition-all tracking-tighter uppercase text-center bg-white/5"
+        >
+          CENTRAL_REGISTRY.reg
+        </button>
+      </div>
+
+      <footer className="mt-auto text-[#565758] font-mono text-[8px] uppercase tracking-[0.4em]">
+        {`© 2026 CODEBREAKER`}
+      </footer>
+    </motion.div>
+  );
+}
+
+// Redundant AnimatedHeading removed
+
+function MenuButton({
+  label,
+  desc,
+  onClick,
+  disabled,
+  primary,
+}: {
+  label: string;
+  desc: string;
+  onClick: () => void;
+  disabled?: boolean;
+  primary?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`
+                w-full group relative p-6 rounded-lg border-2 transition-all text-left overflow-hidden
+                ${
+                  disabled
+                    ? "opacity-30 cursor-not-allowed border-slate-900"
+                    : primary
+                      ? "border-[#538d4e] bg-[#538d4e]/10 hover:bg-[#538d4e]/15 shadow-[0_0_25px_rgba(83,141,78,0.1)] hover:shadow-[0_0_35px_rgba(83,141,78,0.2)]"
+                      : "border-[#3a3a3c] hover:border-slate-500 bg-white/5 hover:bg-white/10"
+                }
+            `}
+    >
+      <div className="relative z-10 flex flex-col translate-x-0 group-hover:translate-x-2 transition-transform">
+        <span
+          className={`font-mono text-xl font-black tracking-tighter ${primary ? "text-[#538d4e]" : "text-slate-100"}`}
+        >
+          {label}
+        </span>
+        <span className="text-[#565758] font-mono text-[9px] uppercase tracking-widest mt-1">
+          {desc}
+        </span>
+      </div>
+      {!disabled && (
+        <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1">
+          <svg
+            className={`w-6 h-6 ${primary ? "text-[#538d4e]" : "text-slate-500"}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M14 5l7 7m0 0l-7 7m7-7H3"
+            />
+          </svg>
+        </div>
+      )}
+      {primary && !disabled && (
+        <motion.div
+          className="absolute inset-0 bg-[#538d4e]/5"
+          animate={{ opacity: [0.1, 0.25, 0.1] }}
+          transition={{ duration: 3, repeat: Infinity }}
+        />
+      )}
+    </button>
+  );
+}
+
+function ModifierPanel() {
+  const { timerLimit, setTimerLimit, infiniteMode, setInfiniteMode } =
+    useGameStore();
+
+  const timeOptions = [
+    { label: "OFF", value: null },
+    { label: "2M", value: 120 },
+    { label: "3M", value: 180 },
+    { label: "5M", value: 300 },
+  ];
+
+  return (
+    <div className="w-full space-y-3 p-3 bg-white/5 border border-white/10 rounded-lg my-1">
+      <div className="space-y-1.5">
+        <span className="text-[#565758] font-mono text-[9px] uppercase tracking-widest block">
+          MISSION_PERIOD // {timerLimit ? "COUNTDOWN_ACTIVE" : "UNRESTRICTED"}
+        </span>
+        <div className="grid grid-cols-4 gap-2">
+          {timeOptions.map((opt) => (
+            <button
+              key={opt.label}
+              onClick={() => setTimerLimit(opt.value)}
+              className={`
+                py-1.5 rounded font-mono text-[10px] transition-all border
+                ${
+                  timerLimit === opt.value
+                    ? "bg-[#538d4e] text-black border-[#538d4e] shadow-[0_0_10px_rgba(83,141,78,0.3)]"
+                    : "bg-black/20 text-[#565758] border-[#3a3a3c] hover:border-[#565758]"
+                }
+              `}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between pt-1">
+        <span className="text-[#565758] font-mono text-[9px] uppercase tracking-widest">
+          INFINITE_MODE // OVERRIDE_LIMITS
+        </span>
+        <button
+          onClick={() => setInfiniteMode(!infiniteMode)}
+          className={`
+            w-10 h-5 rounded-full relative transition-all
+            ${infiniteMode ? "bg-[#538d4e]" : "bg-[#3a3a3c]"}
+          `}
+        >
+          <motion.div
+            animate={{ x: infiniteMode ? 20 : 2 }}
+            className="w-4 h-4 rounded-full bg-white absolute top-0.5 shadow-sm"
+          />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GameView() {
+  const {
+    gameId,
+    startedAt,
+    startNewGame,
+    status,
+    error,
+    attemptsRemaining,
+    setView,
+    timer,
+    setTimer,
+    username,
+    currentLevelLabel,
+    guesses,
+    currentGuess,
+    codeLength,
+    isLoading,
+    timerLimit,
+    infiniteMode,
+    calculateScore,
+    revealedCode,
+  } = useGameStore();
+  const uploadedGames = useRef(new Set<string>());
+  const [showHelp, setShowHelp] = useState(false);
+
+  // Timer logic
+  useEffect(() => {
+    if (status !== "active" || !startedAt) return;
+    const interval = setInterval(() => {
+        const nextTime = Math.floor((Date.now() - startedAt) / 1000);
+        setTimer(nextTime);
+        if (timerLimit && nextTime >= timerLimit) {
+          void useGameStore.getState().expireGame();
+        }
+      }, 1000);
+    return () => clearInterval(interval);
+  }, [status, startedAt, setTimer, timerLimit]);
+
+  const timeRemaining = timerLimit ? Math.max(0, timerLimit - timer) : null;
+  const isTimeUp = timerLimit !== null && timeRemaining === 0;
+
+  // Format time
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
+  // Auto-upload score on win
+  useEffect(() => {
+    if (status === "solved" && gameId && !uploadedGames.current.has(gameId)) {
+      uploadedGames.current.add(gameId);
+      const upload = async () => {
+        try {
+          await api.postScore({
+            username,
+            level: currentLevelLabel,
+            tries: guesses.length,
+            time_seconds: timer,
+            status: "solved",
+            score: calculateScore(),
+            timerMode: timerLimit !== null,
+            infiniteMode: useGameStore.getState().infiniteMode,
+          });
+        } catch (e) {
+          console.error(e);
+        }
+      };
+      upload();
+    }
+  }, [
+    status,
+    gameId,
+    username,
+    currentLevelLabel,
+    guesses.length,
+    timer,
+    timerLimit,
+    calculateScore,
+  ]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className="flex h-full w-full flex-col items-center min-h-0 overflow-hidden"
+    >
+      <AnimatePresence>
+        {showHelp && <HowToPlayModal onClose={() => setShowHelp(false)} />}
+      </AnimatePresence>
+
+      <div className="shrink-0 w-full max-w-md flex flex-col items-center mb-2 sm:mb-4">
+        <motion.header
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center"
+        >
+          <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl font-serif mb-1 uppercase">
+            CODEBREAKER
+          </h1>
+          <p className="text-[#565758] font-mono text-[8px] uppercase tracking-[0.3em] mb-4">
+            LOGIC_RECON_v1.0
+          </p>
+          <div className="flex items-center justify-center gap-4">
+            <div
+              className={`flex flex-col items-center px-4 py-1 border border-[#3a3a3c] rounded-md transition-colors 
+                ${!infiniteMode && attemptsRemaining !== null && attemptsRemaining <= 5 ? "border-red-500/50 bg-red-500/5" : ""}
+                ${isTimeUp ? "border-red-500 bg-red-500/10" : ""}
+              `}
+            >
+              <span className="text-[#565758] font-mono text-[8px] uppercase tracking-widest">
+                {timerLimit ? "Time Remaining" : "Attempts Rem."}
+              </span>
+              <span
+                className={`text-xl font-bold font-mono 
+                    ${!infiniteMode && attemptsRemaining !== null && attemptsRemaining <= 5 ? "text-red-400" : "text-slate-100"}
+                    ${isTimeUp || (timerLimit && timeRemaining !== null && timeRemaining <= 30) ? "text-red-500 animate-pulse" : ""}
+                `}
+              >
+                {timerLimit
+                  ? formatTime(timeRemaining || 0)
+                  : infiniteMode
+                    ? "∞"
+                    : (attemptsRemaining ?? "∞")}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => useGameStore.getState().triggerHint()}
+                disabled={status !== "active" || guesses.length < 1}
+                className="px-3 py-1 border border-[#538d4e]/30 bg-[#538d4e]/5 hover:bg-[#538d4e]/10 text-[#538d4e] font-mono text-[8px] uppercase tracking-widest rounded transition-all disabled:opacity-30"
+              >
+                [GET_HINT]
+              </button>
+              <button
+                onClick={() => useGameStore.getState().resignGame()}
+                disabled={status !== "active"}
+                className="px-3 py-1 border border-red-500/30 bg-red-500/5 hover:bg-red-500/10 text-red-400 font-mono text-[8px] uppercase tracking-widest rounded transition-all disabled:opacity-30"
+              >
+                [SURRENDER]
+              </button>
+              <button
+                onClick={() => setShowHelp(true)}
+                className="px-3 py-1 border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 text-blue-400 font-mono text-[8px] uppercase tracking-widest rounded transition-all"
+              >
+                [?]
+              </button>
+            </div>
+          </div>
+        </motion.header>
+      </div>
+
+      <div className="flex-1 w-full max-w-md flex flex-col min-h-0 overflow-hidden px-2">
+        <Board
+          guesses={guesses}
+          currentGuess={currentGuess}
+          codeLength={codeLength}
+          status={status}
+          hintsRevealed={useGameStore.getState().hintsRevealed}
+        />
+      </div>
+
+      <div className="shrink-0 w-full max-w-md mt-4 pb-6">
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="text-red-400 font-mono text-[10px] uppercase bg-red-400/10 border border-red-400/20 px-3 py-1.5 rounded-full mx-auto w-fit mb-4"
+            >
+              ERROR: {error}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {status !== "active" && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="absolute inset-0 overflow-y-auto flex items-start justify-center bg-[#0a0a0b]/90 backdrop-blur-md z-50 p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.9, y: 20, opacity: 0 }}
+                animate={{ scale: 1, y: 0, opacity: 1 }}
+                className="bg-[#121213] border border-[#3a3a3c] p-6 sm:p-10 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,1)] border-t-[#565758]/50 text-center max-w-sm w-full space-y-8"
+              >
+                <div className="space-y-2">
+                  <div
+                    className={`flex flex-col items-center leading-none uppercase font-serif font-bold tracking-tighter
+                      ${status === "solved" ? "text-[#538d4e] drop-shadow-[0_0_15px_rgba(83,141,78,0.5)]" : "text-red-500"}
+                    `}
+                  >
+                    {status === "solved" ? (
+                      <>
+                        <span className="text-xl sm:text-2xl opacity-80">
+                          MISSION
+                        </span>
+                        <span className="text-3xl sm:text-4xl">
+                          ACCOMPLISHED
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-3xl sm:text-4xl">
+                        {isTimeUp ? "TIME_EXPIRED" : "MISSION_FAILED"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[#565758] font-mono text-[9px] uppercase tracking-[0.3em]">
+                    {status === "solved"
+                      ? "Target Cipher Compromised"
+                      : "System Lockdown Initialized"}
+                  </p>
+                </div>
+
+                {revealedCode && (
+                  <div className="py-4 border-y border-[#3a3a3c]/50">
+                    <span className="block text-[#565758] font-mono text-[8px] uppercase tracking-widest mb-2">
+                      Target Cipher
+                    </span>
+                    <div className="flex justify-center gap-2">
+                      {revealedCode.split("").map((digit, i) => (
+                        <div
+                          key={i}
+                          className="w-10 h-10 border border-[#538d4e]/30 bg-[#538d4e]/5 flex items-center justify-center text-[#538d4e] font-mono font-bold text-xl rounded"
+                        >
+                          {digit}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white/5 p-3 rounded-lg border border-white/5">
+                    <span className="block text-[#565758] font-mono text-[7px] uppercase mb-1">
+                      Attempts
+                    </span>
+                    <span className="text-xl font-bold text-slate-100">
+                      {guesses.length}
+                    </span>
+                  </div>
+                  <div className="bg-white/5 p-3 rounded-lg border border-white/5">
+                    <span className="block text-[#565758] font-mono text-[7px] uppercase mb-1">
+                      Duration
+                    </span>
+                    <span className="text-xl font-bold text-slate-100">
+                      {formatTime(timer)}
+                    </span>
+                  </div>
+                  <div className="bg-white/5 p-3 rounded-lg border border-white/5">
+                    <span className="block text-[#565758] font-mono text-[7px] uppercase mb-1">
+                      Hints Used
+                    </span>
+                    <span className="text-xl font-bold text-slate-100">
+                      {useGameStore.getState().hintsUsed}
+                    </span>
+                  </div>
+                  <div className="bg-white/5 p-3 rounded-lg border border-[#538d4e]/20">
+                    <span className="block text-[#538d4e] font-mono text-[7px] uppercase mb-1">
+                      Operative Score
+                    </span>
+                    <span className="text-xl font-bold text-[#538d4e]">
+                      {status === "solved" ? calculateScore() : "000"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => {
+                        const levelData =
+                          MISSION_LEVELS.standard.find(
+                            (l) => l.label === currentLevelLabel,
+                          ) ||
+                          MISSION_LEVELS.overdrive.find(
+                            (l) => l.label === currentLevelLabel,
+                          );
+                        if (levelData) {
+                          startNewGame(
+                            "classic",
+                            levelData.length,
+                            levelData.tries,
+                            levelData.repeats,
+                            levelData.label,
+                          );
+                        }
+                      }}
+                      className="w-full py-4 bg-white/10 hover:bg-white/20 text-slate-100 font-bold rounded-xl transition-all active:scale-95 border border-white/10 uppercase tracking-widest text-xs"
+                    >
+                      Replay Level
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Find current list and index
+                        const isStandard = MISSION_LEVELS.standard.some(
+                          (l) => l.label === currentLevelLabel,
+                        );
+                        const list = isStandard
+                          ? MISSION_LEVELS.standard
+                          : MISSION_LEVELS.overdrive;
+                        const currentIndex = list.findIndex(
+                          (l) => l.label === currentLevelLabel,
+                        );
+                        const nextIndex = currentIndex + 1;
+
+                        if (nextIndex < list.length) {
+                          const nextLevel = list[nextIndex];
+                          startNewGame(
+                            "classic",
+                            nextLevel.length,
+                            nextLevel.tries,
+                            nextLevel.repeats,
+                            nextLevel.label,
+                          );
+                        } else {
+                          // If end of standard, go to overdrive, or stay at MASTER?
+                          // User said "proceed beyond hard", so let's handle transition if possible
+                          if (isStandard) {
+                            const nextLevel = MISSION_LEVELS.overdrive[0];
+                            startNewGame(
+                              "classic",
+                              nextLevel.length,
+                              nextLevel.tries,
+                              nextLevel.repeats,
+                              nextLevel.label,
+                            );
+                          } else {
+                            // Already at MASTER
+                            startNewGame(
+                              "classic",
+                              list[currentIndex].length,
+                              list[currentIndex].tries,
+                              list[currentIndex].repeats,
+                              list[currentIndex].label,
+                            );
+                          }
+                        }
+                      }}
+                      className="w-full py-4 bg-[#538d4e] hover:bg-[#58a352] text-black font-bold rounded-xl transition-all active:scale-95 shadow-[0_0_20px_rgba(83,141,78,0.3)] uppercase tracking-widest text-xs"
+                    >
+                      Next Mission
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => setView("landing")}
+                    className="w-full py-3 bg-[#cf6679] hover:bg-[#b15668] text-white font-bold font-mono text-[10px] rounded-xl uppercase tracking-widest transition-all active:scale-95"
+                  >
+                    EXIT MISSION
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <Keyboard
+          onAddDigit={(d) => useGameStore.getState().addDigit(d)}
+          onRemoveDigit={() => useGameStore.getState().removeDigit()}
+          onSubmitGuess={() => useGameStore.getState().submitGuess()}
+          currentGuess={currentGuess}
+          codeLength={codeLength}
+          status={status}
+          isLoading={isLoading}
+          timerActionBlocked={isTimeUp || showHelp}
+          struckKeys={useGameStore.getState().struckKeys}
+          onToggleStruckKey={(k) => useGameStore.getState().toggleStruckKey(k)}
+        />
+      </div>
+
+      <footer className="flex-none mt-4 text-[#565758] font-mono text-[8px] uppercase tracking-[0.4em]">
+        {`© 2026 CODEBREAKER`}
+      </footer>
+    </motion.div>
+  );
+}
+
+function BinaryBackground() {
+  const [particles, setParticles] = useState<
+    { value: number; duration: number; delay: number }[]
+  >([]);
+
+  useEffect(() => {
+    // Use requestAnimationFrame to avoid "synchronous setState in effect" lint error
+    // and ensure we only generate these on the client.
+    requestAnimationFrame(() => {
+      const p = Array.from({ length: 100 }).map(() => ({
+        value: Math.round(randomUnit()),
+        duration: randomUnit() * 3 + 2,
+        delay: randomUnit() * 5,
+      }));
+      setParticles(p);
+    });
+  }, []);
+
+  return (
+    <div aria-hidden="true" className="absolute inset-0 overflow-hidden opacity-[0.03] pointer-events-none select-none font-mono text-[10px] flex flex-wrap gap-4 leading-none">
+      {particles.map((p, i) => (
+        <span
+          key={i}
+          style={{ animationDuration: `${p.duration}s`, animationDelay: `${p.delay}s` }}
+          className="binary-particle text-[#565758]"
+        >
+          {p.value}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function randomUnit() {
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    return crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32;
+  }
+  return Math.random();
+}
+
+// Redundant HowToPlayModal removed
+
+// Redundant AbandonMissionModal removed
+
+function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
+  const { username, setUsername, view, menuState } = useGameStore();
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(username);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [accountMode, setAccountMode] = useState<"callsign" | "login" | "register">("callsign");
+  const [accountUsername, setAccountUsername] = useState(username);
+  const [accountPassword, setAccountPassword] = useState("");
+  const [accountUser, setAccountUser] = useState<AccountUser | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [showFriends, setShowFriends] = useState(false);
+
+  const isEditable = view === "landing" && menuState === "main";
+
+  const generateNewAlias = () => {
+    if (!isEditable) return;
+    const prefixes = [
+      "VOID",
+      "CYPHER",
+      "LOGIC",
+      "GHOST",
+      "SIGNAL",
+      "DECODER",
+      "PROXY",
+      "NEON",
+      "QUANTUM",
+      "VECTOR",
+      "PHANTOM",
+      "NEXUS",
+      "STATIC",
+      "CIRCUIT",
+      "SHADOW",
+      "BYTE",
+      "RUNTIME",
+      "MATRIX",
+      "SPECTER",
+    ];
+    const suffixes = [
+      "WALKER",
+      "KID",
+      "STALKER",
+      "BLADE",
+      "REAPER",
+      "PULSE",
+      "BREAKER",
+      "HUNTER",
+      "RAVEN",
+      "FALCON",
+      "DRIFT",
+      "ECHO",
+      "FLUX",
+      "NIGHT",
+      "SPARK",
+      "VECTOR",
+      "SHIFT",
+      "TRACE",
+      "SCOUT",
+    ];
+    const randomNum = Math.floor(Math.random() * 900) + 100;
+    const newAlias = `${prefixes[Math.floor(Math.random() * prefixes.length)]}_${suffixes[Math.floor(Math.random() * suffixes.length)]}_${randomNum}`;
+    setDraft(newAlias);
+    setValidationError(null);
+  };
+
+  const openEditor = () => {
+    if (!isEditable) return;
+    setDraft(username);
+    setAccountUsername(username);
+    setAccountPassword("");
+    setValidationError(null);
+    setAccountError(null);
+    setAccountMode("callsign");
+    void api.getCurrentAccount().then((response) => {
+      if (response) {
+        setAccountUser(response.user);
+        setUsername(response.user.username);
+      }
+    }).catch(() => undefined);
+    setIsEditing(true);
+  };
+
+  const saveUsername = () => {
+    const normalized = draft.trim().replace(/\s+/g, "_");
+    if (normalized.length < 2) {
+      setValidationError("CALLSIGN_MUST_BE_AT_LEAST_2_CHARACTERS");
+      return;
+    }
+    if (normalized.length > 24) {
+      setValidationError("CALLSIGN_LIMIT_IS_24_CHARACTERS");
+      return;
+    }
+    setUsername(normalized.toUpperCase());
+    setIsEditing(false);
+  };
+
+  const submitAccount = async () => {
+    setAccountBusy(true);
+    setAccountError(null);
+    try {
+      const response = accountMode === "register"
+        ? await api.register(accountUsername.trim(), accountPassword)
+        : await api.login(accountUsername.trim(), accountPassword);
+      setAccountUser(response.user);
+      setUsername(response.user.username);
+      window.dispatchEvent(new Event("codebreaker-auth-changed"));
+      setIsEditing(false);
+    } catch (error) {
+      setAccountError((error as Error).message);
+    } finally {
+      setAccountBusy(false);
+    }
+  };
+
+  const logoutAccount = async () => {
+    await api.logout();
+    setAccountUser(null);
+    setAccountMode("callsign");
+    window.dispatchEvent(new Event("codebreaker-auth-changed"));
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={openEditor}
+        disabled={!isEditable}
+        className={`flex flex-col gap-1 border border-[#3a3a3c] rounded-lg bg-black/40 backdrop-blur-md shadow-[0_0_20px_rgba(0,0,0,0.5)] border-t-[#565758]/30 text-left transition-all ${
+          prominent
+            ? "w-full max-w-sm p-4 hover:border-[#538d4e]/60 hover:bg-[#538d4e]/5"
+            : "items-end p-2"
+        } ${isEditable ? "cursor-pointer" : "cursor-default"}`}
+      >
+        <span className="text-[#565758] font-mono text-[7px] uppercase tracking-widest">
+          {accountUser ? "ACCOUNT // CALLSIGN" : prominent ? "PLAY_AS // CALLSIGN" : "OPERATIVE_ID"}
+        </span>
+        <div className={`flex items-center gap-3 ${prominent ? "justify-between" : ""}`}>
+          <span className={`text-[#538d4e] font-mono font-bold tracking-tight drop-shadow-[0_0_5px_rgba(83,141,78,0.3)] ${prominent ? "text-lg" : "text-[11px]"}`}>
+            {username}
+          </span>
+          {isEditable && (
+            <span className="text-[#565758] font-mono text-[8px] uppercase">
+              {accountUser ? "SIGNED_IN" : prominent ? "EDIT" : "CHANGE"}
+            </span>
+          )}
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {isEditing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsEditing(false)}
+            className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              onClick={(event) => event.stopPropagation()}
+              className="w-full max-w-sm rounded-2xl border border-[#3a3a3c] bg-[#121213] p-6 shadow-[0_0_50px_rgba(0,0,0,0.8)]"
+            >
+              {accountMode === "callsign" ? (
+                <>
+                  <div className="mb-5">
+                    <p className="text-[#538d4e] font-mono text-xs font-bold tracking-widest">CALLSIGN_CONFIGURATION</p>
+                    <p className="mt-2 text-[#565758] font-mono text-[9px] uppercase">Guest play is instant. An account keeps this identity across devices.</p>
+                  </div>
+                  <input
+                    autoFocus
+                    value={draft}
+                    maxLength={24}
+                    onChange={(event) => {
+                      setDraft(event.target.value);
+                      setValidationError(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") saveUsername();
+                    }}
+                    placeholder="ENTER_CALLSIGN"
+                    className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 text-sm font-mono text-slate-100 outline-none focus:border-[#538d4e]"
+                  />
+                  {validationError && <p role="alert" className="mt-2 text-[9px] font-mono uppercase text-red-400">{validationError}</p>}
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <button type="button" onClick={generateNewAlias} className="rounded-lg border border-[#3a3a3c] py-3 text-[10px] font-mono uppercase text-slate-300 hover:border-[#538d4e] hover:text-[#538d4e]">GENERATE_ALIAS</button>
+                    <button type="button" onClick={saveUsername} className="rounded-lg bg-[#538d4e] py-3 text-[10px] font-mono font-bold uppercase text-black hover:bg-[#58a352]">SAVE_CALLSIGN</button>
+                  </div>
+                  <div className="mt-6 border-t border-[#3a3a3c] pt-5">
+                    {accountUser ? (
+                      <div className="space-y-3">
+                        <button type="button" onClick={() => { setIsEditing(false); setShowFriends(true); }} className="w-full rounded-lg border border-[#538d4e]/40 py-3 text-[10px] font-mono uppercase text-[#538d4e] hover:bg-[#538d4e]/10">OPEN_SOCIAL_CENTER</button>
+                        <button type="button" onClick={logoutAccount} className="w-full rounded-lg border border-[#cf6679]/40 py-3 text-[10px] font-mono uppercase text-[#cf6679] hover:bg-[#cf6679]/10">SIGN_OUT_OF_ACCOUNT</button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3">
+                        <button type="button" onClick={() => setAccountMode("login")} className="rounded-lg border border-[#3a3a3c] py-3 text-[10px] font-mono uppercase text-slate-300 hover:border-[#538d4e] hover:text-[#538d4e]">SIGN_IN</button>
+                        <button type="button" onClick={() => setAccountMode("register")} className="rounded-lg border border-[#538d4e]/40 py-3 text-[10px] font-mono uppercase text-[#538d4e] hover:bg-[#538d4e]/10">CREATE_ACCOUNT</button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-[#538d4e] font-mono text-xs font-bold tracking-widest">{accountMode === "register" ? "CREATE_ACCOUNT" : "ACCOUNT_LOGIN"}</p>
+                    <p className="mt-2 text-[#565758] font-mono text-[9px] uppercase">Use a unique callsign and a password of at least 8 characters.</p>
+                  </div>
+                  <input value={accountUsername} maxLength={24} onChange={(event) => setAccountUsername(event.target.value)} placeholder="CALLSIGN" className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 text-sm font-mono text-slate-100 outline-none focus:border-[#538d4e]" />
+                  <input type="password" value={accountPassword} onChange={(event) => setAccountPassword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void submitAccount(); }} placeholder="PASSWORD" className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 text-sm font-mono text-slate-100 outline-none focus:border-[#538d4e]" />
+                  {accountError && <p role="alert" className="text-[9px] font-mono uppercase text-red-400">{accountError}</p>}
+                  <div className="grid grid-cols-2 gap-3">
+                    <button type="button" onClick={() => setAccountMode("callsign")} className="rounded-lg border border-[#3a3a3c] py-3 text-[10px] font-mono uppercase text-slate-300 hover:border-[#565758]">BACK</button>
+                    <button type="button" disabled={accountBusy} onClick={() => void submitAccount()} className="rounded-lg bg-[#538d4e] py-3 text-[10px] font-mono font-bold uppercase text-black hover:bg-[#58a352] disabled:opacity-50">{accountBusy ? "CONNECTING..." : accountMode === "register" ? "REGISTER" : "SIGN_IN"}</button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {showFriends && <FriendsCenter onClose={() => setShowFriends(false)} />}
+    </>
+  );
+}
+
+function LeaderboardModal({ onClose }: { onClose: () => void }) {
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api
+      .getLeaderboard()
+      .then((data: LeaderboardEntry[]) => {
+        const local = api.getLocalLeaderboard();
+        const merged = [...data, ...local];
+        const unique = merged.filter(
+          (entry, index, self) =>
+            index ===
+            self.findIndex(
+              (e) =>
+                e.timestamp === entry.timestamp &&
+                e.username === entry.username,
+            ),
+        );
+        const statusPriority: Record<string, number> = {
+          solved: 0,
+          surrendered: 1,
+          failed: 2,
+          active: 3,
+        };
+        unique.sort((a, b) => {
+          const sp =
+            (statusPriority[a.status] ?? 99) - (statusPriority[b.status] ?? 99);
+          if (sp !== 0) return sp;
+          return b.score - a.score;
+        });
+        setEntries(unique);
+        setLoading(false);
+      })
+      .catch(() => {
+        setEntries(api.getLocalLeaderboard());
+        setLoading(false);
+      });
+  }, []);
+
+  const handlePurge = () => {
+    api.clearLeaderboard();
+    setEntries([]);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+      className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl cursor-pointer"
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 10, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-[#0f0f10] border border-[#3a3a3c] p-6 sm:p-10 rounded-2xl max-w-4xl w-full shadow-[0_0_50px_rgba(0,0,0,1)] border-t-[#565758]/50 flex flex-col max-h-[80dvh] cursor-default"
+      >
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#3a3a3c] pb-6 shrink-0">
+          <h3 className="text-xl sm:text-2xl font-bold tracking-tighter font-serif uppercase text-[#538d4e] drop-shadow-[0_0_15px_rgba(83,141,78,0.4)]">
+            CENTRAL_REGISTRY.reg
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-[#565758] hover:text-white transition-colors uppercase font-mono text-[10px] sm:text-xs bg-white/5 px-3 py-1.5 rounded border border-white/10 hover:border-white/20 flex items-center gap-2 group"
+          >
+            <span className="hidden sm:inline">[CLOSE_TERMINAL]</span>
+            <span className="sm:hidden">[X]</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500/50 group-hover:bg-red-500 animate-pulse" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto overflow-x-auto min-h-0 flex-1 mt-6 no-scrollbar">
+          <table className="w-full font-mono text-[10px] sm:text-xs text-left uppercase">
+            <thead className="text-[#565758] border-b border-[#3a3a3c]/30 sticky top-0 bg-[#0f0f10] z-10">
+              <tr>
+                <th className="pb-3 px-2">RANK</th>
+                <th className="pb-3 px-2">OPERATIVE_ID</th>
+                <th className="pb-3 px-2">MISSION_LEVEL</th>
+                <th className="pb-3 px-2">EFFICIENCY</th>
+                <th className="pb-3 px-2">DURATION</th>
+                <th className="pb-3 px-2">MODIFIERS</th>
+                <th className="pb-3 px-2 text-right">SCORE</th>
+              </tr>
+            </thead>
+            <tbody className="text-slate-300">
+              {loading ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="py-12 text-center animate-pulse text-[#538d4e] text-sm"
+                  >
+                    ACCESSING_DECRYPTED_RECORDS...
+                  </td>
+                </tr>
+              ) : entries.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="py-12 text-center text-[#565758] text-sm"
+                  >
+                    NO_BREACHES_DETECTED_IN_DATABASE
+                  </td>
+                </tr>
+              ) : (
+                entries.map((e, i) => (
+                  <tr
+                    key={i}
+                    className="border-b border-[#3a3a3c]/10 hover:bg-white/5 transition-colors group"
+                  >
+                    <td className="py-4 px-2 text-[#565758]">
+                      {(i + 1).toString().padStart(2, "0")}
+                    </td>
+                    <td className="py-4 px-2 text-slate-100 font-bold group-hover:text-[#538d4e] transition-colors">
+                      {e.username}
+                    </td>
+                    <td className="py-4 px-2 text-[#c8b653] font-black">
+                      {e.level}
+                    </td>
+                    <td
+                      className={`py-4 px-2 font-mono ${e.status === "solved" ? "text-[#538d4e]" : "text-red-400 opacity-70"}`}
+                    >
+                      {e.status === "solved" ? `${e.tries} TRIES` : "RESIGNED"}
+                    </td>
+                    <td className="py-4 px-2 text-slate-100">
+                      {e.status === "solved" ? `${e.time_seconds}s` : "--"}
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="flex gap-1.5">
+                        {e.timerMode && (
+                          <span className="text-[8px] bg-[#c8b653]/10 text-[#c8b653] border border-[#c8b653]/20 px-2 py-0.5 rounded">
+                            TIMER
+                          </span>
+                        )}
+                        {e.infiniteMode && (
+                          <span className="text-[8px] bg-[#cf6679]/10 text-[#cf6679] border border-[#cf6679]/20 px-2 py-0.5 rounded">
+                            INFINITE
+                          </span>
+                        )}
+                        {!e.timerMode && !e.infiniteMode && (
+                          <span className="text-[8px] text-[#565758] border border-white/5 px-2 py-0.5 rounded">
+                            STANDARD
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td
+                      className={`py-4 px-2 font-bold text-right text-sm ${e.status === "solved" ? "text-[#538d4e]" : "text-[#565758]"}`}
+                    >
+                      {e.status === "solved" ? e.score.toLocaleString() : "--"}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex justify-between items-center border-t border-[#3a3a3c] pt-6 mt-6 shrink-0">
+          <div className="text-[9px] text-[#565758] font-mono uppercase tracking-[0.3em] italic">
+            Encrypted secure uplink active • {entries.length} records found
+          </div>
+          {entries.length > 0 && (
+            <button
+              onClick={handlePurge}
+              className="text-[#cf6679] hover:bg-[#cf6679]/10 font-mono text-[10px] uppercase font-bold tracking-widest px-4 py-2 rounded border border-[#cf6679]/30 transition-all active:scale-95 shadow-[0_0_15px_rgba(207,102,121,0.1)]"
+            >
+              PURGE_REGISTRY_LOGS
+            </button>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}

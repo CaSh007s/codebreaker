@@ -8,6 +8,12 @@ async function setup(page: Page, name: string) {
   await expect(page.getByText("Uplink_Lobby")).toBeVisible();
 }
 
+async function enterApp(page: Page) {
+  await page.goto("/");
+  await page.getByRole("button", { name: "ENTER_AS_GUEST" }).click();
+  await expect(page.getByRole("button", { name: /SINGLE_PLAYER/ })).toBeVisible();
+}
+
 test("two tabs register, play, chat, refresh, reconnect and rematch", async ({ page, context }) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -91,7 +97,7 @@ test("single-player timer ends the game and shows its answer", async ({ page }) 
     expirations++;
     return route.fulfill({ json: { status: "failed", secret_code: "123" } });
   });
-  await page.goto("/");
+  await enterApp(page);
   await page.getByRole("button", { name: /SINGLE_PLAYER/ }).click();
   await page.getByRole("button", { name: /STANDARD_LEVELS/ }).click();
   await page.getByRole("button", { name: "2M", exact: true }).click();
@@ -113,7 +119,7 @@ test("score upload failure does not loop and replay uploads the next score", asy
     uploads++;
     return route.fulfill({ status: 503, json: { detail: "Unavailable" } });
   });
-  await page.goto("/");
+  await enterApp(page);
   await page.getByRole("button", { name: /SINGLE_PLAYER/ }).click();
   await page.getByRole("button", { name: /STANDARD_LEVELS/ }).click();
   await page.getByRole("button", { name: "DEPLOY_MODULE" }).click();
@@ -130,7 +136,7 @@ test("score upload failure does not loop and replay uploads the next score", asy
 test("six-digit game fits a narrow mobile screen", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.route("**/game/new", route => route.fulfill({ json: { game_id: "mobile", code_length: 6, mode: "classic", max_attempts: 10 } }));
-  await page.goto("/");
+  await enterApp(page);
   await page.getByRole("button", { name: /SINGLE_PLAYER/ }).click();
   await page.getByRole("button", { name: /STANDARD_LEVELS/ }).click();
   await page.getByRole("button", { name: /HARD/ }).click();
@@ -144,7 +150,7 @@ test("six-digit game fits a narrow mobile screen", async ({ page }) => {
 });
 
 test("single-player completes a real API guess, hint and surrender flow", async ({ page }) => {
-  await page.goto("/");
+  await enterApp(page);
   await page.getByRole("button", { name: /SINGLE_PLAYER/ }).click();
   await page.getByRole("button", { name: /STANDARD_LEVELS/ }).click();
   await page.getByRole("button", { name: "DEPLOY_MODULE" }).click();
@@ -166,7 +172,7 @@ test("single-player falls back to a persistent offline mission", async ({ page }
     Math.random = () => 0.999;
   });
   await page.route("**/game/new", route => route.abort("failed").catch(() => undefined));
-  await page.goto("/");
+  await enterApp(page);
   await page.getByRole("button", { name: /SINGLE_PLAYER/ }).click();
   await page.getByRole("button", { name: /STANDARD_LEVELS/ }).click();
   await page.getByRole("button", { name: "DEPLOY_MODULE" }).click();
@@ -206,4 +212,19 @@ test("PWA manifest and service worker are available", async ({ page, request }) 
   await page.context().setOffline(true);
   await page.reload();
   await expect(page.getByText("CODEBREAKER", { exact: true }).first()).toBeVisible();
+});
+
+test("install prompt is shown only on the entry page", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    const event = new Event("beforeinstallprompt") as Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" }> };
+    Object.defineProperties(event, {
+      prompt: { value: async () => undefined },
+      userChoice: { value: Promise.resolve({ outcome: "accepted" as const }) },
+    });
+    window.dispatchEvent(event);
+  });
+  await expect(page.getByRole("button", { name: "Install Codebreaker" })).toBeVisible();
+  await page.getByRole("button", { name: "ENTER_AS_GUEST" }).click();
+  await expect(page.getByRole("button", { name: "Install Codebreaker" })).toBeHidden();
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -13,6 +14,8 @@ export default function PWAProvider() {
   const [online, setOnline] = useState(true);
   const [ios, setIos] = useState(false);
   const [standalone, setStandalone] = useState(false);
+  const pathname = usePathname();
+  const isEntryPage = pathname === "/";
 
   useEffect(() => {
     const onlineFrame = requestAnimationFrame(() =>
@@ -62,7 +65,7 @@ export default function PWAProvider() {
           Offline mode // single-player available
         </div>
       )}
-      {installEvent && (
+      {installEvent && isEntryPage && (
         <button
           type="button"
           onClick={install}
@@ -71,7 +74,7 @@ export default function PWAProvider() {
           Install Codebreaker
         </button>
       )}
-      {ios && !standalone && (
+      {ios && !standalone && isEntryPage && (
         <div className="fixed bottom-4 left-1/2 z-1000 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-xl border border-white/15 bg-[#121213] px-4 py-3 text-center font-mono text-[10px] text-slate-300 shadow-2xl">
           Install on iPhone: tap <strong>Share</strong>, then{" "}
           <strong>Add to Home Screen</strong>.

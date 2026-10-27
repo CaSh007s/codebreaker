@@ -13,6 +13,24 @@ export interface AuthResponse {
   user: AccountUser;
 }
 
+export interface FriendRecord {
+  user_id: string;
+  username: string;
+  status: "pending" | "accepted" | "blocked";
+  direction?: "incoming" | "outgoing";
+  created_at: string;
+}
+
+export interface NotificationRecord {
+  notification_id: string;
+  kind: string;
+  title: string;
+  body: string;
+  payload: Record<string, string>;
+  read: boolean;
+  created_at: string;
+}
+
 export interface NewGameResponse {
   game_id: string;
   code_length: number;
@@ -77,6 +95,45 @@ export const api = {
     if (response.status === 401) return null;
     if (!response.ok) throw new Error("Could not load account");
     return response.json();
+  },
+
+  async getFriends(): Promise<FriendRecord[]> {
+    return socialRequest<FriendRecord[]>("/social/friends");
+  },
+
+  async sendFriendRequest(username: string): Promise<FriendRecord> {
+    return socialRequest<FriendRecord>("/social/friends/requests", {
+      method: "POST",
+      body: JSON.stringify({ username }),
+    });
+  },
+
+  async respondToFriendRequest(userId: string, action: "accept" | "decline"): Promise<void> {
+    await socialRequest<void>(`/social/friends/requests/${encodeURIComponent(userId)}/${action}`, { method: "POST" });
+  },
+
+  async removeFriend(userId: string): Promise<void> {
+    await socialRequest<void>(`/social/friends/${encodeURIComponent(userId)}`, { method: "DELETE" });
+  },
+
+  async blockUser(userId: string): Promise<void> {
+    await socialRequest<void>(`/social/blocks/${encodeURIComponent(userId)}`, { method: "POST" });
+  },
+
+  async getNotifications(): Promise<NotificationRecord[]> {
+    return socialRequest<NotificationRecord[]>("/social/notifications");
+  },
+
+  async markNotificationRead(notificationId: string): Promise<void> {
+    await socialRequest<void>(`/social/notifications/${encodeURIComponent(notificationId)}/read`, { method: "POST" });
+  },
+
+  async savePushSubscription(subscription: PushSubscription): Promise<void> {
+    const json = subscription.toJSON();
+    await socialRequest<void>("/social/push-subscriptions", {
+      method: "POST",
+      body: JSON.stringify({ endpoint: json.endpoint, p256dh: json.keys?.p256dh, auth: json.keys?.auth }),
+    });
   },
 
   async createGame(mode: GameMode = "classic", length: number = 4, maxAttempts?: number, allowRepeats: boolean = true, timeLimit?: number): Promise<NewGameResponse> {
@@ -200,6 +257,20 @@ async function authRequest(path: string, username: string, password: string): Pr
     const error = await response.json().catch(() => null);
     throw new Error(error?.detail || "Account request failed");
   }
+  return response.json();
+}
+
+async function socialRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => null);
+    throw new Error(error?.detail || "Social request failed");
+  }
+  if (response.status === 204) return undefined as T;
   return response.json();
 }
 
