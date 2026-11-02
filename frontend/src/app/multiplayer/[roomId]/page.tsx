@@ -642,6 +642,9 @@ export default function MultiplayerRoom() {
                         </span>
                       </button>
                     </div>
+                    <p className="font-mono text-[8px] uppercase tracking-widest text-[#565758]">
+                      REMATCH_REUSES_THIS_ROOM_CONFIGURATION // NEW_ROOM_TO_CHANGE_MODE
+                    </p>
                   </div>
                 );
               })()}

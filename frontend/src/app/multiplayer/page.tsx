@@ -87,7 +87,7 @@ export default function MultiplayerLanding() {
         <div className="w-10" /> {/* Spacer to maintain layout balance */}
       </header>
 
-      <div className="flex-1 w-full flex flex-col items-center justify-center relative z-10 max-w-sm mx-auto gap-8">
+      <div className="flex-1 w-full flex flex-col items-center justify-center relative z-10 max-w-sm lg:max-w-5xl mx-auto gap-8">
         <div className="text-center space-y-3">
           <AnimatedHeading text="CODEBREAKER" />
           <h1 className="text-2xl font-bold tracking-[0.5em] font-serif flex justify-center flex-nowrap whitespace-nowrap overflow-hidden opacity-80">
@@ -98,7 +98,8 @@ export default function MultiplayerLanding() {
           </p>
         </div>
 
-        <div className="w-full space-y-4">
+        <div className="w-full space-y-4 lg:grid lg:grid-cols-[1.15fr_0.85fr] lg:gap-5 lg:space-y-0">
+          <div className="lg:col-span-2">
           <div className="flex gap-2 p-1 bg-white/5 border border-white/10 rounded-lg relative overflow-hidden">
             <button
               onClick={() => {
@@ -133,7 +134,9 @@ export default function MultiplayerLanding() {
               <span className="relative z-10">OVERDRIVE</span>
             </button>
           </div>
+          </div>
 
+          <div className="min-w-0 space-y-4">
           <AnimatePresence>
             {category === "standard" && (
               <motion.div 
@@ -203,20 +206,45 @@ export default function MultiplayerLanding() {
               </motion.div>
             </AnimatePresence>
           </div>
+          </div>
 
-          <button
-            onClick={generateRoom}
-            className="w-full py-4 bg-[#538d4e] hover:bg-[#58a352] text-black text-lg font-bold rounded-lg transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(83,141,78,0.2)]"
-          >
-            CREATE_ROOM
-          </button>
+          <div className="hidden min-w-0 rounded-lg border border-white/10 bg-white/5 p-5 lg:block">
+            <div className="space-y-4">
+              <div>
+                <span className="font-mono text-[9px] uppercase tracking-widest text-[#565758]">UPLINK_CONFIGURATION</span>
+                <h2 className="mt-2 font-serif text-2xl font-bold tracking-tight text-slate-100">{category === "standard" ? "STANDARD_CIPHERS" : "ELITE_OVERDRIVE"}</h2>
+                <p className="mt-2 font-mono text-[9px] uppercase leading-relaxed text-[#565758]">{category === "standard" ? "Unique digit sequences for controlled deduction." : "Repeating digit anomalies for high-risk decryption."}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 border-y border-white/10 py-4 font-mono text-[9px] uppercase">
+                <div><span className="block text-[#565758]">SELECTED_PROFILE</span><span className="mt-1 block text-[#538d4e]">{MISSION_LEVELS[category][selectedLevel].label}</span></div>
+                <div><span className="block text-[#565758]">CIPHER_LENGTH</span><span className="mt-1 block text-slate-200">{MISSION_LEVELS[category][selectedLevel].length} DIGITS</span></div>
+                <div><span className="block text-[#565758]">ATTEMPT_LIMIT</span><span className="mt-1 block text-slate-200">{MISSION_LEVELS[category][selectedLevel].tries} TRIES</span></div>
+                <div><span className="block text-[#565758]">REPEATING_DIGITS</span><span className="mt-1 block text-[#c8b653]">{category === "overdrive" || allowRepeats ? "ENABLED" : "LOCKED"}</span></div>
+              </div>
+              <p className="border border-[#538d4e]/20 bg-[#538d4e]/5 p-3 font-mono text-[9px] uppercase leading-relaxed text-[#538d4e]">Both operatives receive the same mission configuration after deployment.</p>
+            </div>
+          </div>
 
-          <button
-            onClick={() => router.push("/")}
-            className="w-full py-3 bg-[#cf6679] hover:bg-[#b15668] text-white font-mono text-xs font-bold rounded-lg transition-all active:scale-95 shadow-[0_0_15px_rgba(207,102,121,0.2)]"
-          >
-            EXIT_TO_ROOT
-          </button>
+          <div className="lg:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="min-w-0">
+              <button
+                type="button"
+                onClick={generateRoom}
+                className="w-full min-h-14 py-4 bg-[#538d4e] hover:bg-[#58a352] text-black text-lg font-bold rounded-lg transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(83,141,78,0.2)]"
+              >
+                CREATE_ROOM
+              </button>
+            </div>
+            <div className="min-w-0">
+              <button
+                type="button"
+                onClick={() => router.push("/")}
+                className="w-full min-h-14 py-4 bg-[#cf6679] hover:bg-[#b15668] text-white font-mono text-xs font-bold rounded-lg transition-all active:scale-95 shadow-[0_0_15px_rgba(207,102,121,0.2)]"
+              >
+                BACK_TO_ROOT
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -200,7 +200,7 @@ function LandingView() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="relative flex flex-col items-center justify-center my-auto shrink-0 py-4 w-full max-w-sm gap-6 sm:gap-8"
+      className={`relative flex flex-col items-center justify-center my-auto shrink-0 py-4 w-full gap-6 sm:gap-8 ${menuState === "category" ? "max-w-sm lg:max-w-5xl" : "max-w-sm lg:max-w-3xl"}`}
     >
       <BinaryBackground />
       {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
@@ -233,7 +233,7 @@ function LandingView() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1.05 }}
-              className="w-full space-y-4"
+              className="w-full space-y-4 lg:grid lg:grid-cols-2 lg:gap-5 lg:space-y-0"
             >
               <MenuButton
                 label="SINGLE_PLAYER"
@@ -255,7 +255,7 @@ function LandingView() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="w-full space-y-4"
+              className="w-full space-y-4 lg:grid lg:grid-cols-2 lg:gap-5 lg:space-y-0"
             >
               <MenuButton
                 label="STANDARD_LEVELS"
@@ -275,12 +275,14 @@ function LandingView() {
                   setSelectedLevel(0);
                 }}
               />
+              <div className="lg:col-span-2 flex justify-center pt-1">
               <button
                 onClick={() => setMenuState("main")}
-                className="w-full py-3 bg-[#cf6679] hover:bg-[#b15668] text-white font-mono text-xs font-bold rounded-lg transition-all active:scale-95 shadow-[0_0_15px_rgba(207,102,121,0.2)]"
+                className="w-full lg:max-w-xs py-3 bg-[#cf6679] hover:bg-[#b15668] text-white font-mono text-xs font-bold rounded-lg transition-all active:scale-95 shadow-[0_0_15px_rgba(207,102,121,0.2)]"
               >
                 BACK_TO_ROOT
               </button>
+              </div>
             </motion.div>
           )}
 
@@ -290,7 +292,7 @@ function LandingView() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="w-full space-y-3"
+              className="w-full space-y-3 lg:grid lg:grid-cols-[1.15fr_0.85fr] lg:gap-5 lg:items-start lg:space-y-0"
             >
               <div className="flex flex-col gap-2 max-h-[30dvh] overflow-y-auto pr-1 custom-scrollbar">
                 {MISSION_LEVELS[category].map((level, i) => (
@@ -326,6 +328,7 @@ function LandingView() {
 
               <ModifierPanel />
 
+              <div className="min-w-0">
               <button
                 onClick={() => {
                   const l = MISSION_LEVELS[category][selectedLevel];
@@ -337,17 +340,20 @@ function LandingView() {
                     l.label,
                   );
                 }}
-                className="w-full py-4 bg-[#538d4e] hover:bg-[#58a352] text-black text-lg font-bold rounded-lg transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(83,141,78,0.2)] hover:shadow-[0_0_25px_rgba(83,141,78,0.4)] mt-4"
+                className="h-full min-h-14 w-full py-4 bg-[#538d4e] hover:bg-[#58a352] text-black text-lg font-bold rounded-lg transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(83,141,78,0.2)] hover:shadow-[0_0_25px_rgba(83,141,78,0.4)] mt-4"
               >
                 DEPLOY_MODULE
               </button>
+              </div>
 
+              <div className="min-w-0">
               <button
                 onClick={() => setMenuState("single")}
-                className="w-full py-3 bg-[#cf6679] hover:bg-[#b15668] text-white font-mono text-xs font-bold rounded-lg transition-all active:scale-95 shadow-[0_0_15px_rgba(207,102,121,0.2)]"
+                className="h-full min-h-14 w-full py-4 bg-[#cf6679] hover:bg-[#b15668] text-white font-mono text-xs font-bold rounded-lg transition-all active:scale-95 shadow-[0_0_15px_rgba(207,102,121,0.2)] mt-4"
               >
                 RECONFIGURE_MODE
               </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -358,7 +364,7 @@ function LandingView() {
           onClick={() => setShowHowToPlay(true)}
           className="flex-1 py-2 px-3 border border-[#3a3a3c] rounded text-[#565758] hover:text-[#538d4e] hover:border-[#538d4e]/50 font-mono text-[9px] transition-all tracking-tighter uppercase text-center bg-white/5"
         >
-          FIELD_MANUAL.pdf
+           FIELD_MANUAL
         </button>
         <button
           onClick={() => setShowLeaderboard(true)}

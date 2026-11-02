@@ -4,6 +4,8 @@ const ACCOUNTS_KEY = "codebreaker_local_accounts_v1";
 const SESSION_KEY = "codebreaker_local_session_v1";
 const FRIENDSHIPS_KEY = "codebreaker_local_friendships_v1";
 const NOTIFICATIONS_KEY = "codebreaker_local_notifications_v1";
+const DIRECT_MESSAGES_KEY = "codebreaker_local_direct_messages_v1";
+const REPORTS_KEY = "codebreaker_local_reports_v1";
 const PASSWORD_ITERATIONS = 120_000;
 
 interface LocalAccount {
@@ -24,6 +26,16 @@ interface LocalFriendship {
   blockedBy?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+interface LocalDirectMessage {
+  message_id: string;
+  sender_id: string;
+  sender_username: string;
+  recipient_id: string;
+  body: string;
+  created_at: string;
+  read: boolean;
 }
 
 const DISCRIMINATOR_PATTERN = /^[0-9]{4}$/;
@@ -367,6 +379,40 @@ export function challengeLocalFriend(otherUserId: string, roomId: string): void 
   addLocalNotification(otherUserId, "game_invite", "Direct game invite", `${user.username}#${user.discriminator} opened a direct game with you.`, { room_id: roomId, mode: "standard", level: "4", repeats: "false" });
 }
 
+export function getLocalDirectMessages(otherUserId: string): LocalDirectMessage[] {
+  const user = requireLocalUser();
+  const blocked = readFriendships().some((item) => item.status === "blocked" && ((item.userA === user.user_id && item.userB === otherUserId) || (item.userA === otherUserId && item.userB === user.user_id)));
+  if (blocked) throw new Error("MESSAGING_BLOCKED // OPERATIVE_UNAVAILABLE");
+  return read<LocalDirectMessage[]>(DIRECT_MESSAGES_KEY, []).filter((message) => (message.sender_id === user.user_id && message.recipient_id === otherUserId) || (message.sender_id === otherUserId && message.recipient_id === user.user_id)).map((message) => message.recipient_id === user.user_id ? { ...message, read: true } : message);
+}
+
+export function sendLocalDirectMessage(otherUserId: string, body: string): LocalDirectMessage {
+  const user = requireLocalUser();
+  const friendship = readFriendships().find((item) => item.status === "accepted" && ((item.userA === user.user_id && item.userB === otherUserId) || (item.userA === otherUserId && item.userB === user.user_id)));
+  if (!friendship) throw new Error("You must be friends before sending direct messages");
+  const trimmed = body.trim();
+  if (!trimmed || trimmed.length > 2000) throw new Error("Message must contain 1 to 2000 characters");
+  const message: LocalDirectMessage = { message_id: `local-message-${randomId()}`, sender_id: user.user_id, sender_username: user.username, recipient_id: otherUserId, body: trimmed, created_at: new Date().toISOString(), read: true };
+  write(DIRECT_MESSAGES_KEY, [...read<LocalDirectMessage[]>(DIRECT_MESSAGES_KEY, []), message]);
+  return message;
+}
+
+export function reportLocalUser(targetUserId: string, reason: string): void {
+  const user = requireLocalUser();
+  if (user.user_id === targetUserId) throw new Error("You cannot report yourself");
+  const target = readAccounts().find((account) => account.user.user_id === targetUserId);
+  if (!target) throw new Error("Operative not found locally");
+  const trimmed = reason.trim();
+  if (trimmed.length < 3 || trimmed.length > 500) throw new Error("REPORT_REASON_MUST_BE_3_TO_500_CHARACTERS");
+  write(REPORTS_KEY, [...read<{ id: string; reporter_id: string; target_user_id: string; reason: string; created_at: string }[]>(REPORTS_KEY, []), {
+    id: `local-report-${randomId()}`,
+    reporter_id: user.user_id,
+    target_user_id: targetUserId,
+    reason: trimmed,
+    created_at: new Date().toISOString(),
+  }]);
+}
+
 export function respondToLocalFriendRequest(otherUserId: string, accept: boolean): void {
   const user = requireLocalUser();
   const [userA, userB] = orderedIds(user.user_id, otherUserId);
@@ -429,4 +475,6 @@ export function clearLocalAccountData(): void {
   storage().removeItem(SESSION_KEY);
   storage().removeItem(FRIENDSHIPS_KEY);
   storage().removeItem(NOTIFICATIONS_KEY);
+  storage().removeItem(DIRECT_MESSAGES_KEY);
+  storage().removeItem(REPORTS_KEY);
 }

@@ -193,6 +193,24 @@ class AccountService:
                     auth TEXT NOT NULL,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
+                CREATE TABLE IF NOT EXISTS cb_direct_messages (
+                    id TEXT PRIMARY KEY,
+                    sender_id TEXT NOT NULL REFERENCES cb_users(id) ON DELETE CASCADE,
+                    recipient_id TEXT NOT NULL REFERENCES cb_users(id) ON DELETE CASCADE,
+                    body TEXT NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    read_at TIMESTAMPTZ
+                );
+                CREATE INDEX IF NOT EXISTS cb_direct_messages_pair_idx ON cb_direct_messages(sender_id, recipient_id, created_at DESC);
+                CREATE TABLE IF NOT EXISTS cb_reports (
+                    id TEXT PRIMARY KEY,
+                    reporter_id TEXT NOT NULL REFERENCES cb_users(id) ON DELETE CASCADE,
+                    target_user_id TEXT NOT NULL REFERENCES cb_users(id) ON DELETE CASCADE,
+                    reason TEXT NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    status TEXT NOT NULL DEFAULT 'open'
+                );
+                CREATE INDEX IF NOT EXISTS cb_reports_status_idx ON cb_reports(status, created_at DESC);
                 """
             )
         except Exception:
@@ -603,6 +621,49 @@ class AccountService:
             f"{sender['username']}#{sender['discriminator']} opened a direct game with you.",
             {"room_id": room_id, "mode": "standard", "level": "4", "repeats": "false"},
         )
+
+    async def _assert_friends(self, user_id: str, other_user_id: str) -> None:
+        if user_id == other_user_id:
+            raise ValueError("You cannot message yourself")
+        pool = self._require_storage()
+        user_a, user_b = self._ordered_users(user_id, other_user_id)
+        friendship = await pool.fetchval("SELECT status FROM cb_friendships WHERE user_a = $1 AND user_b = $2", user_a, user_b)
+        if friendship == "blocked":
+            raise ValueError("MESSAGING_BLOCKED // OPERATIVE_UNAVAILABLE")
+        if friendship != "accepted":
+            raise ValueError("You must be friends before sending direct messages")
+
+    async def list_direct_messages(self, user_id: str, other_user_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        pool = self._require_storage()
+        await self._assert_friends(user_id, other_user_id)
+        rows = await pool.fetch(
+            """
+            SELECT m.id, m.sender_id, u.username AS sender_username, m.body, m.created_at, m.read_at
+            FROM cb_direct_messages m JOIN cb_users u ON u.id = m.sender_id
+            WHERE (m.sender_id = $1 AND m.recipient_id = $2) OR (m.sender_id = $2 AND m.recipient_id = $1)
+            ORDER BY m.created_at DESC LIMIT $3
+            """, user_id, other_user_id, min(limit, 200),
+        )
+        await pool.execute("UPDATE cb_direct_messages SET read_at = NOW() WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL", user_id, other_user_id)
+        return [{"message_id": row["id"], "sender_id": row["sender_id"], "sender_username": row["sender_username"], "body": row["body"], "created_at": row["created_at"].isoformat(), "read": row["read_at"] is not None or row["sender_id"] == user_id} for row in reversed(rows)]
+
+    async def send_direct_message(self, user_id: str, other_user_id: str, body: str) -> dict[str, Any]:
+        pool = self._require_storage()
+        await self._assert_friends(user_id, other_user_id)
+        body = body.strip()
+        if not body or len(body) > 2000:
+            raise ValueError("Message must contain 1 to 2000 characters")
+        row = await pool.fetchrow("INSERT INTO cb_direct_messages (id, sender_id, recipient_id, body) VALUES ($1, $2, $3, $4) RETURNING id, sender_id, body, created_at", str(uuid.uuid4()), user_id, other_user_id, body)
+        sender = await pool.fetchrow("SELECT username FROM cb_users WHERE id = $1", user_id)
+        return {"message_id": row["id"], "sender_id": user_id, "sender_username": sender["username"], "body": row["body"], "created_at": row["created_at"].isoformat(), "read": True}
+
+    async def report_user(self, reporter_id: str, target_user_id: str, reason: str) -> None:
+        pool = self._require_storage()
+        if reporter_id == target_user_id:
+            raise ValueError("You cannot report yourself")
+        if not await pool.fetchval("SELECT 1 FROM cb_users WHERE id = $1", target_user_id):
+            raise ValueError("Operative not found")
+        await pool.execute("INSERT INTO cb_reports (id, reporter_id, target_user_id, reason) VALUES ($1, $2, $3, $4)", str(uuid.uuid4()), reporter_id, target_user_id, reason.strip()[:500])
 
     async def list_friends(self, user_id: str) -> list[dict[str, Any]]:
         pool = self._require_storage()

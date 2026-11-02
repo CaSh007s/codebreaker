@@ -59,6 +59,24 @@ class ChallengeRequest(BaseModel):
     room_id: str = Field(min_length=1, max_length=128)
 
 
+class DirectMessageRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class DirectMessageRecord(BaseModel):
+    message_id: str
+    sender_id: str
+    sender_username: str
+    body: str
+    created_at: str
+    read: bool = False
+
+
+class ReportRequest(BaseModel):
+    target_user_id: str = Field(min_length=1, max_length=64)
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class FriendAction(BaseModel):
     user_id: str = Field(min_length=1, max_length=64)
 

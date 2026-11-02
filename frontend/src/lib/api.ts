@@ -1,5 +1,6 @@
 import {
   blockLocalUser,
+  getLocalDirectMessages,
   getLocalCurrentAccount,
   getLocalFriends,
   getLocalNotifications,
@@ -9,9 +10,11 @@ import {
   logoutLocal,
   markLocalNotificationRead,
   registerLocal,
+  reportLocalUser,
   removeLocalFriend,
   respondToLocalFriendRequest,
   sendLocalFriendRequest,
+  sendLocalDirectMessage,
   challengeLocalFriend,
   getLocalProfile,
   isLocalFallbackEnabled,
@@ -77,6 +80,15 @@ export interface NotificationRecord {
   created_at: string;
 }
 
+export interface DirectMessageRecord {
+  message_id: string;
+  sender_id: string;
+  sender_username: string;
+  body: string;
+  created_at: string;
+  read: boolean;
+}
+
 export interface NewGameResponse {
   game_id: string;
   code_length: number;
@@ -105,6 +117,7 @@ export interface LeaderboardEntry {
   timerMode: boolean;
   infiniteMode: boolean;
   timestamp: string;
+  suspicious?: boolean;
 }
 
 function saveLocalScore(score: Omit<LeaderboardEntry, "timestamp">): LeaderboardEntry {
@@ -218,6 +231,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ room_id: roomId }),
     }, "OPERATIVE_OFFLINE // DIRECT_GAMES_REQUIRE_ONLINE_UPLINK");
+  },
+
+  async getDirectMessages(userId: string): Promise<DirectMessageRecord[]> {
+    if (isLocalFallbackEnabled() && hasLocalSession()) return getLocalDirectMessages(userId);
+    return socialRequest<DirectMessageRecord[]>(`/social/messages/${encodeURIComponent(userId)}`, {}, "OPERATIVE_OFFLINE // DIRECT_MESSAGES_REQUIRE_ONLINE_UPLINK");
+  },
+
+  async sendDirectMessage(userId: string, body: string): Promise<DirectMessageRecord> {
+    if (isLocalFallbackEnabled() && hasLocalSession()) return sendLocalDirectMessage(userId, body);
+    return socialRequest<DirectMessageRecord>(`/social/messages/${encodeURIComponent(userId)}`, { method: "POST", body: JSON.stringify({ body }) }, "OPERATIVE_OFFLINE // DIRECT_MESSAGES_REQUIRE_ONLINE_UPLINK");
+  },
+
+  async reportUser(userId: string, reason: string): Promise<void> {
+    if (isLocalFallbackEnabled() && hasLocalSession()) {
+      reportLocalUser(userId, reason);
+      return;
+    }
+    await socialRequest<void>("/social/reports", { method: "POST", body: JSON.stringify({ target_user_id: userId, reason }) }, "OPERATIVE_OFFLINE // REPORTING_REQUIRES_ONLINE_UPLINK");
   },
 
   async respondToFriendRequest(userId: string, action: "accept" | "decline"): Promise<void> {
@@ -442,5 +473,5 @@ async function socialRequest<T>(path: string, options: RequestInit = {}, offline
 }
 
 function normalizeEntry(entry: LeaderboardEntry & { timer_mode?: boolean; infinite_mode?: boolean }): LeaderboardEntry {
-  return { ...entry, timerMode: entry.timer_mode ?? entry.timerMode ?? false, infiniteMode: entry.infinite_mode ?? entry.infiniteMode ?? false };
+  return { ...entry, timerMode: entry.timer_mode ?? entry.timerMode ?? false, infiniteMode: entry.infinite_mode ?? entry.infiniteMode ?? false, suspicious: Boolean(entry.suspicious) };
 }

@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 import uuid
 import os
 import random
+import logging
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -28,12 +29,15 @@ from app.models.account import (
     AccountCallsignUpdate,
     ChallengeRequest,
     ChallengeResponse,
+    DirectMessageRecord,
+    DirectMessageRequest,
     AccountResponse,
     AuthResponse,
     FriendAction,
     FriendRecord,
     FriendTarget,
     ProfileResponse,
+    ReportRequest,
     NotificationRecord,
     PushSubscription,
 )
@@ -43,6 +47,8 @@ from app.services.account_service import (
     UsernameTakenError,
     account_service,
 )
+
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -89,6 +95,24 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 SESSION_COOKIE = "codebreaker_session"
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
+
+MAX_SCORE_BY_LEVEL = {
+    "ROOKIE": 500,
+    "EASY": 1000,
+    "MEDIUM": 2000,
+    "HARD": 3500,
+    "ELITE": 5000,
+    "MASTER": 10000,
+}
+
+
+def is_suspicious_score(entry: LeaderboardRequest) -> bool:
+    """Flag scores that exceed the client game's published scoring ceiling."""
+    if entry.status != GameStatus.SOLVED:
+        return entry.score != 0
+    base = MAX_SCORE_BY_LEVEL.get(entry.level.upper(), 1000)
+    ceiling = base * (1.5 if entry.timer_mode else 1.0) * (0.7 if entry.infinite_mode else 1.0)
+    return entry.score > round(ceiling * 1.1)
 
 
 def set_session_cookie(response: Response, token: str) -> None:
@@ -206,7 +230,7 @@ async def get_profile(request: Request, identity: str):
     try:
         profile = await account_service.get_profile(identity, user["user_id"])
         scores = await load_scores()
-        matching_scores = [score for score in scores if score.username.casefold() == profile["username"].casefold()]
+        matching_scores = [score for score in scores if not score.suspicious and score.username.casefold() == profile["username"].casefold()]
         profile["records"] = {
             "games_played": len(matching_scores),
             "wins": sum(1 for score in matching_scores if score.status == GameStatus.SOLVED),
@@ -263,6 +287,36 @@ async def challenge_friend(request: Request, other_user_id: str, challenge: Chal
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return ChallengeResponse(room_id=challenge.room_id)
+
+
+@app.get("/social/messages/{other_user_id}", response_model=List[DirectMessageRecord])
+async def list_direct_messages(request: Request, other_user_id: str):
+    user = await authenticated_user(request)
+    try:
+        return await account_service.list_direct_messages(user["user_id"], other_user_id)
+    except ValueError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
+
+
+@app.post("/social/messages/{other_user_id}", response_model=DirectMessageRecord)
+@limiter.limit("30/minute")
+async def send_direct_message(request: Request, other_user_id: str, message: DirectMessageRequest):
+    user = await authenticated_user(request)
+    try:
+        return await account_service.send_direct_message(user["user_id"], other_user_id, message.body)
+    except ValueError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
+
+
+@app.post("/social/reports", status_code=204)
+@limiter.limit("10/hour")
+async def report_user(request: Request, report: ReportRequest):
+    user = await authenticated_user(request)
+    try:
+        await account_service.report_user(user["user_id"], report.target_user_id, report.reason)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return Response(status_code=204)
 
 
 @app.post("/social/blocks/{other_user_id}", status_code=204)
@@ -395,7 +449,7 @@ async def get_leaderboard():
         GameStatus.ACTIVE: 3
     }
     sorted_leaderboard = sorted(
-        await load_scores(),
+        [entry for entry in await load_scores() if not entry.suspicious],
         key=lambda x: (
             status_priority.get(x.status, 99), 
             -x.score,  # Higher score is better
@@ -417,8 +471,11 @@ async def add_to_leaderboard(request: Request, lb_req: LeaderboardRequest):
         score=lb_req.score,
         timer_mode=lb_req.timer_mode,
         infinite_mode=lb_req.infinite_mode,
+        suspicious=is_suspicious_score(lb_req),
         timestamp=datetime.now(timezone.utc)
     )
+    if entry.suspicious:
+        logger.warning("Suspicious leaderboard score flagged for %s at level %s", entry.username, entry.level)
     await save_score(entry)
     return entry
 

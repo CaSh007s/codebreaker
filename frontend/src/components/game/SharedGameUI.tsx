@@ -413,11 +413,23 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
     { id: 'basics', label: '01_CORE_MECHANICS' },
     { id: 'modes', label: '02_MISSION_PROFILES' },
     { id: 'scoring', label: '03_OPERATIVE_ENTRY' },
-    { id: 'multiplayer', label: '04_REMOTE_UPLINK' }
+    { id: 'multiplayer', label: '04_REMOTE_UPLINK' },
+    { id: 'identity', label: '05_OPERATIVE_IDENTITY' },
+    { id: 'social', label: '06_SOCIAL_NETWORK' },
+    { id: 'accessibility', label: '07_ACCESSIBILITY' },
+    { id: 'themes', label: '08_THEMES // UPCOMING' }
   ] as const;
 
   type SectionId = typeof sections[number]['id'];
   const [activeSection, setActiveSection] = useState<SectionId>('basics');
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
 
   return (
     <motion.div
@@ -428,6 +440,9 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
       className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl cursor-pointer"
     >
       <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Codebreaker field manual"
         initial={{ scale: 0.95, y: 20, opacity: 0 }}
         animate={{ scale: 1, y: 0, opacity: 1 }}
         onClick={(e) => e.stopPropagation()}
@@ -438,10 +453,12 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-[#538d4e] animate-pulse" />
             <h3 className="text-xl font-bold tracking-tighter font-serif uppercase text-slate-100">
-                FIELD_MANUAL.pdf
+                FIELD_MANUAL
             </h3>
           </div>
           <button
+            type="button"
+            aria-label="Close field manual"
             onClick={onClose}
             className="text-[#565758] hover:text-white transition-all uppercase font-mono text-[10px] sm:text-xs bg-white/5 px-3 py-1.5 rounded border border-white/10 hover:border-white/20 flex items-center gap-2 group"
           >
@@ -677,6 +694,165 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
                             Multiplayer scoring utilizes the same <span className="text-slate-200 underline">Efficiency_Rating</span> as single-player field ops. Speed and precision are paramount.
                         </p>
                     </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeSection === 'identity' && (
+                <motion.div
+                  key="identity"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="space-y-6"
+                >
+                  <div className="space-y-4">
+                    <h4 className="text-[#538d4e] font-mono text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                      <span className="w-1 h-3 bg-[#538d4e] rounded-full" />
+                      Operative_Identity_Protocol
+                    </h4>
+                    <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-2">
+                      <span className="text-[#538d4e] font-mono text-[10px] font-bold uppercase">CALLSIGN // DISCRIMINATOR</span>
+                      <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">
+                        Your display callsign may be shared. Your complete handle, formatted as <span className="text-slate-200">CALLSIGN#1234</span>, identifies your account for login, profile search, and friend requests.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="p-4 border border-[#c8b653]/30 bg-[#c8b653]/5 rounded-xl space-y-2">
+                        <span className="text-[#c8b653] font-mono text-[10px] font-bold uppercase">PROFILE_RECORDS</span>
+                        <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">
+                          Profiles contain public records, friend status, avatar identity, and account activity summaries.
+                        </p>
+                      </div>
+                      <div className="p-4 border border-blue-500/20 bg-blue-500/5 rounded-xl space-y-2">
+                        <span className="text-blue-400 font-mono text-[10px] font-bold uppercase">AVATAR_UPLINK</span>
+                        <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">
+                          Generate another avatar while online. The selected avatar is saved to your account and appears in live operations.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-4 border border-amber-500/20 bg-amber-900/10 rounded-xl">
+                      <span className="text-amber-400 font-mono text-[10px] font-bold uppercase">LOCAL_TESTING // OFFLINE_MODE</span>
+                      <p className="mt-2 text-amber-300 font-mono text-[9px] uppercase leading-relaxed">
+                        Localhost supports browser-local account and social testing. Offline single-player missions remain playable and save locally. Hosted deployments use the online account service and do not use browser-local social fallback.
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeSection === 'social' && (
+                <motion.div
+                  key="social"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="space-y-6"
+                >
+                  <div className="space-y-4">
+                    <h4 className="text-[#538d4e] font-mono text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                      <span className="w-1 h-3 bg-[#538d4e] rounded-full" />
+                      Social_Network_Protocol
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-2">
+                        <span className="text-[#538d4e] font-mono text-[10px] font-bold uppercase">FRIEND_REQUESTS</span>
+                        <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">
+                          Search a complete handle, inspect the profile, then send or respond to a friend request. Accepted friends can launch direct games.
+                        </p>
+                      </div>
+                      <div className="p-4 border border-blue-500/20 bg-blue-500/5 rounded-xl space-y-2">
+                        <span className="text-blue-400 font-mono text-[10px] font-bold uppercase">DIRECT_CHANNELS</span>
+                        <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">
+                          Friend-only direct messages are available from multiplayer profiles. Single-player missions do not open a direct channel.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <h5 className="text-slate-300 font-mono text-[10px] font-black uppercase tracking-widest">Safety_Controls</h5>
+                      <div className="flex items-start gap-4 p-3 border border-red-500/20 bg-red-500/5 rounded-lg">
+                        <div className="w-8 h-8 rounded bg-red-500/20 flex items-center justify-center text-red-400 font-bold text-xs shrink-0">!</div>
+                        <div className="flex flex-col">
+                          <span className="text-red-400 font-bold font-mono text-[10px] uppercase">BLOCK // REPORT // RATE_LIMIT</span>
+                          <span className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">Block an operative from their profile, report abusive behavior, and use the built-in rate-limited message channel.</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 border border-purple-500/20 bg-purple-500/5 rounded-xl">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+                        <span className="text-purple-400 font-mono text-[10px] font-bold uppercase">ALERT_INBOX</span>
+                      </div>
+                      <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">Notifications surface friend requests, accepted requests, and direct-game invitations. Open an invitation to enter its multiplayer room.</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeSection === 'accessibility' && (
+                <motion.div
+                  key="accessibility"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="space-y-6"
+                >
+                  <div className="space-y-4">
+                    <h4 className="text-[#538d4e] font-mono text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                      <span className="w-1 h-3 bg-[#538d4e] rounded-full" />
+                      Accessibility_Protocol
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-2">
+                        <span className="text-[#538d4e] font-mono text-[10px] font-bold uppercase">KEYBOARD_NAVIGATION</span>
+                        <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">Use visible focus states and keyboard controls to move through mission selection, dialogs, chat, and the game board.</p>
+                      </div>
+                      <div className="p-4 border border-blue-500/20 bg-blue-500/5 rounded-xl space-y-2">
+                        <span className="text-blue-400 font-mono text-[10px] font-bold uppercase">SCREEN_READER_SUPPORT</span>
+                        <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">Dialogs, alerts, controls, and live multiplayer messages expose descriptive labels and status announcements.</p>
+                      </div>
+                      <div className="p-4 border border-[#c8b653]/30 bg-[#c8b653]/5 rounded-xl space-y-2">
+                        <span className="text-[#c8b653] font-mono text-[10px] font-bold uppercase">CONTRAST_AND_SIGNAL</span>
+                        <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">Color highlights are paired with labels and status text so important signals do not rely on color alone.</p>
+                      </div>
+                      <div className="p-4 border border-purple-500/20 bg-purple-500/5 rounded-xl space-y-2">
+                        <span className="text-purple-400 font-mono text-[10px] font-bold uppercase">REDUCED_MOTION</span>
+                        <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">Enable your device&apos;s reduced-motion preference to minimize transitions, animated particles, and scrolling effects.</p>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeSection === 'themes' && (
+                <motion.div
+                  key="themes"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="space-y-6"
+                >
+                  <div className="space-y-4">
+                    <h4 className="text-[#c8b653] font-mono text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                      <span className="w-1 h-3 bg-[#c8b653] rounded-full" />
+                      Themes_Expansion_Reserved
+                    </h4>
+                    <div className="p-5 border border-[#c8b653]/30 bg-[#c8b653]/5 rounded-xl space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-[#c8b653] animate-pulse" />
+                        <span className="text-[#c8b653] font-mono text-[10px] font-bold uppercase">UPCOMING_UPDATE // NOT_DEPLOYED</span>
+                      </div>
+                      <p className="text-amber-300 font-mono text-[10px] uppercase leading-relaxed">
+                        Themes will let operatives customize the visual atmosphere of the board, mission selection, and tactical interface while preserving readability and game clarity.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-2">
+                        <span className="text-slate-300 font-mono text-[10px] font-bold uppercase">VISUAL_PRESETS</span>
+                        <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">Future presets may adjust colors, highlights, surfaces, and ambient signal treatments across the platform.</p>
+                      </div>
+                      <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-2">
+                        <span className="text-slate-300 font-mono text-[10px] font-bold uppercase">ACCESSIBILITY_FIRST</span>
+                        <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">Theme options will retain contrast, keyboard focus visibility, reduced-motion support, and screen-reader clarity.</p>
+                      </div>
+                    </div>
+                    <p className="p-3 bg-white/5 rounded italic text-[9px] text-[#565758] font-mono uppercase">* Current tactical green interface remains the default until the themes update is released.</p>
                   </div>
                 </motion.div>
               )}

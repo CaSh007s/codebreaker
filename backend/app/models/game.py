@@ -71,6 +71,7 @@ class LeaderboardEntry(BaseModel):
     score: int = 0
     timer_mode: bool = False
     infinite_mode: bool = False
+    suspicious: bool = False
 
 class LeaderboardRequest(BaseModel):
     username: str = Field(min_length=1, max_length=64)

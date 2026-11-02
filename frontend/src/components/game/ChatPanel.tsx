@@ -33,6 +33,15 @@ export default function ChatPanel({
     }
   }, [messages]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isOpen, setOpen]);
+
   const handleSend = () => {
     if (!inputText.trim()) return;
     onSendMessage({
@@ -53,6 +62,9 @@ export default function ChatPanel({
         <>
           {/* Backdrop for Mobile overlay */}
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Secure multiplayer communications"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -77,6 +89,8 @@ export default function ChatPanel({
                 </h3>
               </div>
               <button
+                type="button"
+                aria-label="Close secure communications"
                 onClick={(e) => {
                   e.currentTarget.blur();
                   setOpen(false);
@@ -141,7 +155,9 @@ export default function ChatPanel({
               {/* Emoji bar */}
               <div className="flex gap-2 mb-3 justify-center">
                 {VALID_EMOJIS.map((emoji) => (
-                  <button
+                      <button
+                        type="button"
+                        aria-label={`Send reaction ${emoji}`}
                     key={emoji}
                     onClick={(e) => {
                       e.currentTarget.blur();
@@ -169,6 +185,8 @@ export default function ChatPanel({
                   className="flex-1 bg-transparent outline-none text-sm px-2 font-mono placeholder:opacity-30"
                 />
                 <button
+                  type="button"
+                  aria-label="Send message"
                   onClick={(e) => {
                     e.currentTarget.blur();
                     handleSend();

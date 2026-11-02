@@ -28,6 +28,11 @@ body {
   touch-action: manipulation;
 }
 
+:where(button, a, input, textarea, select):focus-visible {
+  outline: 2px solid #b8db85;
+  outline-offset: 3px;
+}
+
 /* Hide Scrollbars but maintain functionality */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
@@ -58,6 +63,12 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
   .binary-particle { animation: none; }
   .scroll-smooth { scroll-behavior: auto; }
 }
