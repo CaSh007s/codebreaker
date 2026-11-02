@@ -1,10 +1,11 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
+import { UserCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGameStore } from "@/store/useGameStore";
-import { api, AccountUser, LeaderboardEntry } from "@/lib/api";
+import { api, AccountUser, formatAccountIdentity, LeaderboardEntry } from "@/lib/api";
 import {
   Board,
   Keyboard,
@@ -54,6 +55,7 @@ export default function Home() {
 }
 
 function TopHeader() {
+  const router = useRouter();
   const { view, setView, status } = useGameStore();
   const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
 
@@ -110,6 +112,15 @@ function TopHeader() {
 
       <div className="flex items-center gap-3">
         <NotificationCenter />
+        <button
+          type="button"
+          aria-label="Open profile"
+          title="Profile"
+          onClick={() => router.push("/profile")}
+          className="rounded-full border border-[#3a3a3c] bg-black/30 p-2 text-[#565758] transition-colors hover:border-[#538d4e]/60 hover:text-[#538d4e]"
+        >
+          <UserCircle className="h-4 w-4" />
+        </button>
         {view === "game" ? <OperativeIdentity /> : <div className="w-10" />}
       </div>
     </header>
@@ -930,6 +941,28 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
 
   const isEditable = view === "landing" && menuState === "main";
 
+  useEffect(() => {
+    let active = true;
+    const refreshAccount = () => {
+      void api.getCurrentAccount().then((response) => {
+        if (!active) return;
+        setAccountUser(response?.user ?? null);
+        if (response) {
+          setUsername(response.user.username);
+          setDraft(response.user.username);
+          setAccountUsername(response.user.username);
+        }
+      }).catch(() => undefined);
+    };
+    const frame = requestAnimationFrame(refreshAccount);
+    window.addEventListener("codebreaker-auth-changed", refreshAccount);
+    return () => {
+      active = false;
+      cancelAnimationFrame(frame);
+      window.removeEventListener("codebreaker-auth-changed", refreshAccount);
+    };
+  }, [setUsername]);
+
   const generateNewAlias = () => {
     if (!isEditable) return;
     const prefixes = [
@@ -992,12 +1025,14 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
       if (response) {
         setAccountUser(response.user);
         setUsername(response.user.username);
+        setDraft(response.user.username);
+        setAccountUsername(response.user.username);
       }
     }).catch(() => undefined);
     setIsEditing(true);
   };
 
-  const saveUsername = () => {
+  const saveUsername = async () => {
     const normalized = draft.trim().replace(/\s+/g, "_");
     if (normalized.length < 2) {
       setValidationError("CALLSIGN_MUST_BE_AT_LEAST_2_CHARACTERS");
@@ -1007,8 +1042,26 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
       setValidationError("CALLSIGN_LIMIT_IS_24_CHARACTERS");
       return;
     }
-    setUsername(normalized.toUpperCase());
-    setIsEditing(false);
+    setValidationError(null);
+    if (!accountUser) {
+      setUsername(normalized.toUpperCase());
+      setIsEditing(false);
+      return;
+    }
+    setAccountBusy(true);
+    setAccountError(null);
+    try {
+      const response = await api.updateUsername(normalized.toUpperCase());
+      setAccountUser(response.user);
+      setUsername(response.user.username);
+      setDraft(response.user.username);
+      setIsEditing(false);
+      window.dispatchEvent(new Event("codebreaker-auth-changed"));
+    } catch (error) {
+      setAccountError((error as Error).message);
+    } finally {
+      setAccountBusy(false);
+    }
   };
 
   const submitAccount = async () => {
@@ -1052,8 +1105,13 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
           {accountUser ? "ACCOUNT // CALLSIGN" : prominent ? "PLAY_AS // CALLSIGN" : "OPERATIVE_ID"}
         </span>
         <div className={`flex items-center gap-3 ${prominent ? "justify-between" : ""}`}>
-          <span className={`text-[#538d4e] font-mono font-bold tracking-tight drop-shadow-[0_0_5px_rgba(83,141,78,0.3)] ${prominent ? "text-lg" : "text-[11px]"}`}>
-            {username}
+          <span className="flex min-w-0 items-baseline gap-1.5">
+            <span className={`text-[#538d4e] font-mono font-bold tracking-tight drop-shadow-[0_0_5px_rgba(83,141,78,0.3)] ${prominent ? "text-lg" : "text-[11px]"}`}>
+              {username}
+            </span>
+            {accountUser && <span className={`font-mono tracking-wider text-[#565758] drop-shadow-[0_0_5px_rgba(86,87,88,0.35)] ${prominent ? "text-[10px]" : "text-[8px]"}`}>
+              #{accountUser.discriminator}
+            </span>}
           </span>
           {isEditable && (
             <span className="text-[#565758] font-mono text-[8px] uppercase">
@@ -1083,6 +1141,7 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
                   <div className="mb-5">
                     <p className="text-[#538d4e] font-mono text-xs font-bold tracking-widest">CALLSIGN_CONFIGURATION</p>
                     <p className="mt-2 text-[#565758] font-mono text-[9px] uppercase">Guest play is instant. An account keeps this identity across devices.</p>
+                    {accountUser && <p className="mt-2 text-[#538d4e] font-mono text-[9px] uppercase">HANDLE // {formatAccountIdentity(accountUser)}</p>}
                   </div>
                   <input
                     autoFocus
@@ -1093,7 +1152,7 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
                       setValidationError(null);
                     }}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter") saveUsername();
+                      if (event.key === "Enter") void saveUsername();
                     }}
                     placeholder="ENTER_CALLSIGN"
                     className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 text-sm font-mono text-slate-100 outline-none focus:border-[#538d4e]"
@@ -1101,7 +1160,7 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
                   {validationError && <p role="alert" className="mt-2 text-[9px] font-mono uppercase text-red-400">{validationError}</p>}
                   <div className="mt-5 grid grid-cols-2 gap-3">
                     <button type="button" onClick={generateNewAlias} className="rounded-lg border border-[#3a3a3c] py-3 text-[10px] font-mono uppercase text-slate-300 hover:border-[#538d4e] hover:text-[#538d4e]">GENERATE_ALIAS</button>
-                    <button type="button" onClick={saveUsername} className="rounded-lg bg-[#538d4e] py-3 text-[10px] font-mono font-bold uppercase text-black hover:bg-[#58a352]">SAVE_CALLSIGN</button>
+                   <button type="button" disabled={accountBusy} onClick={() => void saveUsername()} className="rounded-lg bg-[#538d4e] py-3 text-[10px] font-mono font-bold uppercase text-black hover:bg-[#58a352] disabled:opacity-50">{accountBusy ? "SAVING..." : "SAVE_CALLSIGN"}</button>
                   </div>
                   <div className="mt-6 border-t border-[#3a3a3c] pt-5">
                     {accountUser ? (
@@ -1121,9 +1180,9 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
                 <div className="space-y-4">
                   <div>
                     <p className="text-[#538d4e] font-mono text-xs font-bold tracking-widest">{accountMode === "register" ? "CREATE_ACCOUNT" : "ACCOUNT_LOGIN"}</p>
-                    <p className="mt-2 text-[#565758] font-mono text-[9px] uppercase">Use a unique callsign and a password of at least 8 characters.</p>
+                     <p className="mt-2 text-[#565758] font-mono text-[9px] uppercase">Use a callsign and a password of at least 8 characters. The discriminator is assigned automatically.</p>
                   </div>
-                  <input value={accountUsername} maxLength={24} onChange={(event) => setAccountUsername(event.target.value)} placeholder="CALLSIGN" className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 text-sm font-mono text-slate-100 outline-none focus:border-[#538d4e]" />
+                   <input value={accountUsername} maxLength={29} onChange={(event) => setAccountUsername(event.target.value)} placeholder={accountMode === "login" ? "CALLSIGN_OR_CALLSIGN#1234" : "CALLSIGN"} className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 text-sm font-mono text-slate-100 outline-none focus:border-[#538d4e]" />
                   <input type="password" value={accountPassword} onChange={(event) => setAccountPassword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void submitAccount(); }} placeholder="PASSWORD" className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 text-sm font-mono text-slate-100 outline-none focus:border-[#538d4e]" />
                   {accountError && <p role="alert" className="text-[9px] font-mono uppercase text-red-400">{accountError}</p>}
                   <div className="grid grid-cols-2 gap-3">

@@ -3,16 +3,19 @@ import re
 
 
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_]{2,24}$")
+IDENTITY_PATTERN = re.compile(r"^[A-Za-z0-9_]{2,24}(#[0-9]{4})?$")
 
 
 class AccountCredentials(BaseModel):
-    username: str = Field(min_length=2, max_length=24, pattern=USERNAME_PATTERN.pattern)
+    # Registration accepts a display name; login may also use CALLSIGN#1234.
+    username: str = Field(min_length=2, max_length=29, pattern=IDENTITY_PATTERN.pattern)
     password: str = Field(min_length=8, max_length=128)
 
 
 class AccountResponse(BaseModel):
     user_id: str
     username: str
+    discriminator: str
     created_at: str
 
 
@@ -21,6 +24,11 @@ class AuthResponse(BaseModel):
 
 
 class FriendTarget(BaseModel):
+    # Friend lookups must use the complete unique handle.
+    identity: str = Field(min_length=7, max_length=29, pattern=r"^[A-Za-z0-9_]{2,24}#[0-9]{4}$")
+
+
+class AccountCallsignUpdate(BaseModel):
     username: str = Field(min_length=2, max_length=24, pattern=USERNAME_PATTERN.pattern)
 
 
@@ -31,6 +39,7 @@ class FriendAction(BaseModel):
 class FriendRecord(BaseModel):
     user_id: str
     username: str
+    discriminator: str
     status: str
     direction: str | None = None
     created_at: str

@@ -12,6 +12,8 @@ import {
   removeLocalFriend,
   respondToLocalFriendRequest,
   sendLocalFriendRequest,
+  isLocalFallbackEnabled,
+  updateLocalUsername,
 } from "./localStore";
 
 export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8000").replace(/\/$/, "");
@@ -22,6 +24,7 @@ export type GameMode = "classic" | "timer" | "limited";
 export interface AccountUser {
   user_id: string;
   username: string;
+  discriminator: string;
   created_at: string;
 }
 
@@ -32,9 +35,18 @@ export interface AuthResponse {
 export interface FriendRecord {
   user_id: string;
   username: string;
+  discriminator: string;
   status: "pending" | "accepted" | "blocked";
   direction?: "incoming" | "outgoing";
   created_at: string;
+}
+
+export function formatAccountIdentity(user: Pick<AccountUser, "username" | "discriminator">): string {
+  return `${user.username}#${user.discriminator}`;
+}
+
+export function formatFriendIdentity(friend: Pick<FriendRecord, "username" | "discriminator">): string {
+  return `${friend.username}#${friend.discriminator}`;
 }
 
 export interface NotificationRecord {
@@ -97,6 +109,26 @@ export const api = {
     return authRequest("/auth/login", username, password);
   },
 
+  async updateUsername(username: string): Promise<AuthResponse> {
+    if (isLocalFallbackEnabled() && hasLocalSession()) return updateLocalUsername(username);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username }),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        throw new Error(error?.detail || "Could not update callsign");
+      }
+      return normalizeAuthResponse(await response.json());
+    } catch (error) {
+      if (error instanceof TypeError) throw new Error("OPERATIVE_OFFLINE // CALLSIGN_UPDATE_REQUIRES_ONLINE_UPLINK");
+      throw error;
+    }
+  },
+
   async logout(): Promise<void> {
     const local = hasLocalSession();
     logoutLocal();
@@ -112,30 +144,35 @@ export const api = {
 
   async getCurrentAccount(): Promise<AuthResponse | null> {
     const local = getLocalCurrentAccount();
-    if (local) return local;
-    const response = await fetch(`${API_BASE_URL}/auth/me`, {
-      credentials: "include",
-    });
+    if (isLocalFallbackEnabled() && local) return local;
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}/auth/me`, {
+        credentials: "include",
+      });
+    } catch {
+      throw new Error("OPERATIVE_OFFLINE // ACCOUNT_SERVICE_REQUIRES_ONLINE_UPLINK");
+    }
     if (response.status === 401) return null;
     if (!response.ok) throw new Error("Could not load account");
-    return response.json();
+    return normalizeAuthResponse(await response.json());
   },
 
   async getFriends(): Promise<FriendRecord[]> {
-    if (hasLocalSession()) return getLocalFriends();
-    return socialRequest<FriendRecord[]>("/social/friends");
+    if (isLocalFallbackEnabled() && hasLocalSession()) return getLocalFriends();
+    return socialRequest<FriendRecord[]>("/social/friends", {}, "OPERATIVE_OFFLINE // FRIENDS_REQUIRE_ONLINE_UPLINK");
   },
 
-  async sendFriendRequest(username: string): Promise<FriendRecord> {
-    if (hasLocalSession()) return sendLocalFriendRequest(username);
+  async sendFriendRequest(identity: string): Promise<FriendRecord> {
+    if (isLocalFallbackEnabled() && hasLocalSession()) return sendLocalFriendRequest(identity);
     return socialRequest<FriendRecord>("/social/friends/requests", {
       method: "POST",
-      body: JSON.stringify({ username }),
-    });
+      body: JSON.stringify({ identity }),
+    }, "OPERATIVE_OFFLINE // FRIEND_REQUESTS_REQUIRE_ONLINE_UPLINK");
   },
 
   async respondToFriendRequest(userId: string, action: "accept" | "decline"): Promise<void> {
-    if (hasLocalSession()) {
+    if (isLocalFallbackEnabled() && hasLocalSession()) {
       respondToLocalFriendRequest(userId, action === "accept");
       return;
     }
@@ -143,7 +180,7 @@ export const api = {
   },
 
   async removeFriend(userId: string): Promise<void> {
-    if (hasLocalSession()) {
+    if (isLocalFallbackEnabled() && hasLocalSession()) {
       removeLocalFriend(userId);
       return;
     }
@@ -151,7 +188,7 @@ export const api = {
   },
 
   async blockUser(userId: string): Promise<void> {
-    if (hasLocalSession()) {
+    if (isLocalFallbackEnabled() && hasLocalSession()) {
       blockLocalUser(userId);
       return;
     }
@@ -159,12 +196,12 @@ export const api = {
   },
 
   async getNotifications(): Promise<NotificationRecord[]> {
-    if (hasLocalSession()) return getLocalNotifications();
-    return socialRequest<NotificationRecord[]>("/social/notifications");
+    if (isLocalFallbackEnabled() && hasLocalSession()) return getLocalNotifications();
+    return socialRequest<NotificationRecord[]>("/social/notifications", {}, "OPERATIVE_OFFLINE // NOTIFICATIONS_REQUIRE_ONLINE_UPLINK");
   },
 
   async markNotificationRead(notificationId: string): Promise<void> {
-    if (hasLocalSession()) {
+    if (isLocalFallbackEnabled() && hasLocalSession()) {
       markLocalNotificationRead(notificationId);
       return;
     }
@@ -172,7 +209,7 @@ export const api = {
   },
 
   async savePushSubscription(subscription: PushSubscription): Promise<void> {
-    if (hasLocalSession()) return;
+    if (isLocalFallbackEnabled() && hasLocalSession()) return;
     const json = subscription.toJSON();
     await socialRequest<void>("/social/push-subscriptions", {
       method: "POST",
@@ -293,7 +330,10 @@ export const api = {
 async function authRequest(path: string, username: string, password: string): Promise<AuthResponse> {
   // A browser-local account is authoritative for this browser. This lets a
   // user keep testing when the API, Neon, or a hosted deployment is down.
-  if (path === "/auth/login" && hasLocalAccount(username)) {
+  if (isLocalFallbackEnabled() && path === "/auth/register") {
+    return registerLocal(username, password);
+  }
+  if (isLocalFallbackEnabled() && path === "/auth/login" && hasLocalAccount(username)) {
     return loginLocal(username, password);
   }
 
@@ -306,13 +346,24 @@ async function authRequest(path: string, username: string, password: string): Pr
       body: JSON.stringify({ username, password }),
     });
   } catch {
-    return localAuthRequest(path, username, password);
+    if (isLocalFallbackEnabled()) return localAuthRequest(path, username, password);
+    throw new Error("OPERATIVE_OFFLINE // ACCOUNT_SERVICE_REQUIRES_ONLINE_UPLINK");
   }
 
-  if (response.ok) return response.json();
-  if (response.status >= 500) return localAuthRequest(path, username, password);
+  if (response.ok) return normalizeAuthResponse(await response.json());
+  if (response.status >= 500 && isLocalFallbackEnabled()) return localAuthRequest(path, username, password);
   const error = await response.json().catch(() => null);
   throw new Error(error?.detail || "Account request failed");
+}
+
+function normalizeAuthResponse(response: AuthResponse): AuthResponse {
+  return {
+    user: {
+      ...response.user,
+      // Older development fallback records may predate discriminators.
+      discriminator: response.user.discriminator || "0000",
+    },
+  };
 }
 
 function localAuthRequest(path: string, username: string, password: string): Promise<AuthResponse> {
@@ -321,13 +372,19 @@ function localAuthRequest(path: string, username: string, password: string): Pro
   return Promise.reject(new Error("Account service is temporarily unavailable"));
 }
 
-async function socialRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-  });
+async function socialRequest<T>(path: string, options: RequestInit = {}, offlineMessage = "OPERATIVE_OFFLINE // SOCIAL_FEATURES_REQUIRE_ONLINE_UPLINK"): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    });
+  } catch {
+    throw new Error(offlineMessage);
+  }
   if (!response.ok) {
+    if (response.status >= 500) throw new Error(offlineMessage);
     const error = await response.json().catch(() => null);
     throw new Error(error?.detail || "Social request failed");
   }

@@ -26,6 +26,14 @@ interface LocalFriendship {
   updatedAt: string;
 }
 
+const DISCRIMINATOR_PATTERN = /^[0-9]{4}$/;
+
+export function isLocalFallbackEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" && window.location.hostname !== "::1" && window.location.hostname !== "[::1]") return false;
+  return process.env.NEXT_PUBLIC_ENABLE_LOCAL_FALLBACK !== "false";
+}
+
 function storage(): Storage {
   if (typeof window === "undefined" || !window.localStorage) {
     throw new Error("Browser storage is unavailable");
@@ -69,15 +77,34 @@ function accountKey(username: string): string {
   return normalizeUsername(username).toLowerCase();
 }
 
-function validateCredentials(username: string, password: string): { username: string; password: string } {
-  const normalized = normalizeUsername(username);
-  if (!/^[A-Z0-9_]{2,24}$/.test(normalized)) {
-    throw new Error("CALLSIGN_MUST_USE_2_TO_24_LETTERS_NUMBERS_OR_UNDERSCORES");
+function splitIdentity(identity: string, requireDiscriminator = false): { username: string; discriminator?: string } {
+  const parts = identity.trim().split("#");
+  if (parts.length > 2) throw new Error("USE_THE_COMPLETE_HANDLE_LIKE_CALLSIGN#1234");
+  const [rawUsername, rawDiscriminator] = parts;
+  const username = normalizeUsername(rawUsername);
+  if (rawDiscriminator !== undefined && !DISCRIMINATOR_PATTERN.test(rawDiscriminator)) {
+    throw new Error("USE_THE_COMPLETE_HANDLE_LIKE_CALLSIGN#1234");
   }
+  if (requireDiscriminator && !rawDiscriminator) {
+    throw new Error("USE_THE_COMPLETE_HANDLE_LIKE_CALLSIGN#1234");
+  }
+  return { username, discriminator: rawDiscriminator };
+}
+
+function validateCredentials(username: string, password: string): { username: string; password: string } {
+  const normalized = validateUsername(username);
   if (password.length < 8 || password.length > 128) {
     throw new Error("PASSWORD_MUST_BE_8_TO_128_CHARACTERS");
   }
   return { username: normalized, password };
+}
+
+function validateUsername(username: string): string {
+  const normalized = normalizeUsername(username);
+  if (!/^[A-Z0-9_]{2,24}$/.test(normalized)) {
+    throw new Error("CALLSIGN_MUST_USE_2_TO_24_LETTERS_NUMBERS_OR_UNDERSCORES");
+  }
+  return normalized;
 }
 
 async function deriveVerifier(password: string, salt: Uint8Array): Promise<string> {
@@ -92,14 +119,22 @@ async function deriveVerifier(password: string, salt: Uint8Array): Promise<strin
   return encode(new Uint8Array(bits));
 }
 
-function findAccount(username: string): LocalAccount | undefined {
-  return read<LocalAccount[]>(ACCOUNTS_KEY, []).find((account) => accountKey(account.user.username) === accountKey(username));
+function findAccount(identity: string, requireDiscriminator = false): LocalAccount | undefined {
+  const { username, discriminator } = splitIdentity(identity, requireDiscriminator);
+  const matches = readAccounts().filter((account) =>
+    accountKey(account.user.username) === accountKey(username)
+    && (!discriminator || account.user.discriminator === discriminator),
+  );
+  if (!discriminator && matches.length > 1) {
+    throw new Error("MULTIPLE_CALLSIGNS_FOUND_USE_CALLSIGN#1234");
+  }
+  return matches[0];
 }
 
 function currentLocalAccount(): LocalAccount | undefined {
   const session = read<LocalSession | null>(SESSION_KEY, null);
   if (!session) return undefined;
-  return read<LocalAccount[]>(ACCOUNTS_KEY, []).find((account) => account.user.user_id === session.userId);
+  return readAccounts().find((account) => account.user.user_id === session.userId);
 }
 
 function startSession(userId: string): void {
@@ -107,7 +142,12 @@ function startSession(userId: string): void {
 }
 
 export function hasLocalAccount(username: string): boolean {
-  return Boolean(findAccount(username));
+  try {
+    const { username: baseUsername } = splitIdentity(username);
+    return readAccounts().some((account) => accountKey(account.user.username) === accountKey(baseUsername));
+  } catch {
+    return false;
+  }
 }
 
 export function hasLocalSession(): boolean {
@@ -121,10 +161,10 @@ export function getLocalCurrentAccount(): { user: AccountUser } | null {
 
 export async function registerLocal(username: string, password: string): Promise<{ user: AccountUser }> {
   const credentials = validateCredentials(username, password);
-  if (findAccount(credentials.username)) throw new Error("That callsign is already registered locally");
   const user: AccountUser = {
     user_id: `local-${randomId()}`,
     username: credentials.username,
+    discriminator: generateDiscriminator(credentials.username),
     created_at: new Date().toISOString(),
   };
   const account: LocalAccount = {
@@ -133,7 +173,7 @@ export async function registerLocal(username: string, password: string): Promise
     verifier: "",
   };
   account.verifier = await deriveVerifier(credentials.password, decode(account.salt));
-  write(ACCOUNTS_KEY, [...read<LocalAccount[]>(ACCOUNTS_KEY, []), account]);
+  write(ACCOUNTS_KEY, [...readAccounts(), account]);
   startSession(user.user_id);
   return { user };
 }
@@ -147,12 +187,35 @@ export async function loginLocal(username: string, password: string): Promise<{ 
   return { user: account.user };
 }
 
+export function updateLocalUsername(username: string): { user: AccountUser } {
+  const current = currentLocalAccount();
+  if (!current) throw new Error("Sign in before changing your callsign");
+  const normalized = validateUsername(username);
+  const accounts = readAccounts();
+  const updatedUser = { ...current.user, username: normalized };
+  write(ACCOUNTS_KEY, accounts.map((account) => account.user.user_id === current.user.user_id ? { ...account, user: updatedUser } : account));
+  return { user: updatedUser };
+}
+
 export function logoutLocal(): void {
   storage().removeItem(SESSION_KEY);
 }
 
 function orderedIds(first: string, second: string): [string, string] {
   return first < second ? [first, second] : [second, first];
+}
+
+function generateDiscriminator(username: string): string {
+  const existing = new Set(
+    readStoredAccounts()
+      .filter((account) => accountKey(account.user.username) === accountKey(username))
+      .map((account) => account.user.discriminator),
+  );
+  let discriminator = "";
+  do {
+    discriminator = String(Math.floor(Math.random() * 9000) + 1000);
+  } while (existing.has(discriminator));
+  return discriminator;
 }
 
 function readFriendships(): LocalFriendship[] {
@@ -163,8 +226,31 @@ function saveFriendships(friendships: LocalFriendship[]): void {
   write(FRIENDSHIPS_KEY, friendships);
 }
 
-function readAccounts(): LocalAccount[] {
+function readStoredAccounts(): LocalAccount[] {
   return read<LocalAccount[]>(ACCOUNTS_KEY, []);
+}
+
+function readAccounts(): LocalAccount[] {
+  const stored = readStoredAccounts();
+  const used = new Map<string, Set<string>>();
+  let changed = false;
+  const accounts = stored.map((account) => {
+    const key = accountKey(account.user.username);
+    const usedDiscriminators = used.get(key) ?? new Set<string>();
+    let discriminator = account.user.discriminator;
+    if (!DISCRIMINATOR_PATTERN.test(discriminator || "") || usedDiscriminators.has(discriminator)) {
+      do {
+        discriminator = String(Math.floor(Math.random() * 9000) + 1000);
+      } while (usedDiscriminators.has(discriminator));
+      changed = true;
+    }
+    usedDiscriminators.add(discriminator);
+    used.set(key, usedDiscriminators);
+    if (account.user.discriminator === discriminator) return account;
+    return { ...account, user: { ...account.user, discriminator } };
+  });
+  if (changed) write(ACCOUNTS_KEY, accounts);
+  return accounts;
 }
 
 function friendRecord(friendship: LocalFriendship, userId: string): FriendRecord | null {
@@ -174,6 +260,7 @@ function friendRecord(friendship: LocalFriendship, userId: string): FriendRecord
   return {
     user_id: other.user.user_id,
     username: other.user.username,
+    discriminator: other.user.discriminator,
     status: friendship.status,
     direction: friendship.status === "pending" ? (friendship.requestedBy === userId ? "outgoing" : "incoming") : undefined,
     created_at: friendship.createdAt,
@@ -207,9 +294,9 @@ export function getLocalFriends(): FriendRecord[] {
     .filter((friendship): friendship is FriendRecord => Boolean(friendship));
 }
 
-export function sendLocalFriendRequest(username: string): FriendRecord {
+export function sendLocalFriendRequest(identity: string): FriendRecord {
   const user = requireLocalUser();
-  const target = findAccount(username);
+  const target = findAccount(identity, true);
   if (!target || target.user.user_id === user.user_id) throw new Error("Operative not found locally");
   const [userA, userB] = orderedIds(user.user_id, target.user.user_id);
   const friendships = readFriendships();
@@ -222,7 +309,7 @@ export function sendLocalFriendRequest(username: string): FriendRecord {
   const now = new Date().toISOString();
   const friendship: LocalFriendship = { userA, userB, status: "pending", requestedBy: user.user_id, createdAt: now, updatedAt: now };
   saveFriendships([...friendships, friendship]);
-  addLocalNotification(target.user.user_id, "friend_request", "New friend request", `${user.username} sent you a friend request.`, { user_id: user.user_id });
+  addLocalNotification(target.user.user_id, "friend_request", "New friend request", `${user.username}#${user.discriminator} sent you a friend request.`, { user_id: user.user_id });
   return friendRecord(friendship, user.user_id) as FriendRecord;
 }
 
@@ -236,7 +323,7 @@ export function respondToLocalFriendRequest(otherUserId: string, accept: boolean
   if (accept) {
     friendships[index] = { ...friendship, status: "accepted", updatedAt: new Date().toISOString() };
     const sender = readAccounts().find((account) => account.user.user_id === otherUserId);
-    if (sender) addLocalNotification(sender.user.user_id, "friend_accepted", "Friend request accepted", `${user.username} accepted your request.`, {});
+    if (sender) addLocalNotification(sender.user.user_id, "friend_accepted", "Friend request accepted", `${user.username}#${user.discriminator} accepted your request.`, {});
   } else {
     friendships.splice(index, 1);
   }

@@ -8,6 +8,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -27,6 +28,8 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
+USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_]{2,24}$")
+DISCRIMINATOR_PATTERN = re.compile(r"^[0-9]{4}$")
 
 
 class AccountUnavailableError(RuntimeError):
@@ -69,6 +72,31 @@ def verify_password(password: str, encoded: str) -> bool:
         return False
 
 
+def normalize_username(username: str) -> str:
+    normalized = username.strip().replace(" ", "_")
+    if not USERNAME_PATTERN.fullmatch(normalized):
+        raise ValueError("Callsigns must use 2 to 24 letters, numbers, or underscores")
+    return normalized
+
+
+def split_identity(identity: str, *, require_discriminator: bool = False) -> tuple[str, str | None]:
+    value = identity.strip()
+    if "#" in value:
+        username, discriminator = value.rsplit("#", 1)
+        username = normalize_username(username)
+        if not DISCRIMINATOR_PATTERN.fullmatch(discriminator):
+            raise ValueError("Use a four-digit discriminator, for example CALLSIGN#1234")
+        return username, discriminator
+    username = normalize_username(value)
+    if require_discriminator:
+        raise ValueError("Use the complete handle, for example CALLSIGN#1234")
+    return username, None
+
+
+def generate_discriminator() -> str:
+    return f"{secrets.randbelow(9000) + 1000:04d}"
+
+
 class AccountService:
     def __init__(self) -> None:
         self.pool: asyncpg.Pool | None = None
@@ -100,10 +128,30 @@ class AccountService:
                 CREATE TABLE IF NOT EXISTS cb_users (
                     id TEXT PRIMARY KEY,
                     username TEXT NOT NULL,
-                    username_key TEXT NOT NULL UNIQUE,
+                    username_key TEXT NOT NULL,
+                    discriminator TEXT NOT NULL DEFAULT '0000',
                     password_hash TEXT NOT NULL,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
+                ALTER TABLE cb_users ADD COLUMN IF NOT EXISTS discriminator TEXT;
+                UPDATE cb_users
+                SET discriminator = LPAD((1000 + MOD(ABS(hashtext(id)::bigint), 9000))::text, 4, '0')
+                WHERE discriminator IS NULL OR discriminator = '';
+                ALTER TABLE cb_users ALTER COLUMN discriminator SET DEFAULT '0000';
+                ALTER TABLE cb_users ALTER COLUMN discriminator SET NOT NULL;
+                DO $$
+                DECLARE old_constraint TEXT;
+                BEGIN
+                    SELECT conname INTO old_constraint
+                    FROM pg_constraint
+                    WHERE conrelid = 'cb_users'::regclass
+                      AND contype = 'u'
+                      AND pg_get_constraintdef(oid) = 'UNIQUE (username_key)';
+                    IF old_constraint IS NOT NULL THEN
+                        EXECUTE format('ALTER TABLE cb_users DROP CONSTRAINT %I', old_constraint);
+                    END IF;
+                END $$;
+                CREATE UNIQUE INDEX IF NOT EXISTS cb_users_identity_idx ON cb_users(username_key, discriminator);
                 CREATE TABLE IF NOT EXISTS cb_sessions (
                     token_hash TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL REFERENCES cb_users(id) ON DELETE CASCADE,
@@ -163,7 +211,13 @@ class AccountService:
             return
         try:
             raw = json.loads(self.fallback_path.read_text())
-            self.fallback_accounts = raw.get("accounts", {})
+            accounts: dict[str, dict[str, Any]] = {}
+            for account in raw.get("accounts", {}).values():
+                account = dict(account)
+                account["username"] = account.get("username", "").strip()
+                account["discriminator"] = account.get("discriminator") or generate_discriminator()
+                accounts[f"{account['username'].casefold()}#{account['discriminator']}"] = account
+            self.fallback_accounts = accounts
             self.fallback_sessions = raw.get("sessions", {})
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             self.fallback_accounts = {}
@@ -183,30 +237,76 @@ class AccountService:
             logger.exception("Could not save emergency account fallback store")
 
     def _account_user(self, account: dict[str, Any]) -> dict[str, Any]:
-        return {"user_id": account["id"], "username": account["username"], "created_at": account["created_at"]}
+        return {
+            "user_id": account["id"],
+            "username": account["username"],
+            "discriminator": account["discriminator"],
+            "created_at": account["created_at"],
+        }
 
     def _fallback_register(self, username: str, password: str) -> tuple[dict[str, Any], str]:
-        username_key = username.casefold()
-        if username_key in self.fallback_accounts:
-            raise UsernameTakenError("That callsign is already registered")
+        username = normalize_username(username)
+        discriminator = generate_discriminator()
+        while f"{username.casefold()}#{discriminator}" in self.fallback_accounts:
+            discriminator = generate_discriminator()
         account = {
             "id": secrets.token_hex(16),
             "username": username,
+            "discriminator": discriminator,
             "password_hash": hash_password(password),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        self.fallback_accounts[username_key] = account
+        self.fallback_accounts[f"{username.casefold()}#{discriminator}"] = account
         self._save_fallback()
         return self._account_user(account), self._fallback_create_session(account["id"])
 
-    def _mirror_fallback_account(self, user_id: str, username: str, password_hash: str, created_at: Any) -> None:
-        self.fallback_accounts[username.casefold()] = {
+    def _mirror_fallback_account(self, user_id: str, username: str, discriminator: str, password_hash: str, created_at: Any) -> None:
+        self.fallback_accounts = {
+            key: account for key, account in self.fallback_accounts.items() if account.get("id") != user_id
+        }
+        self.fallback_accounts[f"{username.casefold()}#{discriminator}"] = {
             "id": user_id,
             "username": username,
+            "discriminator": discriminator,
             "password_hash": password_hash,
             "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
         }
         self._save_fallback()
+
+    async def update_username(self, user_id: str, username: str) -> dict[str, Any]:
+        username = normalize_username(username)
+        username_key = username.casefold()
+        if not self.pool:
+            account = next((item for item in self.fallback_accounts.values() if item.get("id") == user_id), None)
+            if not account:
+                raise AccountUnavailableError("Account storage is unavailable")
+            account["username"] = username
+            self._mirror_fallback_account(
+                account["id"], account["username"], account["discriminator"], account["password_hash"], account["created_at"],
+            )
+            return self._account_user(account)
+
+        try:
+            row = await self.pool.fetchrow(
+                """
+                UPDATE cb_users
+                SET username = $1, username_key = $2
+                WHERE id = $3
+                RETURNING id, username, discriminator, created_at, password_hash
+                """,
+                username,
+                username_key,
+                user_id,
+            )
+        except asyncpg.UniqueViolationError as error:
+            raise ValueError("Could not update this callsign; please retry") from error
+        except Exception as error:
+            logger.warning("Neon callsign update failed", exc_info=True)
+            raise AccountUnavailableError("Account service temporarily unavailable") from error
+        if not row:
+            raise ValueError("Account was not found")
+        self._mirror_fallback_account(row["id"], row["username"], row["discriminator"], row["password_hash"], row["created_at"])
+        return self._user(row)
 
     def _fallback_create_session(self, user_id: str) -> str:
         token = secrets.token_urlsafe(48)
@@ -218,7 +318,15 @@ class AccountService:
         return token
 
     def _fallback_login(self, username: str, password: str) -> tuple[dict[str, Any], str]:
-        account = self.fallback_accounts.get(username.casefold())
+        base_username, discriminator = split_identity(username)
+        matches = [
+            account for account in self.fallback_accounts.values()
+            if account["username"].casefold() == base_username.casefold()
+            and (discriminator is None or account["discriminator"] == discriminator)
+        ]
+        if discriminator is None and len(matches) > 1:
+            raise InvalidCredentialsError("Multiple callsigns found; sign in with CALLSIGN#1234")
+        account = matches[0] if matches else None
         if not account or not verify_password(password, account["password_hash"]):
             raise InvalidCredentialsError("Invalid callsign or password")
         return self._account_user(account), self._fallback_create_session(account["id"])
@@ -246,6 +354,7 @@ class AccountService:
         return {
             "user_id": row["id"],
             "username": row["username"],
+            "discriminator": row["discriminator"],
             "created_at": row["created_at"].isoformat(),
         }
 
@@ -255,29 +364,36 @@ class AccountService:
         if not self.pool:
             return self._fallback_register(username, password)
         pool = self.pool
+        username = normalize_username(username)
         username_key = username.casefold()
         user_id = secrets.token_hex(16)
         password_hash = hash_password(password)
-        try:
-            row = await pool.fetchrow(
-                """
-                INSERT INTO cb_users (id, username, username_key, password_hash)
-                VALUES ($1, $2, $3, $4)
-                RETURNING id, username, created_at
-                """,
-                user_id,
-                username,
-                username_key,
-                password_hash,
-            )
-        except asyncpg.UniqueViolationError as exc:
-            raise UsernameTakenError("That callsign is already registered") from exc
-        except Exception:
-            logger.warning("Neon registration failed; using emergency account fallback", exc_info=True)
-            self.pool = None
-            return self._fallback_register(username, password)
-        self._mirror_fallback_account(row["id"], row["username"], password_hash, row["created_at"])
-        return self._user(row), await self._create_session(user_id)
+        for _attempt in range(5):
+            discriminator = generate_discriminator()
+            try:
+                row = await pool.fetchrow(
+                    """
+                    INSERT INTO cb_users (id, username, username_key, discriminator, password_hash)
+                    VALUES ($1, $2, $3, $4, $5)
+                    RETURNING id, username, discriminator, created_at
+                    """,
+                    user_id,
+                    username,
+                    username_key,
+                    discriminator,
+                    password_hash,
+                )
+            except asyncpg.UniqueViolationError as exc:
+                if _attempt == 4:
+                    raise UsernameTakenError("Could not reserve a unique callsign handle; please retry") from exc
+            except Exception:
+                logger.warning("Neon registration failed; using emergency account fallback", exc_info=True)
+                self.pool = None
+                return self._fallback_register(username, password)
+            else:
+                self._mirror_fallback_account(row["id"], row["username"], row["discriminator"], password_hash, row["created_at"])
+                return self._user(row), await self._create_session(user_id)
+        raise UsernameTakenError("Could not reserve a unique callsign handle; please retry")
 
     async def login(self, username: str, password: str) -> tuple[dict[str, Any], str]:
         if not self.session_secret:
@@ -285,18 +401,30 @@ class AccountService:
         if not self.pool:
             return self._fallback_login(username, password)
         pool = self.pool
+        base_username, discriminator = split_identity(username)
         try:
-            row = await pool.fetchrow(
-                "SELECT id, username, password_hash, created_at FROM cb_users WHERE username_key = $1",
-                username.casefold(),
-            )
-        except Exception:
+            if discriminator:
+                row = await pool.fetchrow(
+                    "SELECT id, username, discriminator, password_hash, created_at FROM cb_users WHERE username_key = $1 AND discriminator = $2",
+                    base_username.casefold(), discriminator,
+                )
+            else:
+                rows = await pool.fetch(
+                    "SELECT id, username, discriminator, password_hash, created_at FROM cb_users WHERE username_key = $1",
+                    base_username.casefold(),
+                )
+                if len(rows) > 1:
+                    raise InvalidCredentialsError("Multiple callsigns found; sign in with CALLSIGN#1234")
+                row = rows[0] if rows else None
+        except Exception as error:
+            if isinstance(error, InvalidCredentialsError):
+                raise
             logger.warning("Neon login failed; using emergency account fallback", exc_info=True)
             self.pool = None
             return self._fallback_login(username, password)
         if not row or not verify_password(password, row["password_hash"]):
             raise InvalidCredentialsError("Invalid callsign or password")
-        self._mirror_fallback_account(row["id"], row["username"], row["password_hash"], row["created_at"])
+        self._mirror_fallback_account(row["id"], row["username"], row["discriminator"], row["password_hash"], row["created_at"])
         return self._user(row), await self._create_session(row["id"])
 
     async def _create_session(self, user_id: str) -> str:
@@ -322,7 +450,7 @@ class AccountService:
         try:
             row = await pool.fetchrow(
                 """
-                SELECT u.id, u.username, u.created_at
+                SELECT u.id, u.username, u.discriminator, u.created_at
                 FROM cb_sessions s JOIN cb_users u ON u.id = s.user_id
                 WHERE s.token_hash = $1 AND s.expires_at > NOW()
                 """,
@@ -356,16 +484,18 @@ class AccountService:
         return {
             "user_id": other_id,
             "username": row["other_username"],
+            "discriminator": row["other_discriminator"],
             "status": row["status"],
             "direction": direction,
             "created_at": row["created_at"].isoformat(),
         }
 
-    async def find_user(self, username: str, current_user_id: str) -> dict[str, Any] | None:
+    async def find_user(self, identity: str, current_user_id: str) -> dict[str, Any] | None:
         pool = self._require_storage()
+        username, discriminator = split_identity(identity, require_discriminator=True)
         row = await pool.fetchrow(
-            "SELECT id, username, created_at FROM cb_users WHERE username_key = $1 AND id <> $2",
-            username.casefold(), current_user_id,
+            "SELECT id, username, discriminator, created_at FROM cb_users WHERE username_key = $1 AND discriminator = $2 AND id <> $3",
+            username.casefold(), discriminator, current_user_id,
         )
         return self._user(row) if row else None
 
@@ -373,7 +503,7 @@ class AccountService:
         pool = self._require_storage()
         rows = await pool.fetch(
             """
-            SELECT f.*, u.username AS other_username
+            SELECT f.*, u.username AS other_username, u.discriminator AS other_discriminator
             FROM cb_friendships f
             JOIN cb_users u ON u.id = CASE WHEN f.user_a = $1 THEN f.user_b ELSE f.user_a END
             WHERE f.user_a = $1 OR f.user_b = $1
@@ -382,9 +512,9 @@ class AccountService:
         )
         return [self._friend(row, user_id) for row in rows]
 
-    async def send_friend_request(self, requester_id: str, username: str) -> dict[str, Any]:
+    async def send_friend_request(self, requester_id: str, identity: str) -> dict[str, Any]:
         pool = self._require_storage()
-        target = await self.find_user(username, requester_id)
+        target = await self.find_user(identity, requester_id)
         if not target:
             raise ValueError("Operative not found")
         target_id = target["user_id"]
@@ -404,10 +534,16 @@ class AccountService:
             user_a, user_b, requester_id,
         )
         await self.create_notification(
-            target_id, "friend_request", "New friend request", f"{target['username']} sent you a friend request.",
+            target_id, "friend_request", "New friend request", f"{target['username']}#{target['discriminator']} sent you a friend request.",
             {"user_id": requester_id},
         )
-        return {"user_id": target_id, "username": target["username"], "status": "pending", "direction": "outgoing"}
+        return {
+            "user_id": target_id,
+            "username": target["username"],
+            "discriminator": target["discriminator"],
+            "status": "pending",
+            "direction": "outgoing",
+        }
 
     async def respond_friend_request(self, user_id: str, other_user_id: str, accept: bool) -> None:
         pool = self._require_storage()
@@ -423,9 +559,9 @@ class AccountService:
                 "UPDATE cb_friendships SET status = 'accepted', updated_at = NOW() WHERE user_a = $1 AND user_b = $2",
                 user_a, user_b,
             )
-            sender = await pool.fetchrow("SELECT username FROM cb_users WHERE id = $1", other_user_id)
+            sender = await pool.fetchrow("SELECT username, discriminator FROM cb_users WHERE id = $1", other_user_id)
             await self.create_notification(
-                other_user_id, "friend_accepted", "Friend request accepted", f"{sender['username']} accepted your request.", {},
+                other_user_id, "friend_accepted", "Friend request accepted", f"{sender['username']}#{sender['discriminator']} accepted your request.", {},
             )
         else:
             await pool.execute("DELETE FROM cb_friendships WHERE user_a = $1 AND user_b = $2", user_a, user_b)

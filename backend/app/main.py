@@ -25,6 +25,7 @@ from slowapi.errors import RateLimitExceeded
 from app.socket_manager import app_sio, configure_socket_manager
 from app.models.account import (
     AccountCredentials,
+    AccountCallsignUpdate,
     AccountResponse,
     AuthResponse,
     FriendAction,
@@ -110,6 +111,8 @@ def account_http_error(error: Exception) -> HTTPException:
         return HTTPException(status_code=409, detail=str(error))
     if isinstance(error, InvalidCredentialsError):
         return HTTPException(status_code=401, detail=str(error))
+    if isinstance(error, ValueError):
+        return HTTPException(status_code=400, detail=str(error))
     return HTTPException(status_code=503, detail="Account service temporarily unavailable")
 
 
@@ -141,7 +144,7 @@ async def root():
 async def register_account(request: Request, credentials: AccountCredentials, response: Response):
     try:
         user, token = await account_service.register(credentials.username, credentials.password)
-    except (AccountUnavailableError, UsernameTakenError) as error:
+    except (AccountUnavailableError, UsernameTakenError, ValueError) as error:
         raise account_http_error(error) from error
     set_session_cookie(response, token)
     return account_response(user)
@@ -152,7 +155,7 @@ async def register_account(request: Request, credentials: AccountCredentials, re
 async def login_account(request: Request, credentials: AccountCredentials, response: Response):
     try:
         user, token = await account_service.login(credentials.username, credentials.password)
-    except (AccountUnavailableError, InvalidCredentialsError) as error:
+    except (AccountUnavailableError, InvalidCredentialsError, ValueError) as error:
         raise account_http_error(error) from error
     set_session_cookie(response, token)
     return account_response(user)
@@ -162,6 +165,16 @@ async def login_account(request: Request, credentials: AccountCredentials, respo
 async def current_account(request: Request):
     user = await authenticated_user(request)
     return account_response(user)
+
+
+@app.patch("/auth/profile", response_model=AuthResponse)
+async def update_profile(request: Request, update: AccountCallsignUpdate):
+    user = await authenticated_user(request)
+    try:
+        updated = await account_service.update_username(user["user_id"], update.username)
+    except (AccountUnavailableError, ValueError) as error:
+        raise account_http_error(error) from error
+    return account_response(updated)
 
 
 @app.post("/auth/logout", status_code=204)
@@ -189,7 +202,7 @@ async def list_friends(request: Request):
 async def send_friend_request(request: Request, target: FriendTarget):
     user = await authenticated_user(request)
     try:
-        return await account_service.send_friend_request(user["user_id"], target.username)
+        return await account_service.send_friend_request(user["user_id"], target.identity)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 

@@ -223,7 +223,7 @@ pnpm install
 pnpm dev -- -p 13000
 ```
 
-Create an account from the entry page. If the API is unavailable, Codebreaker stores the account in that browser's `localStorage` and hashes the password with PBKDF2 through Web Crypto. Local sessions, local friend requests, local notifications, offline missions, and the local leaderboard remain until the site's storage is cleared. Multiplayer still requires the backend and its realtime service.
+Create an account from the entry page. On `localhost`, Codebreaker uses the browser-local account path for testing and assigns a unique four-digit discriminator, shown as `CALLSIGN#1234`; the full handle is used for login when display names overlap and for friend requests. Local sessions, local friend requests, local notifications, offline missions, and the local leaderboard remain until the site's storage is cleared. `NEXT_PUBLIC_ENABLE_LOCAL_FALLBACK=false` can disable it locally. Hosted builds disable this browser-local account/social fallback; hosted friend requests require an online account service. Multiplayer still requires the backend and its realtime service.
 
 To reset local accounts, use the browser's site-data controls for `localhost:13000`, or run this in DevTools:
 

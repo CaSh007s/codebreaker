@@ -32,3 +32,44 @@ def test_emergency_account_store_keeps_hashed_credentials(tmp_path):
         assert token != second_token
 
     asyncio.run(scenario())
+
+
+def test_accounts_can_share_display_name_but_have_unique_handles(tmp_path):
+    async def scenario():
+        service = AccountService()
+        service.session_secret = "test-session-secret"
+        service.fallback_path = tmp_path / "accounts.json"
+
+        first, first_token = await service.register("SameName", "password123")
+        second, second_token = await service.register("SameName", "password456")
+
+        assert first["username"] == second["username"] == "SameName"
+        assert first["discriminator"] != second["discriminator"]
+        assert len(first["discriminator"]) == len(second["discriminator"]) == 4
+
+        first_login, _ = await service.login(f"SameName#{first['discriminator']}", "password123")
+        second_login, _ = await service.login(f"SameName#{second['discriminator']}", "password456")
+        assert first_login["user_id"] == first["user_id"]
+        assert second_login["user_id"] == second["user_id"]
+        assert (await service.get_user(first_token))["discriminator"] == first["discriminator"]
+        assert (await service.get_user(second_token))["discriminator"] == second["discriminator"]
+
+    asyncio.run(scenario())
+
+
+def test_fallback_callsign_update_preserves_discriminator(tmp_path):
+    async def scenario():
+        service = AccountService()
+        service.session_secret = "test-session-secret"
+        service.fallback_path = tmp_path / "accounts.json"
+
+        user, token = await service.register("BeforeName", "password123")
+        updated = await service.update_username(user["user_id"], "AfterName")
+
+        assert updated["username"] == "AfterName"
+        assert updated["discriminator"] == user["discriminator"]
+        current = await service.get_user(token)
+        assert current["username"] == "AfterName"
+        assert current["discriminator"] == user["discriminator"]
+
+    asyncio.run(scenario())
