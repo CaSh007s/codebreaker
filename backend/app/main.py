@@ -95,6 +95,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 SESSION_COOKIE = "codebreaker_session"
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
+COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "").lower()
 
 MAX_SCORE_BY_LEVEL = {
     "ROOKIE": 500,
@@ -115,14 +116,23 @@ def is_suspicious_score(entry: LeaderboardRequest) -> bool:
     return entry.score > round(ceiling * 1.1)
 
 
-def set_session_cookie(response: Response, token: str) -> None:
+def set_session_cookie(request: Request, response: Response, token: str) -> None:
+    # Hosted frontends and APIs commonly use different HTTPS domains. A
+    # cross-site cookie is required for the browser to keep that session.
+    request_is_https = request.url.scheme == "https" or request.headers.get("origin", "").startswith("https://")
+    secure = COOKIE_SECURE or request_is_https
+    same_site = COOKIE_SAMESITE or ("none" if secure else "lax")
+    if same_site not in {"lax", "strict", "none"}:
+        same_site = "none" if secure else "lax"
+    if same_site == "none":
+        secure = True
     response.set_cookie(
         SESSION_COOKIE,
         token,
         max_age=60 * 60 * 24 * 30,
         httponly=True,
-        secure=COOKIE_SECURE,
-        samesite="lax",
+        secure=secure,
+        samesite=same_site,
         path="/",
     )
 
@@ -173,7 +183,7 @@ async def register_account(request: Request, credentials: AccountCredentials, re
         user, token = await account_service.register(credentials.username, credentials.password)
     except (AccountUnavailableError, UsernameTakenError, ValueError) as error:
         raise account_http_error(error) from error
-    set_session_cookie(response, token)
+    set_session_cookie(request, response, token)
     return account_response(user)
 
 
@@ -184,7 +194,7 @@ async def login_account(request: Request, credentials: AccountCredentials, respo
         user, token = await account_service.login(credentials.username, credentials.password)
     except (AccountUnavailableError, InvalidCredentialsError, ValueError) as error:
         raise account_http_error(error) from error
-    set_session_cookie(response, token)
+    set_session_cookie(request, response, token)
     return account_response(user)
 
 

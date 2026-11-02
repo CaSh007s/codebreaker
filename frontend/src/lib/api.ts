@@ -219,7 +219,14 @@ export const api = {
 
   async getProfile(identity: string): Promise<ProfileResponse> {
     if (isLocalFallbackEnabled() && hasLocalSession()) return getLocalProfile(identity);
-    return socialRequest<ProfileResponse>(`/social/profiles/${encodeURIComponent(identity)}`, {}, "OPERATIVE_OFFLINE // PROFILE_SEARCH_REQUIRES_ONLINE_UPLINK");
+    try {
+      return await socialRequest<ProfileResponse>(`/social/profiles/${encodeURIComponent(identity)}`, {}, "OPERATIVE_OFFLINE // PROFILE_SEARCH_REQUIRES_ONLINE_UPLINK");
+    } catch (error) {
+      if ((error as Error).message === "Operative not found") {
+        throw new Error("USER_NOT_FOUND // CHECK_CALLSIGN_AND_DISCRIMINATOR");
+      }
+      throw error;
+    }
   },
 
   async challengeFriend(userId: string, roomId: string): Promise<void> {

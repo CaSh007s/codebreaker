@@ -331,7 +331,7 @@ export function getLocalFriends(): FriendRecord[] {
 export function getLocalProfile(identity: string): ProfileResponse {
   const viewer = requireLocalUser();
   const target = findAccount(identity, true);
-  if (!target) throw new Error("OPERATIVE_NOT_FOUND_LOCALLY // CREATE_BOTH_ACCOUNTS_IN_THIS_BROWSER");
+  if (!target) throw new Error("USER_NOT_FOUND // CHECK_CALLSIGN_AND_DISCRIMINATOR");
   const friendships = readFriendships();
   const [userA, userB] = orderedIds(viewer.user_id, target.user.user_id);
   const friendship = friendships.find((item) => item.userA === userA && item.userB === userB);

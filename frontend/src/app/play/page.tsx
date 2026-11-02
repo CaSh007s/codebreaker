@@ -55,7 +55,6 @@ export default function Home() {
 }
 
 function TopHeader() {
-  const router = useRouter();
   const { view, setView, status } = useGameStore();
   const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
 
@@ -112,18 +111,46 @@ function TopHeader() {
 
       <div className="flex items-center gap-3">
         <NotificationCenter />
-        <button
-          type="button"
-          aria-label="Open profile"
-          title="Profile"
-          onClick={() => router.push("/profile")}
-          className="rounded-full border border-[#3a3a3c] bg-black/30 p-2 text-[#565758] transition-colors hover:border-[#538d4e]/60 hover:text-[#538d4e]"
-        >
-          <UserCircle className="h-4 w-4" />
-        </button>
+        <ProfileShortcut />
         {view === "game" ? <OperativeIdentity /> : <div className="w-10" />}
       </div>
     </header>
+  );
+}
+
+function ProfileShortcut() {
+  const router = useRouter();
+  const [identity, setIdentity] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      void api.getCurrentAccount()
+        .then((response) => {
+          if (active) setIdentity(response ? formatAccountIdentity(response.user) : null);
+        })
+        .catch(() => {
+          if (active) setIdentity(null);
+        });
+    };
+    refresh();
+    window.addEventListener("codebreaker-auth-changed", refresh);
+    return () => {
+      active = false;
+      window.removeEventListener("codebreaker-auth-changed", refresh);
+    };
+  }, []);
+
+  return (
+    <button
+      type="button"
+      aria-label="Open profile"
+      title="Profile"
+      onClick={() => router.push(identity ? `/profile?identity=${encodeURIComponent(identity)}` : "/profile")}
+      className="rounded-full border border-[#3a3a3c] bg-black/30 p-2 text-[#565758] transition-colors hover:border-[#538d4e]/60 hover:text-[#538d4e]"
+    >
+      <UserCircle className="h-4 w-4" />
+    </button>
   );
 }
 

@@ -17,23 +17,25 @@ import {
   UsersRound,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, AccountUser, formatAccountIdentity, FriendRecord, ProfileResponse } from "@/lib/api";
 import { avatarUrl, nextAvatar } from "@/lib/avatar";
 
 type ProfileTab = "records" | "friends" | "about";
 
 export default function ProfilePage() {
-  const router = useRouter();
-  const requestedIdentity = useSyncExternalStore(
-    (onChange) => {
-      window.addEventListener("popstate", onChange);
-      return () => window.removeEventListener("popstate", onChange);
-    },
-    () => new URLSearchParams(window.location.search).get("identity"),
-    () => null,
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <ProfileRoute />
+    </Suspense>
   );
+}
+
+function ProfileRoute() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedIdentity = searchParams.get("identity");
 
   return <ProfileContent requestedIdentity={requestedIdentity} onBack={() => router.push("/play")} />;
 }
@@ -51,32 +53,31 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
   const [menuOpen, setMenuOpen] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
 
-  const loadProfile = async (identity?: string | null) => {
+  const loadProfile = useCallback(async (identity?: string | null) => {
     setBusy(true);
     setError(null);
     try {
       const current = await api.getCurrentAccount();
       if (!current) {
+        setError("SIGN_IN_REQUIRED_FOR_PROFILE");
         router.replace("/");
         return;
       }
       setViewer(current.user);
       const loaded = await api.getProfile(identity || formatAccountIdentity(current.user));
       setProfile(loaded);
-      if (loaded.is_self) setFriends(await api.getFriends());
+      setFriends(loaded.is_self ? await api.getFriends() : []);
     } catch (requestError) {
       setProfile(null);
       setError((requestError as Error).message);
     } finally {
       setBusy(false);
     }
-  };
+  }, [router]);
 
   useEffect(() => {
     void loadProfile(requestedIdentity);
-    // Profile identity is intentionally the only reload input.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestedIdentity]);
+  }, [loadProfile, requestedIdentity]);
 
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
