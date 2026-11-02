@@ -416,8 +416,7 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
     { id: 'multiplayer', label: '04_REMOTE_UPLINK' },
     { id: 'identity', label: '05_OPERATIVE_IDENTITY' },
     { id: 'social', label: '06_SOCIAL_NETWORK' },
-    { id: 'accessibility', label: '07_ACCESSIBILITY' },
-    { id: 'themes', label: '08_THEMES // UPCOMING' }
+    { id: 'accessibility', label: '07_ACCESSIBILITY' }
   ] as const;
 
   type SectionId = typeof sections[number]['id'];
@@ -821,41 +820,6 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
                 </motion.div>
               )}
 
-              {activeSection === 'themes' && (
-                <motion.div
-                  key="themes"
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="space-y-6"
-                >
-                  <div className="space-y-4">
-                    <h4 className="text-[#c8b653] font-mono text-xs font-bold uppercase tracking-widest flex items-center gap-2">
-                      <span className="w-1 h-3 bg-[#c8b653] rounded-full" />
-                      Themes_Expansion_Reserved
-                    </h4>
-                    <div className="p-5 border border-[#c8b653]/30 bg-[#c8b653]/5 rounded-xl space-y-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-[#c8b653] animate-pulse" />
-                        <span className="text-[#c8b653] font-mono text-[10px] font-bold uppercase">UPCOMING_UPDATE // NOT_DEPLOYED</span>
-                      </div>
-                      <p className="text-amber-300 font-mono text-[10px] uppercase leading-relaxed">
-                        Themes will let operatives customize the visual atmosphere of the board, mission selection, and tactical interface while preserving readability and game clarity.
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-2">
-                        <span className="text-slate-300 font-mono text-[10px] font-bold uppercase">VISUAL_PRESETS</span>
-                        <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">Future presets may adjust colors, highlights, surfaces, and ambient signal treatments across the platform.</p>
-                      </div>
-                      <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-2">
-                        <span className="text-slate-300 font-mono text-[10px] font-bold uppercase">ACCESSIBILITY_FIRST</span>
-                        <p className="text-slate-500 font-mono text-[9px] uppercase leading-relaxed">Theme options will retain contrast, keyboard focus visibility, reduced-motion support, and screen-reader clarity.</p>
-                      </div>
-                    </div>
-                    <p className="p-3 bg-white/5 rounded italic text-[9px] text-[#565758] font-mono uppercase">* Current tactical green interface remains the default until the themes update is released.</p>
-                  </div>
-                </motion.div>
-              )}
             </AnimatePresence>
           </div>
         </div>
