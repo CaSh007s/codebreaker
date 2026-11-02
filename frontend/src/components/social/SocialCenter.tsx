@@ -28,13 +28,16 @@ export function NotificationCenter() {
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => void refresh());
-    const timer = window.setInterval(() => void refresh(), 30_000);
+    const timer = window.setInterval(() => void refresh(), 5_000);
     const authChanged = () => void refresh();
+    const socialChanged = () => void refresh();
     window.addEventListener("codebreaker-auth-changed", authChanged);
+    window.addEventListener("codebreaker-social-changed", socialChanged);
     return () => {
       cancelAnimationFrame(frame);
       window.clearInterval(timer);
       window.removeEventListener("codebreaker-auth-changed", authChanged);
+      window.removeEventListener("codebreaker-social-changed", socialChanged);
     };
   }, []);
 
@@ -69,9 +72,14 @@ export function NotificationCenter() {
                  if (!notification.read) {
                     void api.markNotificationRead(notification.notification_id);
                     setNotifications((items) => items.map((item) => item.notification_id === notification.notification_id ? { ...item, read: true } : item));
-                  }
-                  const roomId = notification.payload.room_id;
-                  if (roomId) router.push(`/multiplayer/${roomId}?mode=standard&level=${notification.payload.level || "4"}&repeats=${notification.payload.repeats || "false"}&direct=true`);
+                   }
+                   const roomId = notification.payload.room_id;
+                   if (roomId) router.push(`/multiplayer/${roomId}?mode=standard&level=${notification.payload.level || "4"}&repeats=${notification.payload.repeats || "false"}&direct=true`);
+                   const identity = notification.payload.identity;
+                   if (identity && (notification.kind === "friend_request" || notification.kind === "friend_accepted")) {
+                     setOpen(false);
+                     router.push(`/profile?identity=${encodeURIComponent(identity)}`);
+                   }
                 }}
                 className={`w-full border-b border-white/5 px-4 py-3 text-left transition-colors hover:bg-white/5 ${notification.read ? "opacity-60" : "bg-[#538d4e]/5"}`}
               >
@@ -95,6 +103,7 @@ export function FriendsCenter({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const [account, setAccount] = useState<AccountUser | null>(null);
   const [friends, setFriends] = useState<FriendRecord[]>([]);
+  const [blocked, setBlocked] = useState<FriendRecord[]>([]);
   const [targetName, setTargetName] = useState("");
   const [targetDiscriminator, setTargetDiscriminator] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +113,14 @@ export function FriendsCenter({ onClose }: { onClose: () => void }) {
     try {
       const current = await api.getCurrentAccount();
       setAccount(current?.user ?? null);
-      if (current) setFriends(await api.getFriends());
+      if (current) {
+        const [friendList, blockedList] = await Promise.all([api.getFriends(), api.getBlockedUsers().catch(() => [])]);
+        setFriends(friendList);
+        setBlocked(blockedList);
+      } else {
+        setFriends([]);
+        setBlocked([]);
+      }
     } catch (requestError) {
       setError((requestError as Error).message);
     }
@@ -112,7 +128,14 @@ export function FriendsCenter({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => void refresh());
-    return () => cancelAnimationFrame(frame);
+    const timer = window.setInterval(() => void refresh(), 5_000);
+    const socialChanged = () => void refresh();
+    window.addEventListener("codebreaker-social-changed", socialChanged);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearInterval(timer);
+      window.removeEventListener("codebreaker-social-changed", socialChanged);
+    };
   }, []);
 
   const incoming = useMemo(() => friends.filter((friend) => friend.status === "pending" && friend.direction === "incoming"), [friends]);
@@ -169,6 +192,15 @@ export function FriendsCenter({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const unblock = async (friend: FriendRecord) => {
+    try {
+      await api.unblockUser(friend.user_id);
+      await refresh();
+    } catch (requestError) {
+      setError((requestError as Error).message);
+    }
+  };
+
   const enablePush = async () => {
     const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     if (!publicKey || !("Notification" in window) || !("serviceWorker" in navigator)) {
@@ -206,7 +238,8 @@ export function FriendsCenter({ onClose }: { onClose: () => void }) {
                </div>
             </div>
              {incoming.length > 0 && <section className="mb-5"><p className="mb-2 font-mono text-[9px] uppercase tracking-widest text-[#c8b653]">INCOMING_REQUESTS</p>{incoming.map((friend) => <div key={friend.user_id} className="mb-2 flex items-center justify-between rounded-lg border border-[#c8b653]/20 bg-[#c8b653]/5 p-3"><span className="font-mono text-[10px] font-bold text-slate-200">{formatFriendIdentity(friend)}</span><div className="flex gap-2"><button type="button" onClick={() => void respond(friend.user_id, "accept")} aria-label={`Accept ${formatFriendIdentity(friend)}`} className="rounded bg-[#538d4e] p-1 text-black"><Check className="h-3 w-3" /></button><button type="button" onClick={() => void respond(friend.user_id, "decline")} aria-label={`Decline ${formatFriendIdentity(friend)}`} className="rounded bg-[#cf6679] p-1 text-white"><X className="h-3 w-3" /></button></div></div>)}</section>}
-             <section><p className="mb-2 font-mono text-[9px] uppercase tracking-widest text-[#565758]">FRIEND_LIST // {accepted.length}</p>{accepted.length === 0 ? <p className="rounded-lg border border-white/5 p-4 text-center font-mono text-[9px] uppercase text-[#565758]">NO_FRIENDS_CONNECTED</p> : accepted.map((friend) => <div key={friend.user_id} className="mb-2 rounded-lg border border-white/5 bg-white/[0.02] p-3"><div className="flex items-center justify-between"><span className="font-mono text-[10px] font-bold text-slate-200">{formatFriendIdentity(friend)}</span><button type="button" disabled={busy} onClick={() => void startDirectGame(friend)} className="font-mono text-[8px] uppercase text-[#538d4e] hover:text-[#58a352] disabled:opacity-50">START_DIRECT_GAME</button></div><div className="mt-2 flex justify-end gap-3"><button type="button" onClick={() => void remove(friend)} className="font-mono text-[8px] uppercase text-[#565758] hover:text-[#cf6679]">REMOVE</button><button type="button" onClick={() => void block(friend)} className="font-mono text-[8px] uppercase text-[#565758] hover:text-red-400">BLOCK</button></div></div>)}</section>
+              <section><p className="mb-2 font-mono text-[9px] uppercase tracking-widest text-[#565758]">FRIEND_LIST // {accepted.length}</p>{accepted.length === 0 ? <p className="rounded-lg border border-white/5 p-4 text-center font-mono text-[9px] uppercase text-[#565758]">NO_FRIENDS_CONNECTED</p> : accepted.map((friend) => <div key={friend.user_id} className="mb-2 rounded-lg border border-white/5 bg-white/[0.02] p-3"><div className="flex items-center justify-between"><span className="font-mono text-[10px] font-bold text-slate-200">{formatFriendIdentity(friend)}</span><button type="button" disabled={busy} onClick={() => void startDirectGame(friend)} className="font-mono text-[8px] uppercase text-[#538d4e] hover:text-[#58a352] disabled:opacity-50">START_DIRECT_GAME</button></div><div className="mt-2 flex justify-end gap-3"><button type="button" onClick={() => void remove(friend)} className="font-mono text-[8px] uppercase text-[#565758] hover:text-[#cf6679]">REMOVE</button><button type="button" onClick={() => void block(friend)} className="font-mono text-[8px] uppercase text-[#565758] hover:text-red-400">BLOCK</button></div></div>)}</section>
+              {blocked.length > 0 && <section className="mt-5"><p className="mb-2 font-mono text-[9px] uppercase tracking-widest text-[#cf8896]">BLOCK_LIST // {blocked.length}</p>{blocked.map((friend) => <div key={friend.user_id} className="mb-2 flex items-center justify-between rounded-lg border border-[#cf6679]/20 bg-[#cf6679]/5 p-3"><span className="font-mono text-[10px] font-bold text-slate-200">{formatFriendIdentity(friend)}</span><button type="button" onClick={() => void unblock(friend)} className="font-mono text-[8px] uppercase text-[#c9e99a] hover:text-white">UNBLOCK</button></div>)}</section>}
             <button type="button" onClick={() => void enablePush()} className="mt-5 w-full rounded-lg border border-[#538d4e]/30 bg-[#538d4e]/5 py-3 font-mono text-[9px] uppercase tracking-widest text-[#538d4e] hover:bg-[#538d4e]/10">ENABLE_PUSH_ALERTS</button>
           </>
         )}

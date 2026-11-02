@@ -332,7 +332,29 @@ async def report_user(request: Request, report: ReportRequest):
 @app.post("/social/blocks/{other_user_id}", status_code=204)
 async def block_user(request: Request, other_user_id: str):
     user = await authenticated_user(request)
-    await account_service.block_user(user["user_id"], other_user_id)
+    try:
+        await account_service.block_user(user["user_id"], other_user_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return Response(status_code=204)
+
+
+@app.get("/social/blocks", response_model=List[FriendRecord])
+async def list_blocked_users(request: Request):
+    user = await authenticated_user(request)
+    try:
+        return await account_service.list_blocked_users(user["user_id"])
+    except AccountUnavailableError as error:
+        raise account_http_error(error) from error
+
+
+@app.delete("/social/blocks/{other_user_id}", status_code=204)
+async def unblock_user(request: Request, other_user_id: str):
+    user = await authenticated_user(request)
+    try:
+        await account_service.unblock_user(user["user_id"], other_user_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     return Response(status_code=204)
 
 

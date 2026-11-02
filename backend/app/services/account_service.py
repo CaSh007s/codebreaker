@@ -561,6 +561,7 @@ class AccountService:
             "discriminator": row["other_discriminator"],
             "status": row["status"],
             "direction": direction,
+            "blocked_by": row["blocked_by"],
             "created_at": row["created_at"].isoformat(),
         }
 
@@ -568,7 +569,7 @@ class AccountService:
         pool = self._require_storage()
         username, discriminator = split_identity(identity, require_discriminator=True)
         row = await pool.fetchrow(
-            "SELECT id, username, discriminator, created_at FROM cb_users WHERE username_key = $1 AND discriminator = $2 AND id <> $3",
+            "SELECT id, username, discriminator, avatar_url, created_at FROM cb_users WHERE username_key = $1 AND discriminator = $2 AND id <> $3",
             username.casefold(), discriminator, current_user_id,
         )
         return self._user(row) if row else None
@@ -584,10 +585,10 @@ class AccountService:
             raise ValueError("Operative not found")
         target_id = row["id"]
         friendship = await pool.fetchrow(
-            "SELECT status, requested_by FROM cb_friendships WHERE (user_a = $1 AND user_b = $2) OR (user_a = $2 AND user_b = $1)",
+            "SELECT status, requested_by, blocked_by FROM cb_friendships WHERE (user_a = $1 AND user_b = $2) OR (user_a = $2 AND user_b = $1)",
             current_user_id, target_id,
         )
-        if friendship and friendship["status"] == "blocked":
+        if friendship and friendship["status"] == "blocked" and friendship["blocked_by"] != current_user_id:
             raise ValueError("PROFILE_UNAVAILABLE // OPERATIVE_BLOCKED")
         friend_count = await pool.fetchval(
             "SELECT COUNT(*) FROM cb_friendships WHERE status = 'accepted' AND (user_a = $1 OR user_b = $1)",
@@ -663,7 +664,11 @@ class AccountService:
             raise ValueError("You cannot report yourself")
         if not await pool.fetchval("SELECT 1 FROM cb_users WHERE id = $1", target_user_id):
             raise ValueError("Operative not found")
-        await pool.execute("INSERT INTO cb_reports (id, reporter_id, target_user_id, reason) VALUES ($1, $2, $3, $4)", str(uuid.uuid4()), reporter_id, target_user_id, reason.strip()[:500])
+        reason = reason.strip()
+        if len(reason) < 3:
+            raise ValueError("REPORT_REASON_MUST_BE_3_TO_500_CHARACTERS")
+        await pool.execute("INSERT INTO cb_reports (id, reporter_id, target_user_id, reason) VALUES ($1, $2, $3, $4)", str(uuid.uuid4()), reporter_id, target_user_id, reason[:500])
+        logger.info("User report submitted: reporter=%s target=%s", reporter_id, target_user_id)
 
     async def list_friends(self, user_id: str) -> list[dict[str, Any]]:
         pool = self._require_storage()
@@ -672,7 +677,20 @@ class AccountService:
             SELECT f.*, u.username AS other_username, u.discriminator AS other_discriminator
             FROM cb_friendships f
             JOIN cb_users u ON u.id = CASE WHEN f.user_a = $1 THEN f.user_b ELSE f.user_a END
-            WHERE f.user_a = $1 OR f.user_b = $1
+            WHERE (f.user_a = $1 OR f.user_b = $1) AND f.status IN ('pending', 'accepted')
+            ORDER BY f.updated_at DESC
+        """, user_id,
+        )
+        return [self._friend(row, user_id) for row in rows]
+
+    async def list_blocked_users(self, user_id: str) -> list[dict[str, Any]]:
+        pool = self._require_storage()
+        rows = await pool.fetch(
+            """
+            SELECT f.*, u.username AS other_username, u.discriminator AS other_discriminator
+            FROM cb_friendships f
+            JOIN cb_users u ON u.id = CASE WHEN f.user_a = $1 THEN f.user_b ELSE f.user_a END
+            WHERE f.blocked_by = $1 AND f.status = 'blocked'
             ORDER BY f.updated_at DESC
             """, user_id,
         )
@@ -699,9 +717,11 @@ class AccountService:
             "INSERT INTO cb_friendships (user_a, user_b, status, requested_by) VALUES ($1, $2, 'pending', $3)",
             user_a, user_b, requester_id,
         )
+        requester = await pool.fetchrow("SELECT username, discriminator FROM cb_users WHERE id = $1", requester_id)
+        requester_identity = f"{requester['username']}#{requester['discriminator']}"
         await self.create_notification(
-            target_id, "friend_request", "New friend request", f"{target['username']}#{target['discriminator']} sent you a friend request.",
-            {"user_id": requester_id},
+            target_id, "friend_request", "New friend request", f"{requester_identity} sent you a friend request.",
+            {"user_id": requester_id, "identity": requester_identity},
         )
         return {
             "user_id": target_id,
@@ -725,9 +745,10 @@ class AccountService:
                 "UPDATE cb_friendships SET status = 'accepted', updated_at = NOW() WHERE user_a = $1 AND user_b = $2",
                 user_a, user_b,
             )
-            sender = await pool.fetchrow("SELECT username, discriminator FROM cb_users WHERE id = $1", other_user_id)
+            accepter = await pool.fetchrow("SELECT username, discriminator FROM cb_users WHERE id = $1", user_id)
+            accepter_identity = f"{accepter['username']}#{accepter['discriminator']}"
             await self.create_notification(
-                other_user_id, "friend_accepted", "Friend request accepted", f"{sender['username']}#{sender['discriminator']} accepted your request.", {},
+                other_user_id, "friend_accepted", "Friend request accepted", f"{accepter_identity} accepted your friend request.", {"user_id": user_id, "identity": accepter_identity},
             )
         else:
             await pool.execute("DELETE FROM cb_friendships WHERE user_a = $1 AND user_b = $2", user_a, user_b)
@@ -742,6 +763,10 @@ class AccountService:
 
     async def block_user(self, user_id: str, other_user_id: str) -> None:
         pool = self._require_storage()
+        if user_id == other_user_id:
+            raise ValueError("You cannot block yourself")
+        if not await pool.fetchval("SELECT 1 FROM cb_users WHERE id = $1", other_user_id):
+            raise ValueError("Operative not found")
         user_a, user_b = self._ordered_users(user_id, other_user_id)
         await pool.execute(
             """
@@ -749,6 +774,14 @@ class AccountService:
             VALUES ($1, $2, 'blocked', $3, $3)
             ON CONFLICT (user_a, user_b) DO UPDATE SET status = 'blocked', blocked_by = $3, updated_at = NOW()
             """, user_a, user_b, user_id,
+        )
+
+    async def unblock_user(self, user_id: str, other_user_id: str) -> None:
+        pool = self._require_storage()
+        user_a, user_b = self._ordered_users(user_id, other_user_id)
+        await pool.execute(
+            "DELETE FROM cb_friendships WHERE user_a = $1 AND user_b = $2 AND status = 'blocked' AND blocked_by = $3",
+            user_a, user_b, user_id,
         )
 
     async def create_notification(self, recipient_id: str, kind: str, title: str, body: str, payload: dict[str, Any]) -> None:

@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   CalendarDays,
   Camera,
+  Check,
   Flag,
   Flame,
   Info,
@@ -19,8 +20,9 @@ import {
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, AccountUser, formatAccountIdentity, FriendRecord, ProfileResponse } from "@/lib/api";
+import { api, AccountUser, formatAccountIdentity, formatFriendIdentity, FriendRecord, ProfileResponse } from "@/lib/api";
 import { avatarUrl, nextAvatar } from "@/lib/avatar";
+import { NotificationCenter } from "@/components/social/SocialCenter";
 
 type ProfileTab = "records" | "friends" | "about";
 
@@ -46,16 +48,19 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [viewer, setViewer] = useState<AccountUser | null>(null);
   const [friends, setFriends] = useState<FriendRecord[]>([]);
+  const [blockedUsers, setBlockedUsers] = useState<FriendRecord[]>([]);
   const [tab, setTab] = useState<ProfileTab>("records");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [online, setOnline] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const loadProfile = useCallback(async (identity?: string | null) => {
-    setBusy(true);
+  const loadProfile = useCallback(async (identity?: string | null, silent = false) => {
+    if (!silent) setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       const current = await api.getCurrentAccount();
       if (!current) {
@@ -66,17 +71,29 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
       setViewer(current.user);
       const loaded = await api.getProfile(identity || formatAccountIdentity(current.user));
       setProfile(loaded);
-      setFriends(loaded.is_self ? await api.getFriends() : []);
+      if (loaded.is_self) {
+        const [friendList, blockedList] = await Promise.all([
+          api.getFriends(),
+          api.getBlockedUsers().catch(() => []),
+        ]);
+        setFriends(friendList);
+        setBlockedUsers(blockedList);
+      } else {
+        setFriends([]);
+        setBlockedUsers([]);
+      }
     } catch (requestError) {
       setProfile(null);
       setError((requestError as Error).message);
     } finally {
-      setBusy(false);
+      if (!silent) setBusy(false);
     }
   }, [router]);
 
   useEffect(() => {
     void loadProfile(requestedIdentity);
+    const timer = window.setInterval(() => void loadProfile(requestedIdentity, true), 5_000);
+    return () => window.clearInterval(timer);
   }, [loadProfile, requestedIdentity]);
 
   useEffect(() => {
@@ -101,6 +118,7 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
     if (relationship === "accepted") return "FRIENDS_CONNECTED";
     if (relationship === "pending_outgoing") return "REQUEST_PENDING";
     if (relationship === "pending_incoming") return "INCOMING_REQUEST";
+    if (relationship === "blocked") return "OPERATIVE_BLOCKED";
     return "PUBLIC_OPERATIVE";
   }, [isOwnProfile, relationship]);
 
@@ -111,6 +129,22 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
     try {
       await api.sendFriendRequest(formatAccountIdentity(profile));
       await loadProfile(formatAccountIdentity(profile));
+      window.dispatchEvent(new Event("codebreaker-social-changed"));
+    } catch (requestError) {
+      setError((requestError as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const respondToRequest = async (action: "accept" | "decline") => {
+    if (!profile) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.respondToFriendRequest(profile.user_id, action);
+      await loadProfile(formatAccountIdentity(profile));
+      window.dispatchEvent(new Event("codebreaker-social-changed"));
     } catch (requestError) {
       setError((requestError as Error).message);
     } finally {
@@ -133,15 +167,31 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
     }
   };
 
-  const changeFriendship = async (action: "remove" | "block") => {
+  const changeFriendship = async (action: "remove" | "block" | "unblock") => {
     if (!profile) return;
     setBusy(true);
     setError(null);
     try {
       if (action === "remove") await api.removeFriend(profile.user_id);
-      else await api.blockUser(profile.user_id);
+      else if (action === "block") await api.blockUser(profile.user_id);
+      else await api.unblockUser(profile.user_id);
       setMenuOpen(false);
       await loadProfile(formatAccountIdentity(profile));
+      window.dispatchEvent(new Event("codebreaker-social-changed"));
+    } catch (requestError) {
+      setError((requestError as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const unblockFromList = async (userId: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.unblockUser(userId);
+      await loadProfile(requestedIdentity);
+      window.dispatchEvent(new Event("codebreaker-social-changed"));
     } catch (requestError) {
       setError((requestError as Error).message);
     } finally {
@@ -171,9 +221,10 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
     if (!profile) return;
     const reason = window.prompt("Reason for report:");
     if (!reason?.trim()) return;
+    setError(null);
     try {
       await api.reportUser(profile.user_id, reason);
-      setError("REPORT_SUBMITTED");
+      setNotice("REPORT_SUBMITTED // STORED_FOR_MODERATION");
     } catch (requestError) { setError((requestError as Error).message); }
   };
 
@@ -181,6 +232,7 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
     <main className="relative min-h-dvh overflow-hidden bg-[#080a08] px-4 py-5 text-slate-100 sm:px-8 sm:py-8" onClick={(event) => { if (window.matchMedia("(min-width: 1024px)").matches && !profileCardRef.current?.contains(event.target as Node)) onBack(); }}>
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(120,145,103,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(120,145,103,0.08)_1px,transparent_1px)] [background-size:46px_46px] [mask-image:radial-gradient(ellipse_at_center,black,transparent_80%)]" />
       <div className="relative mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[1220px] items-center justify-center">
+        <div className="absolute right-2 top-2 z-40" onClick={(event) => event.stopPropagation()}><NotificationCenter /></div>
         <div className="absolute -top-1 left-0 hidden sm:-top-2 lg:block">
           <button type="button" onClick={onBack} className="flex items-center gap-3 text-left font-sans text-xl font-semibold text-slate-100 transition-colors hover:text-[#c9e99a]"><ArrowLeft className="h-6 w-6" strokeWidth={1.7} /> Profile</button>
         </div>
@@ -190,7 +242,7 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
               <div className="flex items-center border-b border-[#52604b]/50 px-5 py-4 lg:hidden"><button type="button" onClick={onBack} className="flex items-center gap-3 font-sans text-lg font-semibold text-slate-100 hover:text-[#c9e99a]"><ArrowLeft className="h-5 w-5" /> Profile</button></div>
               <div className="relative overflow-hidden border-y border-[#52604b]/50 px-5 py-8 sm:px-12 sm:py-10">
                 <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(155deg,transparent_45%,rgba(112,138,98,0.28)_45.2%,transparent_45.5%),linear-gradient(25deg,transparent_62%,rgba(112,138,98,0.22)_62.2%,transparent_62.5%)]" />
-                <div className={`absolute right-5 top-5 flex items-center gap-2 rounded-full border px-4 py-2 font-mono text-[10px] uppercase tracking-widest ${online ? "border-[#87a967]/40 bg-[#7da35b]/10 text-[#b6d992]" : "border-[#cf6679]/40 bg-[#cf6679]/10 text-[#cf8896]"}`}><span className={`h-2 w-2 rounded-full ${online ? "bg-[#9bdb68] shadow-[0_0_10px_#9bdb68]" : "bg-[#cf6679]"}`} />{online ? "ONLINE" : "OFFLINE"}</div>
+                 <div className={`absolute right-5 top-16 flex items-center gap-2 rounded-full border px-4 py-2 font-mono text-[10px] uppercase tracking-widest ${online ? "border-[#87a967]/40 bg-[#7da35b]/10 text-[#b6d992]" : "border-[#cf6679]/40 bg-[#cf6679]/10 text-[#cf8896]"}`}><span className={`h-2 w-2 rounded-full ${online ? "bg-[#9bdb68] shadow-[0_0_10px_#9bdb68]" : "bg-[#cf6679]"}`} />{online ? "ONLINE" : "OFFLINE"}</div>
                 <div className="relative grid items-center gap-8 lg:grid-cols-[250px_1fr_auto]">
                   <div className="flex justify-center lg:justify-start">
                     <div className="relative">
@@ -210,10 +262,13 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
                   </div>
 
                   <div className="flex items-center justify-center gap-3 lg:justify-end">
-                    {!isOwnProfile && relationship !== "accepted" && relationship !== "pending_outgoing" && relationship !== "pending_incoming" && <button type="button" disabled={busy} onClick={() => void sendRequest()} className="flex items-center gap-2 rounded-xl bg-[#c9e99a] px-5 py-3 font-sans text-sm font-semibold text-[#162010] shadow-[0_0_20px_rgba(177,220,117,0.15)] transition-colors hover:bg-[#daf5ad] disabled:opacity-50"><UserPlus className="h-5 w-5" /> Add Friend</button>}
-                    {!isOwnProfile && relationship === "accepted" && <button type="button" disabled={busy} onClick={() => void startDirectGame()} className="flex items-center gap-2 rounded-xl bg-[#c9e99a] px-5 py-3 font-sans text-sm font-semibold text-[#162010] shadow-[0_0_20px_rgba(177,220,117,0.15)] transition-colors hover:bg-[#daf5ad] disabled:opacity-50"><Swords className="h-5 w-5" /> Start Game</button>}
-                    {!isOwnProfile && relationship === "accepted" && <button type="button" aria-label="Open direct messages" onClick={() => setShowMessages(true)} className="rounded-xl border border-[#687468] bg-white/[0.02] p-3 text-slate-200 transition-colors hover:border-[#a5bd8c]"><MessageCircle className="h-6 w-6" /></button>}
-                    {!isOwnProfile && <div className="relative"><button type="button" aria-label="More profile actions" onClick={() => setMenuOpen((open) => !open)} className="rounded-xl border border-[#687468] bg-white/[0.02] p-3 text-slate-200 transition-colors hover:border-[#a5bd8c]"><MoreHorizontal className="h-6 w-6" /></button>{menuOpen && <div className="absolute right-0 top-14 z-20 min-w-40 overflow-hidden rounded-xl border border-[#52604b] bg-[#171d16] p-1 shadow-2xl">{relationship === "accepted" && <button type="button" onClick={() => void changeFriendship("remove")} className="w-full rounded-lg px-3 py-2 text-left font-mono text-[9px] uppercase text-[#b9c4b1] hover:bg-white/5">REMOVE_FRIEND</button>}<button type="button" onClick={() => void changeFriendship("block")} className="w-full rounded-lg px-3 py-2 text-left font-mono text-[9px] uppercase text-[#cf8896] hover:bg-[#cf6679]/10">BLOCK_OPERATIVE</button><button type="button" onClick={() => void reportProfile()} className="w-full rounded-lg px-3 py-2 text-left font-mono text-[9px] uppercase text-[#cf8896] hover:bg-[#cf6679]/10">REPORT_OPERATIVE</button></div>}</div>}
+                     {!isOwnProfile && relationship === null && <button type="button" disabled={busy} onClick={() => void sendRequest()} className="flex items-center gap-2 rounded-xl bg-[#c9e99a] px-5 py-3 font-sans text-sm font-semibold text-[#162010] shadow-[0_0_20px_rgba(177,220,117,0.15)] transition-colors hover:bg-[#daf5ad] disabled:opacity-50"><UserPlus className="h-5 w-5" /> Add Friend</button>}
+                     {!isOwnProfile && relationship === "pending_outgoing" && <button type="button" disabled className="flex items-center gap-2 rounded-xl border border-[#c8b653]/50 bg-[#c8b653]/10 px-5 py-3 font-sans text-sm font-semibold text-[#c8b653]"><Check className="h-5 w-5" /> Friend Request Sent</button>}
+                     {!isOwnProfile && relationship === "pending_incoming" && <div className="flex flex-wrap justify-center gap-2 lg:justify-end"><button type="button" disabled={busy} onClick={() => void respondToRequest("accept")} className="flex items-center gap-2 rounded-xl bg-[#c9e99a] px-4 py-3 font-sans text-sm font-semibold text-[#162010] disabled:opacity-50"><Check className="h-5 w-5" /> Accept</button><button type="button" disabled={busy} onClick={() => void respondToRequest("decline")} className="rounded-xl border border-[#cf6679]/50 px-4 py-3 font-mono text-[10px] uppercase text-[#cf8896] disabled:opacity-50">Decline</button></div>}
+                     {!isOwnProfile && relationship === "blocked" && <button type="button" disabled={busy} onClick={() => void changeFriendship("unblock")} className="rounded-xl border border-[#c9e99a]/50 bg-[#c9e99a]/10 px-5 py-3 font-sans text-sm font-semibold text-[#c9e99a] disabled:opacity-50">Unblock</button>}
+                     {!isOwnProfile && relationship === "accepted" && <button type="button" disabled={busy} onClick={() => void startDirectGame()} className="flex items-center gap-2 rounded-xl bg-[#c9e99a] px-5 py-3 font-sans text-sm font-semibold text-[#162010] shadow-[0_0_20px_rgba(177,220,117,0.15)] transition-colors hover:bg-[#daf5ad] disabled:opacity-50"><Swords className="h-5 w-5" /> Start Game</button>}
+                     {!isOwnProfile && relationship === "accepted" && <button type="button" aria-label="Open direct messages" onClick={() => setShowMessages(true)} className="rounded-xl border border-[#687468] bg-white/[0.02] p-3 text-slate-200 transition-colors hover:border-[#a5bd8c]"><MessageCircle className="h-6 w-6" /></button>}
+                     {!isOwnProfile && <div className="relative"><button type="button" aria-label="More profile actions" onClick={() => setMenuOpen((open) => !open)} className="rounded-xl border border-[#687468] bg-white/[0.02] p-3 text-slate-200 transition-colors hover:border-[#a5bd8c]"><MoreHorizontal className="h-6 w-6" /></button>{menuOpen && <div className="absolute right-0 top-14 z-20 min-w-40 overflow-hidden rounded-xl border border-[#52604b] bg-[#171d16] p-1 shadow-2xl">{relationship === "accepted" && <button type="button" onClick={() => void changeFriendship("remove")} className="w-full rounded-lg px-3 py-2 text-left font-mono text-[9px] uppercase text-[#b9c4b1] hover:bg-white/5">REMOVE_FRIEND</button>}{relationship === "blocked" ? <button type="button" onClick={() => void changeFriendship("unblock")} className="w-full rounded-lg px-3 py-2 text-left font-mono text-[9px] uppercase text-[#c9e99a] hover:bg-white/5">UNBLOCK_OPERATIVE</button> : <button type="button" onClick={() => void changeFriendship("block")} className="w-full rounded-lg px-3 py-2 text-left font-mono text-[9px] uppercase text-[#cf8896] hover:bg-[#cf6679]/10">BLOCK_OPERATIVE</button>}<button type="button" onClick={() => void reportProfile()} className="w-full rounded-lg px-3 py-2 text-left font-mono text-[9px] uppercase text-[#cf8896] hover:bg-[#cf6679]/10">REPORT_OPERATIVE</button></div>}</div>}
                   </div>
                 </div>
               </div>
@@ -225,8 +280,9 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
                   <ProfileTabButton active={tab === "about"} onClick={() => setTab("about")} icon={<Info />} label="About" />
                 </nav>
                 {tab === "records" && <RecordsPanel profile={profile} winRate={winRate} />}
-                {tab === "friends" && <FriendsPanel friends={friends} own={Boolean(isOwnProfile)} />}
-                {tab === "about" && <AboutPanel profile={profile} online={online} onReport={() => void reportProfile()} />}
+                 {tab === "friends" && <FriendsPanel friends={friends} blockedUsers={blockedUsers} own={Boolean(isOwnProfile)} onUnblock={(userId) => void unblockFromList(userId)} />}
+                 {tab === "about" && <AboutPanel profile={profile} online={online} onReport={() => void reportProfile()} />}
+                 {notice && <p role="status" className="pb-5 font-mono text-[9px] uppercase text-[#b8dc87]">{notice}</p>}
               </div>
             </>
           )}
@@ -242,8 +298,14 @@ function RecordsPanel({ profile, winRate }: { profile: ProfileResponse; winRate:
   return <div className="py-7 sm:py-9"><div className="mb-5 flex items-center justify-between"><p className="font-mono text-[10px] uppercase tracking-[0.4em] text-[#a1b19a]">Operation Records</p><button type="button" disabled className="rounded-xl border border-[#53604f] px-4 py-2 font-sans text-sm text-[#b9c4b1] opacity-80">All Time <span className="ml-5">⌄</span></button></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><RecordCard icon={<Trophy />} value={String(records.wins)} label="Total Wins" /><RecordCard icon={<Target />} value={String(records.games_played)} label="Matches Played" /><RecordCard icon={<Target />} value={winRate} label="Win Rate" /><RecordCard icon={<Flame />} value={String(records.best_score)} label="Best Score" /></div><p className="mb-4 mt-9 font-mono text-[10px] uppercase tracking-[0.4em] text-[#a1b19a]">Mode Breakdown</p><div className="grid gap-4 lg:grid-cols-2"><ModeCard icon={<Flag />} title="Classified Missions" subtitle="Single Player" games={records.games_played} wins={records.wins} rate={winRate} /><ModeCard icon={<Swords />} title="Live Operations" subtitle="Multiplayer" games={0} wins={0} rate="—" /></div></div>;
 }
 
-function FriendsPanel({ friends, own }: { friends: FriendRecord[]; own: boolean }) {
-  return <div className="min-h-64 py-8">{own && friends.length > 0 ? <div className="grid gap-3 sm:grid-cols-2">{friends.filter((friend) => friend.status === "accepted").map((friend) => <div key={friend.user_id} className="rounded-xl border border-[#3e4b3c] bg-white/[0.02] p-4 font-mono text-xs text-[#d6dfd0]">{friend.username}<span className="ml-2 text-[#7f8e7a]">#{friend.discriminator}</span></div>)}</div> : <div className="flex min-h-56 items-center justify-center font-mono text-[10px] uppercase tracking-widest text-[#687468]">FRIEND_LIST_PRIVATE_OR_EMPTY</div>}</div>;
+function FriendsPanel({ friends, blockedUsers, own, onUnblock }: { friends: FriendRecord[]; blockedUsers: FriendRecord[]; own: boolean; onUnblock: (userId: string) => void }) {
+  const accepted = friends.filter((friend) => friend.status === "accepted");
+  return <div className="min-h-64 py-8">
+    {own ? <>
+      {accepted.length > 0 ? <div className="grid gap-3 sm:grid-cols-2">{accepted.map((friend) => <div key={friend.user_id} className="rounded-xl border border-[#3e4b3c] bg-white/[0.02] p-4 font-mono text-xs text-[#d6dfd0]">{friend.username}<span className="ml-2 text-[#7f8e7a]">#{friend.discriminator}</span></div>)}</div> : <div className="flex min-h-32 items-center justify-center font-mono text-[10px] uppercase tracking-widest text-[#687468]">FRIEND_LIST_PRIVATE_OR_EMPTY</div>}
+      {blockedUsers.length > 0 && <div className="mt-8"><p className="mb-3 font-mono text-[10px] uppercase tracking-[0.3em] text-[#cf8896]">Block List</p><div className="grid gap-3 sm:grid-cols-2">{blockedUsers.map((friend) => <div key={friend.user_id} className="flex items-center justify-between rounded-xl border border-[#cf6679]/20 bg-[#cf6679]/5 p-4"><span className="font-mono text-xs text-[#d6dfd0]">{formatFriendIdentity(friend)}</span><button type="button" onClick={() => onUnblock(friend.user_id)} className="font-mono text-[9px] uppercase text-[#c9e99a] hover:text-white">Unblock</button></div>)}</div></div>}
+    </> : <div className="flex min-h-56 items-center justify-center font-mono text-[10px] uppercase tracking-widest text-[#687468]">FRIEND_LIST_PRIVATE_OR_EMPTY</div>}
+  </div>;
 }
 
 function AboutPanel({ profile, online, onReport }: { profile: ProfileResponse; online: boolean; onReport: () => void }) {

@@ -1,5 +1,6 @@
 import {
   blockLocalUser,
+  getLocalBlockedUsers,
   getLocalDirectMessages,
   getLocalCurrentAccount,
   getLocalFriends,
@@ -15,6 +16,7 @@ import {
   respondToLocalFriendRequest,
   sendLocalFriendRequest,
   sendLocalDirectMessage,
+  unblockLocalUser,
   challengeLocalFriend,
   getLocalProfile,
   isLocalFallbackEnabled,
@@ -45,6 +47,7 @@ export interface FriendRecord {
   discriminator: string;
   status: "pending" | "accepted" | "blocked";
   direction?: "incoming" | "outgoing";
+  blocked_by?: string;
   created_at: string;
 }
 
@@ -280,6 +283,19 @@ export const api = {
       return;
     }
     await socialRequest<void>(`/social/blocks/${encodeURIComponent(userId)}`, { method: "POST" });
+  },
+
+  async getBlockedUsers(): Promise<FriendRecord[]> {
+    if (isLocalFallbackEnabled() && hasLocalSession()) return getLocalBlockedUsers();
+    return socialRequest<FriendRecord[]>("/social/blocks", {}, "OPERATIVE_OFFLINE // BLOCK_LIST_REQUIRES_ONLINE_UPLINK");
+  },
+
+  async unblockUser(userId: string): Promise<void> {
+    if (isLocalFallbackEnabled() && hasLocalSession()) {
+      unblockLocalUser(userId);
+      return;
+    }
+    await socialRequest<void>(`/social/blocks/${encodeURIComponent(userId)}`, { method: "DELETE" });
   },
 
   async getNotifications(): Promise<NotificationRecord[]> {

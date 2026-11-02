@@ -87,6 +87,7 @@ class FriendRecord(BaseModel):
     discriminator: str
     status: str
     direction: str | None = None
+    blocked_by: str | None = None
     created_at: str
 
 

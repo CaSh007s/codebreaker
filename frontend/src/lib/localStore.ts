@@ -297,6 +297,7 @@ function friendRecord(friendship: LocalFriendship, userId: string): FriendRecord
     discriminator: other.user.discriminator,
     status: friendship.status,
     direction: friendship.status === "pending" ? (friendship.requestedBy === userId ? "outgoing" : "incoming") : undefined,
+    blocked_by: friendship.blockedBy,
     created_at: friendship.createdAt,
   };
 }
@@ -323,7 +324,15 @@ function addLocalNotification(recipientId: string, kind: string, title: string, 
 export function getLocalFriends(): FriendRecord[] {
   const user = requireLocalUser();
   return readFriendships()
-    .filter((friendship) => friendship.userA === user.user_id || friendship.userB === user.user_id)
+    .filter((friendship) => (friendship.userA === user.user_id || friendship.userB === user.user_id) && friendship.status !== "blocked")
+    .map((friendship) => friendRecord(friendship, user.user_id))
+    .filter((friendship): friendship is FriendRecord => Boolean(friendship));
+}
+
+export function getLocalBlockedUsers(): FriendRecord[] {
+  const user = requireLocalUser();
+  return readFriendships()
+    .filter((friendship) => friendship.status === "blocked" && friendship.blockedBy === user.user_id)
     .map((friendship) => friendRecord(friendship, user.user_id))
     .filter((friendship): friendship is FriendRecord => Boolean(friendship));
 }
@@ -335,7 +344,7 @@ export function getLocalProfile(identity: string): ProfileResponse {
   const friendships = readFriendships();
   const [userA, userB] = orderedIds(viewer.user_id, target.user.user_id);
   const friendship = friendships.find((item) => item.userA === userA && item.userB === userB);
-  if (friendship?.status === "blocked") throw new Error("PROFILE_UNAVAILABLE // OPERATIVE_BLOCKED");
+  if (friendship?.status === "blocked" && friendship.blockedBy !== viewer.user_id) throw new Error("PROFILE_UNAVAILABLE // OPERATIVE_BLOCKED");
   const friendCount = friendships.filter((item) => item.status === "accepted" && (item.userA === target.user.user_id || item.userB === target.user.user_id)).length;
   const localScores = read<{ username: string; status: string; score: number }[]>("codebreaker_leaderboard", []);
   const records = localScores.filter((entry) => entry.username.toLowerCase() === target.user.username.toLowerCase());
@@ -368,7 +377,8 @@ export function sendLocalFriendRequest(identity: string): FriendRecord {
   const now = new Date().toISOString();
   const friendship: LocalFriendship = { userA, userB, status: "pending", requestedBy: user.user_id, createdAt: now, updatedAt: now };
   saveFriendships([...friendships, friendship]);
-  addLocalNotification(target.user.user_id, "friend_request", "New friend request", `${user.username}#${user.discriminator} sent you a friend request.`, { user_id: user.user_id });
+  const identityValue = `${user.username}#${user.discriminator}`;
+  addLocalNotification(target.user.user_id, "friend_request", "New friend request", `${identityValue} sent you a friend request.`, { user_id: user.user_id, identity: identityValue });
   return friendRecord(friendship, user.user_id) as FriendRecord;
 }
 
@@ -423,7 +433,10 @@ export function respondToLocalFriendRequest(otherUserId: string, accept: boolean
   if (accept) {
     friendships[index] = { ...friendship, status: "accepted", updatedAt: new Date().toISOString() };
     const sender = readAccounts().find((account) => account.user.user_id === otherUserId);
-    if (sender) addLocalNotification(sender.user.user_id, "friend_accepted", "Friend request accepted", `${user.username}#${user.discriminator} accepted your request.`, {});
+    if (sender) {
+      const identityValue = `${user.username}#${user.discriminator}`;
+      addLocalNotification(sender.user.user_id, "friend_accepted", "Friend request accepted", `${identityValue} accepted your friend request.`, { user_id: user.user_id, identity: identityValue });
+    }
   } else {
     friendships.splice(index, 1);
   }
@@ -438,6 +451,8 @@ export function removeLocalFriend(otherUserId: string): void {
 
 export function blockLocalUser(otherUserId: string): void {
   const user = requireLocalUser();
+  if (user.user_id === otherUserId) throw new Error("You cannot block yourself");
+  if (!readAccounts().some((account) => account.user.user_id === otherUserId)) throw new Error("Operative not found");
   const [userA, userB] = orderedIds(user.user_id, otherUserId);
   const friendships = readFriendships();
   const now = new Date().toISOString();
@@ -446,6 +461,17 @@ export function blockLocalUser(otherUserId: string): void {
   if (index === -1) friendships.push(blocked);
   else friendships[index] = blocked;
   saveFriendships(friendships);
+}
+
+export function unblockLocalUser(otherUserId: string): void {
+  const user = requireLocalUser();
+  const [userA, userB] = orderedIds(user.user_id, otherUserId);
+  saveFriendships(readFriendships().filter((friendship) => !(
+    friendship.userA === userA
+    && friendship.userB === userB
+    && friendship.status === "blocked"
+    && friendship.blockedBy === user.user_id
+  )));
 }
 
 export function getLocalNotifications(): NotificationRecord[] {
