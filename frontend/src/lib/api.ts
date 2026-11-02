@@ -12,7 +12,10 @@ import {
   removeLocalFriend,
   respondToLocalFriendRequest,
   sendLocalFriendRequest,
+  challengeLocalFriend,
+  getLocalProfile,
   isLocalFallbackEnabled,
+  updateLocalAvatar,
   updateLocalUsername,
 } from "./localStore";
 
@@ -25,6 +28,7 @@ export interface AccountUser {
   user_id: string;
   username: string;
   discriminator: string;
+  avatar_url?: string | null;
   created_at: string;
 }
 
@@ -39,6 +43,20 @@ export interface FriendRecord {
   status: "pending" | "accepted" | "blocked";
   direction?: "incoming" | "outgoing";
   created_at: string;
+}
+
+export interface ProfileRecords {
+  games_played: number;
+  wins: number;
+  losses: number;
+  best_score: number;
+}
+
+export interface ProfileResponse extends AccountUser {
+  friend_count: number;
+  friendship_status: string | null;
+  is_self: boolean;
+  records: ProfileRecords;
 }
 
 export function formatAccountIdentity(user: Pick<AccountUser, "username" | "discriminator">): string {
@@ -129,6 +147,21 @@ export const api = {
     }
   },
 
+  async updateAvatar(avatarUrl: string): Promise<AuthResponse> {
+    if (isLocalFallbackEnabled() && hasLocalSession()) return updateLocalAvatar(avatarUrl);
+    const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ avatar_url: avatarUrl }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      throw new Error(error?.detail || "Could not update avatar");
+    }
+    return normalizeAuthResponse(await response.json());
+  },
+
   async logout(): Promise<void> {
     const local = hasLocalSession();
     logoutLocal();
@@ -169,6 +202,22 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ identity }),
     }, "OPERATIVE_OFFLINE // FRIEND_REQUESTS_REQUIRE_ONLINE_UPLINK");
+  },
+
+  async getProfile(identity: string): Promise<ProfileResponse> {
+    if (isLocalFallbackEnabled() && hasLocalSession()) return getLocalProfile(identity);
+    return socialRequest<ProfileResponse>(`/social/profiles/${encodeURIComponent(identity)}`, {}, "OPERATIVE_OFFLINE // PROFILE_SEARCH_REQUIRES_ONLINE_UPLINK");
+  },
+
+  async challengeFriend(userId: string, roomId: string): Promise<void> {
+    if (isLocalFallbackEnabled() && hasLocalSession()) {
+      challengeLocalFriend(userId, roomId);
+      return;
+    }
+    await socialRequest<void>(`/social/friends/${encodeURIComponent(userId)}/challenge`, {
+      method: "POST",
+      body: JSON.stringify({ room_id: roomId }),
+    }, "OPERATIVE_OFFLINE // DIRECT_GAMES_REQUIRE_ONLINE_UPLINK");
   },
 
   async respondToFriendRequest(userId: string, action: "accept" | "decline"): Promise<void> {

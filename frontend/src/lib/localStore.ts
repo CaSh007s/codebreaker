@@ -1,4 +1,4 @@
-import type { AccountUser, FriendRecord, NotificationRecord } from "./api";
+import type { AccountUser, FriendRecord, NotificationRecord, ProfileResponse } from "./api";
 
 const ACCOUNTS_KEY = "codebreaker_local_accounts_v1";
 const SESSION_KEY = "codebreaker_local_session_v1";
@@ -192,8 +192,20 @@ export function updateLocalUsername(username: string): { user: AccountUser } {
   if (!current) throw new Error("Sign in before changing your callsign");
   const normalized = validateUsername(username);
   const accounts = readAccounts();
-  const updatedUser = { ...current.user, username: normalized };
+  const used = new Set(accounts
+    .filter((account) => account.user.user_id !== current.user.user_id && accountKey(account.user.username) === accountKey(normalized))
+    .map((account) => account.user.discriminator));
+  const discriminator = used.has(current.user.discriminator) ? nextDiscriminator(used) : current.user.discriminator;
+  const updatedUser = { ...current.user, username: normalized, discriminator };
   write(ACCOUNTS_KEY, accounts.map((account) => account.user.user_id === current.user.user_id ? { ...account, user: updatedUser } : account));
+  return { user: updatedUser };
+}
+
+export function updateLocalAvatar(avatarUrl: string): { user: AccountUser } {
+  const current = currentLocalAccount();
+  if (!current) throw new Error("Sign in before changing your avatar");
+  const updatedUser = { ...current.user, avatar_url: avatarUrl };
+  write(ACCOUNTS_KEY, readAccounts().map((account) => account.user.user_id === current.user.user_id ? { ...account, user: updatedUser } : account));
   return { user: updatedUser };
 }
 
@@ -213,9 +225,19 @@ function generateDiscriminator(username: string): string {
   );
   let discriminator = "";
   do {
-    discriminator = String(Math.floor(Math.random() * 9000) + 1000);
+    discriminator = String(Math.floor(Math.random() * 10000)).padStart(4, "0");
   } while (existing.has(discriminator));
   return discriminator;
+}
+
+function nextDiscriminator(used: Set<string>): string {
+  if (used.size >= 10000) throw new Error("THIS_CALLSIGN_HAS_USED_EVERY_DISCRIMINATOR_CHOOSE_ANOTHER_NAME");
+  const start = Math.floor(Math.random() * 10000);
+  for (let offset = 0; offset < 10000; offset += 1) {
+    const candidate = String((start + offset) % 10000).padStart(4, "0");
+    if (!used.has(candidate)) return candidate;
+  }
+  throw new Error("THIS_CALLSIGN_HAS_USED_EVERY_DISCRIMINATOR_CHOOSE_ANOTHER_NAME");
 }
 
 function readFriendships(): LocalFriendship[] {
@@ -240,7 +262,7 @@ function readAccounts(): LocalAccount[] {
     let discriminator = account.user.discriminator;
     if (!DISCRIMINATOR_PATTERN.test(discriminator || "") || usedDiscriminators.has(discriminator)) {
       do {
-        discriminator = String(Math.floor(Math.random() * 9000) + 1000);
+        discriminator = String(Math.floor(Math.random() * 10000)).padStart(4, "0");
       } while (usedDiscriminators.has(discriminator));
       changed = true;
     }
@@ -294,6 +316,31 @@ export function getLocalFriends(): FriendRecord[] {
     .filter((friendship): friendship is FriendRecord => Boolean(friendship));
 }
 
+export function getLocalProfile(identity: string): ProfileResponse {
+  const viewer = requireLocalUser();
+  const target = findAccount(identity, true);
+  if (!target) throw new Error("OPERATIVE_NOT_FOUND_LOCALLY // CREATE_BOTH_ACCOUNTS_IN_THIS_BROWSER");
+  const friendships = readFriendships();
+  const [userA, userB] = orderedIds(viewer.user_id, target.user.user_id);
+  const friendship = friendships.find((item) => item.userA === userA && item.userB === userB);
+  if (friendship?.status === "blocked") throw new Error("PROFILE_UNAVAILABLE // OPERATIVE_BLOCKED");
+  const friendCount = friendships.filter((item) => item.status === "accepted" && (item.userA === target.user.user_id || item.userB === target.user.user_id)).length;
+  const localScores = read<{ username: string; status: string; score: number }[]>("codebreaker_leaderboard", []);
+  const records = localScores.filter((entry) => entry.username.toLowerCase() === target.user.username.toLowerCase());
+  return {
+    ...target.user,
+    friend_count: friendCount,
+    friendship_status: friendship ? (friendship.status === "pending" ? (friendship.requestedBy === viewer.user_id ? "pending_outgoing" : "pending_incoming") : friendship.status) : null,
+    is_self: target.user.user_id === viewer.user_id,
+    records: {
+      games_played: records.length,
+      wins: records.filter((entry) => entry.status === "solved").length,
+      losses: records.filter((entry) => entry.status !== "solved").length,
+      best_score: records.reduce((best, entry) => Math.max(best, entry.score || 0), 0),
+    },
+  };
+}
+
 export function sendLocalFriendRequest(identity: string): FriendRecord {
   const user = requireLocalUser();
   const target = findAccount(identity, true);
@@ -311,6 +358,13 @@ export function sendLocalFriendRequest(identity: string): FriendRecord {
   saveFriendships([...friendships, friendship]);
   addLocalNotification(target.user.user_id, "friend_request", "New friend request", `${user.username}#${user.discriminator} sent you a friend request.`, { user_id: user.user_id });
   return friendRecord(friendship, user.user_id) as FriendRecord;
+}
+
+export function challengeLocalFriend(otherUserId: string, roomId: string): void {
+  const user = requireLocalUser();
+  const friendship = readFriendships().find((item) => item.status === "accepted" && ((item.userA === user.user_id && item.userB === otherUserId) || (item.userA === otherUserId && item.userB === user.user_id)));
+  if (!friendship) throw new Error("You must be friends before starting a direct game");
+  addLocalNotification(otherUserId, "game_invite", "Direct game invite", `${user.username}#${user.discriminator} opened a direct game with you.`, { room_id: roomId, mode: "standard", level: "4", repeats: "false" });
 }
 
 export function respondToLocalFriendRequest(otherUserId: string, accept: boolean): void {

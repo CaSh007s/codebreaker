@@ -26,11 +26,14 @@ from app.socket_manager import app_sio, configure_socket_manager
 from app.models.account import (
     AccountCredentials,
     AccountCallsignUpdate,
+    ChallengeRequest,
+    ChallengeResponse,
     AccountResponse,
     AuthResponse,
     FriendAction,
     FriendRecord,
     FriendTarget,
+    ProfileResponse,
     NotificationRecord,
     PushSubscription,
 )
@@ -171,7 +174,7 @@ async def current_account(request: Request):
 async def update_profile(request: Request, update: AccountCallsignUpdate):
     user = await authenticated_user(request)
     try:
-        updated = await account_service.update_username(user["user_id"], update.username)
+        updated = await account_service.update_profile(user["user_id"], update.username, update.avatar_url)
     except (AccountUnavailableError, ValueError) as error:
         raise account_http_error(error) from error
     return account_response(updated)
@@ -195,6 +198,24 @@ async def list_friends(request: Request):
         return await account_service.list_friends(user["user_id"])
     except AccountUnavailableError as error:
         raise account_http_error(error) from error
+
+
+@app.get("/social/profiles/{identity}", response_model=ProfileResponse)
+async def get_profile(request: Request, identity: str):
+    user = await authenticated_user(request)
+    try:
+        profile = await account_service.get_profile(identity, user["user_id"])
+        scores = await load_scores()
+        matching_scores = [score for score in scores if score.username.casefold() == profile["username"].casefold()]
+        profile["records"] = {
+            "games_played": len(matching_scores),
+            "wins": sum(1 for score in matching_scores if score.status == GameStatus.SOLVED),
+            "losses": sum(1 for score in matching_scores if score.status != GameStatus.SOLVED),
+            "best_score": max((score.score for score in matching_scores), default=0),
+        }
+        return profile
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
 
 
 @app.post("/social/friends/requests", response_model=FriendRecord)
@@ -232,6 +253,16 @@ async def remove_friend(request: Request, other_user_id: str):
     user = await authenticated_user(request)
     await account_service.remove_friend(user["user_id"], other_user_id)
     return Response(status_code=204)
+
+
+@app.post("/social/friends/{other_user_id}/challenge", response_model=ChallengeResponse)
+async def challenge_friend(request: Request, other_user_id: str, challenge: ChallengeRequest):
+    user = await authenticated_user(request)
+    try:
+        await account_service.challenge_friend(user["user_id"], other_user_id, challenge.room_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return ChallengeResponse(room_id=challenge.room_id)
 
 
 @app.post("/social/blocks/{other_user_id}", status_code=204)

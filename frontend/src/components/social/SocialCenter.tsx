@@ -1,10 +1,12 @@
 "use client";
 
-import { Bell, Check, UserPlus, X } from "lucide-react";
+import { Bell, Check, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api, AccountUser, formatAccountIdentity, formatFriendIdentity, FriendRecord, NotificationRecord } from "@/lib/api";
 
 export function NotificationCenter() {
+  const router = useRouter();
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [open, setOpen] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
@@ -64,10 +66,12 @@ export function NotificationCenter() {
                 type="button"
                 key={notification.notification_id}
                 onClick={() => {
-                  if (!notification.read) {
+                 if (!notification.read) {
                     void api.markNotificationRead(notification.notification_id);
                     setNotifications((items) => items.map((item) => item.notification_id === notification.notification_id ? { ...item, read: true } : item));
                   }
+                  const roomId = notification.payload.room_id;
+                  if (roomId) router.push(`/multiplayer/${roomId}?mode=standard&level=${notification.payload.level || "4"}&repeats=${notification.payload.repeats || "false"}&direct=true`);
                 }}
                 className={`w-full border-b border-white/5 px-4 py-3 text-left transition-colors hover:bg-white/5 ${notification.read ? "opacity-60" : "bg-[#538d4e]/5"}`}
               >
@@ -88,9 +92,11 @@ export function NotificationCenter() {
 }
 
 export function FriendsCenter({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
   const [account, setAccount] = useState<AccountUser | null>(null);
   const [friends, setFriends] = useState<FriendRecord[]>([]);
-  const [target, setTarget] = useState("");
+  const [targetName, setTargetName] = useState("");
+  const [targetDiscriminator, setTargetDiscriminator] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -112,14 +118,22 @@ export function FriendsCenter({ onClose }: { onClose: () => void }) {
   const incoming = useMemo(() => friends.filter((friend) => friend.status === "pending" && friend.direction === "incoming"), [friends]);
   const accepted = useMemo(() => friends.filter((friend) => friend.status === "accepted"), [friends]);
 
-  const sendRequest = async () => {
-    if (!target.trim()) return;
+  const searchProfile = () => {
+    if (!targetName.trim() || !/^\d{4}$/.test(targetDiscriminator)) {
+      setError("ENTER_CALLSIGN_AND_FOUR_DIGIT_DISCRIMINATOR");
+      return;
+    }
+    router.push(`/profile?identity=${encodeURIComponent(`${targetName.trim()}#${targetDiscriminator}`)}`);
+    onClose();
+  };
+
+  const startDirectGame = async (friend: FriendRecord) => {
     setBusy(true);
     setError(null);
     try {
-      await api.sendFriendRequest(target.trim());
-      setTarget("");
-      await refresh();
+      const roomId = crypto.randomUUID().slice(0, 8);
+      await api.challengeFriend(friend.user_id, roomId);
+      router.push(`/multiplayer/${roomId}?mode=standard&level=4&repeats=false&direct=true`);
     } catch (requestError) {
       setError((requestError as Error).message);
     } finally {
@@ -182,12 +196,17 @@ export function FriendsCenter({ onClose }: { onClose: () => void }) {
          {!account ? <p className="rounded-lg border border-[#cf6679]/30 bg-[#cf6679]/5 p-3 font-mono text-[9px] uppercase text-[#cf6679]">SIGN_IN_REQUIRED_FOR_SOCIAL_FEATURES</p> : (
            <>
              <p className="mb-4 rounded-lg border border-[#538d4e]/20 bg-[#538d4e]/5 p-3 font-mono text-[9px] uppercase text-[#538d4e]">YOUR_HANDLE // {formatAccountIdentity(account)}</p>
-             <div className="mb-5 flex gap-2">
-               <input value={target} maxLength={29} onChange={(event) => setTarget(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void sendRequest(); }} placeholder="CALLSIGN#1234" className="min-w-0 flex-1 rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 font-mono text-[10px] uppercase text-slate-100 outline-none focus:border-[#538d4e]" />
-              <button type="button" disabled={busy} onClick={() => void sendRequest()} aria-label="Send friend request" className="rounded-lg bg-[#538d4e] px-3 text-black transition-colors hover:bg-[#58a352] disabled:opacity-50"><UserPlus className="h-4 w-4" /></button>
+             <div className="mb-5">
+               <p className="mb-2 font-mono text-[9px] uppercase text-[#565758]">SEARCH_PROFILE // SEND_REQUEST_FROM_PROFILE</p>
+               <div className="flex gap-2">
+                 <input value={targetName} onChange={(event) => setTargetName(event.target.value.replace(/[^a-zA-Z0-9_]/g, ""))} onKeyDown={(event) => { if (event.key === "Enter") searchProfile(); }} placeholder="CALLSIGN" className="min-w-0 flex-1 rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 font-mono text-[10px] uppercase text-slate-100 outline-none focus:border-[#538d4e]" />
+                 <span className="flex items-center font-mono text-[#565758]">#</span>
+                 <input value={targetDiscriminator} maxLength={4} inputMode="numeric" onChange={(event) => setTargetDiscriminator(event.target.value.replace(/\D/g, ""))} onKeyDown={(event) => { if (event.key === "Enter") searchProfile(); }} placeholder="1234" className="w-16 rounded-lg border border-[#3a3a3c] bg-black/30 px-2 py-3 font-mono text-[10px] text-slate-100 outline-none focus:border-[#538d4e]" />
+                 <button type="button" onClick={searchProfile} aria-label="Search profile" className="rounded-lg bg-[#538d4e] px-3 text-black transition-colors hover:bg-[#58a352]"><Search className="h-4 w-4" /></button>
+               </div>
             </div>
              {incoming.length > 0 && <section className="mb-5"><p className="mb-2 font-mono text-[9px] uppercase tracking-widest text-[#c8b653]">INCOMING_REQUESTS</p>{incoming.map((friend) => <div key={friend.user_id} className="mb-2 flex items-center justify-between rounded-lg border border-[#c8b653]/20 bg-[#c8b653]/5 p-3"><span className="font-mono text-[10px] font-bold text-slate-200">{formatFriendIdentity(friend)}</span><div className="flex gap-2"><button type="button" onClick={() => void respond(friend.user_id, "accept")} aria-label={`Accept ${formatFriendIdentity(friend)}`} className="rounded bg-[#538d4e] p-1 text-black"><Check className="h-3 w-3" /></button><button type="button" onClick={() => void respond(friend.user_id, "decline")} aria-label={`Decline ${formatFriendIdentity(friend)}`} className="rounded bg-[#cf6679] p-1 text-white"><X className="h-3 w-3" /></button></div></div>)}</section>}
-             <section><p className="mb-2 font-mono text-[9px] uppercase tracking-widest text-[#565758]">FRIEND_LIST // {accepted.length}</p>{accepted.length === 0 ? <p className="rounded-lg border border-white/5 p-4 text-center font-mono text-[9px] uppercase text-[#565758]">NO_FRIENDS_CONNECTED</p> : accepted.map((friend) => <div key={friend.user_id} className="mb-2 flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] p-3"><span className="font-mono text-[10px] font-bold text-slate-200">{formatFriendIdentity(friend)}</span><div className="flex gap-3"><button type="button" onClick={() => void remove(friend)} className="font-mono text-[8px] uppercase text-[#565758] hover:text-[#cf6679]">REMOVE</button><button type="button" onClick={() => void block(friend)} className="font-mono text-[8px] uppercase text-[#565758] hover:text-red-400">BLOCK</button></div></div>)}</section>
+             <section><p className="mb-2 font-mono text-[9px] uppercase tracking-widest text-[#565758]">FRIEND_LIST // {accepted.length}</p>{accepted.length === 0 ? <p className="rounded-lg border border-white/5 p-4 text-center font-mono text-[9px] uppercase text-[#565758]">NO_FRIENDS_CONNECTED</p> : accepted.map((friend) => <div key={friend.user_id} className="mb-2 rounded-lg border border-white/5 bg-white/[0.02] p-3"><div className="flex items-center justify-between"><span className="font-mono text-[10px] font-bold text-slate-200">{formatFriendIdentity(friend)}</span><button type="button" disabled={busy} onClick={() => void startDirectGame(friend)} className="font-mono text-[8px] uppercase text-[#538d4e] hover:text-[#58a352] disabled:opacity-50">START_DIRECT_GAME</button></div><div className="mt-2 flex justify-end gap-3"><button type="button" onClick={() => void remove(friend)} className="font-mono text-[8px] uppercase text-[#565758] hover:text-[#cf6679]">REMOVE</button><button type="button" onClick={() => void block(friend)} className="font-mono text-[8px] uppercase text-[#565758] hover:text-red-400">BLOCK</button></div></div>)}</section>
             <button type="button" onClick={() => void enablePush()} className="mt-5 w-full rounded-lg border border-[#538d4e]/30 bg-[#538d4e]/5 py-3 font-mono text-[9px] uppercase tracking-widest text-[#538d4e] hover:bg-[#538d4e]/10">ENABLE_PUSH_ALERTS</button>
           </>
         )}

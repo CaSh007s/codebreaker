@@ -94,7 +94,7 @@ def split_identity(identity: str, *, require_discriminator: bool = False) -> tup
 
 
 def generate_discriminator() -> str:
-    return f"{secrets.randbelow(9000) + 1000:04d}"
+    return f"{secrets.randbelow(10000):04d}"
 
 
 class AccountService:
@@ -130,10 +130,12 @@ class AccountService:
                     username TEXT NOT NULL,
                     username_key TEXT NOT NULL,
                     discriminator TEXT NOT NULL DEFAULT '0000',
+                    avatar_url TEXT,
                     password_hash TEXT NOT NULL,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
                 ALTER TABLE cb_users ADD COLUMN IF NOT EXISTS discriminator TEXT;
+                ALTER TABLE cb_users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
                 UPDATE cb_users
                 SET discriminator = LPAD((1000 + MOD(ABS(hashtext(id)::bigint), 9000))::text, 4, '0')
                 WHERE discriminator IS NULL OR discriminator = '';
@@ -241,6 +243,7 @@ class AccountService:
             "user_id": account["id"],
             "username": account["username"],
             "discriminator": account["discriminator"],
+            "avatar_url": account.get("avatar_url"),
             "created_at": account["created_at"],
         }
 
@@ -253,6 +256,7 @@ class AccountService:
             "id": secrets.token_hex(16),
             "username": username,
             "discriminator": discriminator,
+            "avatar_url": None,
             "password_hash": hash_password(password),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -260,7 +264,7 @@ class AccountService:
         self._save_fallback()
         return self._account_user(account), self._fallback_create_session(account["id"])
 
-    def _mirror_fallback_account(self, user_id: str, username: str, discriminator: str, password_hash: str, created_at: Any) -> None:
+    def _mirror_fallback_account(self, user_id: str, username: str, discriminator: str, password_hash: str, created_at: Any, avatar_url: str | None = None) -> None:
         self.fallback_accounts = {
             key: account for key, account in self.fallback_accounts.items() if account.get("id") != user_id
         }
@@ -268,45 +272,96 @@ class AccountService:
             "id": user_id,
             "username": username,
             "discriminator": discriminator,
+            "avatar_url": avatar_url,
             "password_hash": password_hash,
             "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
         }
         self._save_fallback()
 
-    async def update_username(self, user_id: str, username: str) -> dict[str, Any]:
-        username = normalize_username(username)
-        username_key = username.casefold()
+    async def update_profile(self, user_id: str, username: str | None = None, avatar_url: str | None = None) -> dict[str, Any]:
+        if username is None and avatar_url is None:
+            raise ValueError("Provide a callsign or avatar")
+        username_key = username.casefold() if username is not None else None
         if not self.pool:
             account = next((item for item in self.fallback_accounts.values() if item.get("id") == user_id), None)
             if not account:
                 raise AccountUnavailableError("Account storage is unavailable")
-            account["username"] = username
+            if username is not None:
+                username = normalize_username(username)
+                username_key = username.casefold()
+                used = {
+                    item["discriminator"] for item in self.fallback_accounts.values()
+                    if item.get("id") != user_id and item.get("username", "").casefold() == username_key
+                }
+                if account["discriminator"] in used:
+                    account["discriminator"] = self._next_discriminator(used)
+            if username is not None:
+                account["username"] = username
+            if avatar_url is not None:
+                account["avatar_url"] = avatar_url
             self._mirror_fallback_account(
-                account["id"], account["username"], account["discriminator"], account["password_hash"], account["created_at"],
+                account["id"], account["username"], account["discriminator"], account["password_hash"], account["created_at"], account.get("avatar_url"),
             )
             return self._account_user(account)
 
+        if username is not None:
+            username = normalize_username(username)
+            username_key = username.casefold()
         try:
+            current = await self.pool.fetchrow("SELECT discriminator FROM cb_users WHERE id = $1", user_id)
+            if not current:
+                raise ValueError("Account was not found")
+            discriminator = current["discriminator"]
+            if username is not None:
+                collision = await self.pool.fetchval(
+                    "SELECT 1 FROM cb_users WHERE username_key = $1 AND discriminator = $2 AND id <> $3",
+                    username_key, discriminator, user_id,
+                )
+                if collision:
+                    used = await self.pool.fetch(
+                        "SELECT discriminator FROM cb_users WHERE username_key = $1 AND id <> $2",
+                        username_key, user_id,
+                    )
+                    discriminator = self._next_discriminator({row["discriminator"] for row in used})
             row = await self.pool.fetchrow(
                 """
                 UPDATE cb_users
-                SET username = $1, username_key = $2
-                WHERE id = $3
-                RETURNING id, username, discriminator, created_at, password_hash
+                SET username = COALESCE($1, username), username_key = COALESCE($2, username_key),
+                    discriminator = $3, avatar_url = COALESCE($4, avatar_url)
+                WHERE id = $5
+                RETURNING id, username, discriminator, avatar_url, created_at, password_hash
                 """,
                 username,
                 username_key,
+                discriminator,
+                avatar_url,
                 user_id,
             )
         except asyncpg.UniqueViolationError as error:
             raise ValueError("Could not update this callsign; please retry") from error
+        except ValueError:
+            raise
         except Exception as error:
             logger.warning("Neon callsign update failed", exc_info=True)
             raise AccountUnavailableError("Account service temporarily unavailable") from error
         if not row:
             raise ValueError("Account was not found")
-        self._mirror_fallback_account(row["id"], row["username"], row["discriminator"], row["password_hash"], row["created_at"])
+        self._mirror_fallback_account(row["id"], row["username"], row["discriminator"], row["password_hash"], row["created_at"], row["avatar_url"])
         return self._user(row)
+
+    async def update_username(self, user_id: str, username: str) -> dict[str, Any]:
+        return await self.update_profile(user_id, username=username)
+
+    @staticmethod
+    def _next_discriminator(used: set[str]) -> str:
+        if len(used) >= 10000:
+            raise ValueError("This callsign has used every discriminator; choose a different callsign")
+        start = secrets.randbelow(10000)
+        for offset in range(10000):
+            candidate = f"{(start + offset) % 10000:04d}"
+            if candidate not in used:
+                return candidate
+        raise ValueError("This callsign has used every discriminator; choose a different callsign")
 
     def _fallback_create_session(self, user_id: str) -> str:
         token = secrets.token_urlsafe(48)
@@ -355,6 +410,7 @@ class AccountService:
             "user_id": row["id"],
             "username": row["username"],
             "discriminator": row["discriminator"],
+            "avatar_url": row["avatar_url"],
             "created_at": row["created_at"].isoformat(),
         }
 
@@ -375,7 +431,7 @@ class AccountService:
                     """
                     INSERT INTO cb_users (id, username, username_key, discriminator, password_hash)
                     VALUES ($1, $2, $3, $4, $5)
-                    RETURNING id, username, discriminator, created_at
+                    RETURNING id, username, discriminator, avatar_url, created_at
                     """,
                     user_id,
                     username,
@@ -405,12 +461,12 @@ class AccountService:
         try:
             if discriminator:
                 row = await pool.fetchrow(
-                    "SELECT id, username, discriminator, password_hash, created_at FROM cb_users WHERE username_key = $1 AND discriminator = $2",
+                    "SELECT id, username, discriminator, avatar_url, password_hash, created_at FROM cb_users WHERE username_key = $1 AND discriminator = $2",
                     base_username.casefold(), discriminator,
                 )
             else:
                 rows = await pool.fetch(
-                    "SELECT id, username, discriminator, password_hash, created_at FROM cb_users WHERE username_key = $1",
+                    "SELECT id, username, discriminator, avatar_url, password_hash, created_at FROM cb_users WHERE username_key = $1",
                     base_username.casefold(),
                 )
                 if len(rows) > 1:
@@ -450,7 +506,7 @@ class AccountService:
         try:
             row = await pool.fetchrow(
                 """
-                SELECT u.id, u.username, u.discriminator, u.created_at
+                SELECT u.id, u.username, u.discriminator, u.avatar_url, u.created_at
                 FROM cb_sessions s JOIN cb_users u ON u.id = s.user_id
                 WHERE s.token_hash = $1 AND s.expires_at > NOW()
                 """,
@@ -498,6 +554,55 @@ class AccountService:
             username.casefold(), discriminator, current_user_id,
         )
         return self._user(row) if row else None
+
+    async def get_profile(self, identity: str, current_user_id: str) -> dict[str, Any]:
+        pool = self._require_storage()
+        username, discriminator = split_identity(identity, require_discriminator=True)
+        row = await pool.fetchrow(
+            "SELECT id, username, discriminator, avatar_url, created_at FROM cb_users WHERE username_key = $1 AND discriminator = $2",
+            username.casefold(), discriminator,
+        )
+        if not row:
+            raise ValueError("Operative not found")
+        target_id = row["id"]
+        friendship = await pool.fetchrow(
+            "SELECT status, requested_by FROM cb_friendships WHERE (user_a = $1 AND user_b = $2) OR (user_a = $2 AND user_b = $1)",
+            current_user_id, target_id,
+        )
+        if friendship and friendship["status"] == "blocked":
+            raise ValueError("PROFILE_UNAVAILABLE // OPERATIVE_BLOCKED")
+        friend_count = await pool.fetchval(
+            "SELECT COUNT(*) FROM cb_friendships WHERE status = 'accepted' AND (user_a = $1 OR user_b = $1)",
+            target_id,
+        )
+        friendship_status = friendship["status"] if friendship else None
+        if friendship_status == "pending":
+            friendship_status = "pending_outgoing" if friendship["requested_by"] == current_user_id else "pending_incoming"
+        return {
+            **self._user(row),
+            "friend_count": int(friend_count or 0),
+            "friendship_status": friendship_status,
+            "is_self": target_id == current_user_id,
+            "records": {"games_played": 0, "wins": 0, "losses": 0, "best_score": 0},
+        }
+
+    async def challenge_friend(self, user_id: str, other_user_id: str, room_id: str) -> None:
+        pool = self._require_storage()
+        user_a, user_b = self._ordered_users(user_id, other_user_id)
+        friendship = await pool.fetchval(
+            "SELECT status FROM cb_friendships WHERE user_a = $1 AND user_b = $2",
+            user_a, user_b,
+        )
+        if friendship != "accepted":
+            raise ValueError("You must be friends before starting a direct game")
+        sender = await pool.fetchrow("SELECT username, discriminator FROM cb_users WHERE id = $1", user_id)
+        await self.create_notification(
+            other_user_id,
+            "game_invite",
+            "Direct game invite",
+            f"{sender['username']}#{sender['discriminator']} opened a direct game with you.",
+            {"room_id": room_id, "mode": "standard", "level": "4", "repeats": "false"},
+        )
 
     async def list_friends(self, user_id: str) -> list[dict[str, Any]]:
         pool = self._require_storage()

@@ -16,6 +16,7 @@ class AccountResponse(BaseModel):
     user_id: str
     username: str
     discriminator: str
+    avatar_url: str | None = None
     created_at: str
 
 
@@ -29,7 +30,33 @@ class FriendTarget(BaseModel):
 
 
 class AccountCallsignUpdate(BaseModel):
-    username: str = Field(min_length=2, max_length=24, pattern=USERNAME_PATTERN.pattern)
+    username: str | None = Field(default=None, min_length=2, max_length=24, pattern=USERNAME_PATTERN.pattern)
+    avatar_url: str | None = Field(default=None, max_length=2048)
+
+
+class ProfileRecords(BaseModel):
+    games_played: int = 0
+    wins: int = 0
+    losses: int = 0
+    best_score: int = 0
+
+
+class ProfileResponse(AccountResponse):
+    friend_count: int = 0
+    friendship_status: str | None = None
+    is_self: bool = False
+    records: ProfileRecords = Field(default_factory=ProfileRecords)
+
+
+class ChallengeResponse(BaseModel):
+    room_id: str
+    mode: str = "standard"
+    level: int = 4
+    repeats: bool = False
+
+
+class ChallengeRequest(BaseModel):
+    room_id: str = Field(min_length=1, max_length=128)
 
 
 class FriendAction(BaseModel):

@@ -14,6 +14,8 @@ import {
 } from "@/components/game/SharedGameUI";
 import ChatPanel from "@/components/game/ChatPanel";
 import { useChatStore } from "@/store/useChatStore";
+import { api } from "@/lib/api";
+import { avatarUrl } from "@/lib/avatar";
 
 interface Player {
   player_id: string; // Persistent ID
@@ -91,6 +93,7 @@ export default function MultiplayerRoom() {
   const mode = searchParams.get("mode") || "standard";
   const level = parseInt(searchParams.get("level") || "4"); // Default mission length is 4
   const repeats = searchParams.get("repeats") === "true";
+  const direct = searchParams.get("direct") === "true";
 
   // Session Management
   useEffect(() => {
@@ -115,8 +118,11 @@ export default function MultiplayerRoom() {
     }
   }, [roomId]);
 
-  const getAvatarUrl = (seed: string) =>
-    `https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(seed)}`;
+  const getAvatarUrl = (seed: string) => {
+    const styles = ["pixel-art", "adventurer", "bottts", "fun-emoji", "lorelei", "notionists"];
+    const styleIndex = Array.from(seed).reduce((total, character) => total + character.charCodeAt(0), 0) % styles.length;
+    return avatarUrl(seed, styles[styleIndex]);
+  };
 
   // Initialize room or join existing
   useEffect(() => {
@@ -238,8 +244,36 @@ export default function MultiplayerRoom() {
         avatar: finalAvatar,
       },
     });
+    if (direct) {
+      window.setTimeout(() => emitEvent("toggle_ready", { room_id: roomId, is_ready: true }), 50);
+    }
     setError("");
   };
+
+  useEffect(() => {
+    if (!direct || !isConnected || !roomData || roomData.status !== "waiting" || !playerId || roomData.players[playerId]?.username) return;
+    let active = true;
+    void api.getCurrentAccount().then((account) => {
+      if (!active || !account) {
+        if (active) setError("DIRECT_GAME_REQUIRES_SIGNED_IN_ACCOUNT");
+        return;
+      }
+      const directUsername = account.user.username;
+      const directAvatar = account.user.avatar_url || getAvatarUrl(directUsername);
+      setUsername(directUsername);
+      setAvatarSeed(directAvatar);
+      sessionStorage.setItem(`cb_codename_${roomId}`, directUsername);
+      sessionStorage.setItem(`cb_avatar_${roomId}`, directAvatar);
+      emitEvent("setup_player", {
+        room_id: roomId,
+        player_info: { player_id: playerId, token: getSessionToken(), username: directUsername, avatar: directAvatar },
+      });
+      window.setTimeout(() => emitEvent("toggle_ready", { room_id: roomId, is_ready: true }), 50);
+    }).catch((requestError) => {
+      if (active) setError((requestError as Error).message);
+    });
+    return () => { active = false; };
+  }, [direct, isConnected, roomData, playerId, roomId, emitEvent]);
 
   const toggleReady = () => {
     const nextReady = !isReady;

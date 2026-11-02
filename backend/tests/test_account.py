@@ -73,3 +73,25 @@ def test_fallback_callsign_update_preserves_discriminator(tmp_path):
         assert current["discriminator"] == user["discriminator"]
 
     asyncio.run(scenario())
+
+
+def test_callsign_update_changes_discriminator_only_on_collision(tmp_path):
+    async def scenario():
+        service = AccountService()
+        service.session_secret = "test-session-secret"
+        service.fallback_path = tmp_path / "accounts.json"
+
+        first, _ = await service.register("OldName", "password123")
+        second, _ = await service.register("TargetName", "password456")
+        second_account = next(account for account in service.fallback_accounts.values() if account["id"] == second["user_id"])
+        second_account["discriminator"] = first["discriminator"]
+        service.fallback_accounts = {
+            f"{account['username'].casefold()}#{account['discriminator']}": account
+            for account in service.fallback_accounts.values()
+        }
+
+        updated = await service.update_username(first["user_id"], "TargetName")
+        assert updated["username"] == "TargetName"
+        assert updated["discriminator"] != second["discriminator"]
+
+    asyncio.run(scenario())
