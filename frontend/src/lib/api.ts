@@ -480,6 +480,7 @@ async function socialRequest<T>(path: string, options: RequestInit = {}, offline
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
+      cache: options.cache || "no-store",
       credentials: "include",
       headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     });

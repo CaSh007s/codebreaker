@@ -719,9 +719,10 @@ class AccountService:
         )
         requester = await pool.fetchrow("SELECT username, discriminator FROM cb_users WHERE id = $1", requester_id)
         requester_identity = f"{requester['username']}#{requester['discriminator']}"
+        request_key = f"{user_a}:{user_b}"
         await self.create_notification(
             target_id, "friend_request", "New friend request", f"{requester_identity} sent you a friend request.",
-            {"user_id": requester_id, "identity": requester_identity},
+            {"user_id": requester_id, "identity": requester_identity, "request_key": request_key},
         )
         return {
             "user_id": target_id,
@@ -791,10 +792,50 @@ class AccountService:
             "INSERT INTO cb_notifications (id, recipient_id, kind, title, body, payload) VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
             notification_id, recipient_id, kind, title, body, json.dumps(payload),
         )
-        await self.send_push(recipient_id, title, body, {**payload, "notification_id": notification_id})
+        try:
+            await self.send_push(recipient_id, title, body, {**payload, "notification_id": notification_id})
+        except Exception:
+            # In-app notifications are already persisted. A bad or expired
+            # push subscription must not make a friend request look failed.
+            logger.warning("Could not deliver push notification", exc_info=True)
+
+    async def ensure_pending_friend_notifications(self, user_id: str) -> None:
+        pool = self._require_storage()
+        rows = await pool.fetch(
+            """
+            SELECT f.user_a, f.user_b, f.requested_by, u.username, u.discriminator
+            FROM cb_friendships f
+            JOIN cb_users u ON u.id = f.requested_by
+            WHERE (f.user_a = $1 OR f.user_b = $1)
+              AND f.status = 'pending'
+              AND f.requested_by <> $1
+            """, user_id,
+        )
+        for row in rows:
+            requester_identity = f"{row['username']}#{row['discriminator']}"
+            request_key = f"{row['user_a']}:{row['user_b']}"
+            await pool.execute(
+                """
+                INSERT INTO cb_notifications (id, recipient_id, kind, title, body, payload)
+                SELECT $1, $2, 'friend_request', 'New friend request', $3, $4::jsonb
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM cb_notifications
+                    WHERE recipient_id = $2 AND kind = 'friend_request'
+                      AND (payload->>'request_key' = $5 OR payload->>'user_id' = $6)
+                )
+                ON CONFLICT (id) DO NOTHING
+                """,
+                f"friend-request-{request_key}",
+                user_id,
+                f"{requester_identity} sent you a friend request.",
+                json.dumps({"user_id": row["requested_by"], "identity": requester_identity, "request_key": request_key}),
+                request_key,
+                row["requested_by"],
+            )
 
     async def list_notifications(self, user_id: str, limit: int = 30) -> list[dict[str, Any]]:
         pool = self._require_storage()
+        await self.ensure_pending_friend_notifications(user_id)
         rows = await pool.fetch(
             "SELECT id, kind, title, body, payload, read_at, created_at FROM cb_notifications WHERE recipient_id = $1 ORDER BY created_at DESC LIMIT $2",
             user_id, min(limit, 100),
