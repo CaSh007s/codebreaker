@@ -133,6 +133,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const missionActive = (pathname === "/play" && singlePlayerMissionActive) || multiplayerMissionActive;
   const showAppNavigation = pathname !== "/" && !missionActive;
+  const showMobileNavigation = pathname !== "/";
+  const showMobileUtility = showMobileNavigation && pathname !== "/friends";
+  const showGlobalUtility = showAppNavigation && pathname !== "/friends";
   const navigation = account ? [...PUBLIC_NAVIGATION, ...ACCOUNT_NAVIGATION] : PUBLIC_NAVIGATION;
   const mobileNavigation = account
     ? [...PUBLIC_NAVIGATION, ACCOUNT_NAVIGATION[1]]
@@ -142,12 +145,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="app-shell min-h-dvh bg-[#080a08]">
       {showAppNavigation && sidebarOpen && <button type="button" aria-label="Close navigation" onClick={() => setSidebarOpen(false)} className="fixed inset-0 z-[140] hidden cursor-default lg:block" />}
       {showAppNavigation && <DesktopSidebar account={account} navigation={navigation} pathname={pathname} mode={mode} open={sidebarOpen} serviceOnline={serviceOnline} onExpand={() => setSidebarOpen(true)} onClose={() => setSidebarOpen(false)} onSignOut={() => void signOut()} />}
-      {showAppNavigation && <MobileSearchBar />}
-      {showAppNavigation && <MobileDrawer account={account} navigation={navigation} mode={mode} open={mobileMenuOpen} serviceOnline={serviceOnline} onClose={() => setMobileMenuOpen(false)} onSignOut={() => void signOut()} />}
-      {showAppNavigation && <MobileBottomNavigation navigation={mobileNavigation} pathname={pathname} mode={mode} onMenu={() => setMobileMenuOpen(true)} />}
+      {showMobileUtility && <MobileSearchBar />}
+      {showMobileNavigation && <MobileDrawer account={account} navigation={navigation} mode={mode} open={mobileMenuOpen} serviceOnline={serviceOnline} onClose={() => setMobileMenuOpen(false)} onSignOut={() => void signOut()} />}
+      {showMobileNavigation && <MobileBottomNavigation navigation={mobileNavigation} pathname={pathname} mode={mode} onMenu={() => setMobileMenuOpen(true)} />}
 
       <div className={`app-shell-content min-h-dvh transition-[padding] duration-500 ease-[cubic-bezier(.22,1,.36,1)] ${showAppNavigation ? (sidebarOpen ? "lg:pl-64" : "lg:pl-[84px]") : ""}`}>
-        {showAppNavigation && <DesktopUtilityBar />}
+        {showGlobalUtility && <DesktopUtilityBar />}
         {children}
       </div>
     </div>
@@ -281,7 +284,7 @@ function MobileDrawer({
 
 function MobileBottomNavigation({ navigation, pathname, mode, onMenu }: { navigation: NavigationItem[]; pathname: string; mode: string | null; onMenu: () => void }) {
   return (
-    <nav className="mobile-bottom-dock fixed inset-x-3 z-[90] flex h-[68px] items-center justify-around rounded-2xl border border-[#344431] bg-[#0c120d]/95 px-2 shadow-[0_16px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl lg:hidden" aria-label="Quick navigation">
+    <nav className="mobile-bottom-dock fixed inset-x-3 z-[160] flex h-[68px] items-center justify-around rounded-2xl border border-[#344431] bg-[#0c120d]/95 px-2 shadow-[0_16px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl lg:hidden" aria-label="Quick navigation">
       {navigation.map((item) => <MobileNavItem key={item.href} item={item} pathname={pathname} mode={mode} />)}
       <button type="button" onClick={onMenu} className="group flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[#778777] transition-colors hover:text-[#d7e8ca]"><span className="grid h-7 w-7 place-items-center rounded-lg border border-transparent transition-colors group-hover:border-[#52694a] group-hover:bg-[#172116]"><Menu className="h-4 w-4" /></span><span className="font-mono text-[8px] uppercase tracking-wider">More</span></button>
     </nav>
@@ -345,11 +348,11 @@ function ProfileSearch() {
   };
 
   return (
-    <div className={`mx-auto flex h-11 w-full items-center gap-2 rounded-xl border bg-[#101610]/95 px-3 shadow-[0_12px_35px_rgba(0,0,0,0.35)] backdrop-blur-xl transition-colors ${error ? "border-[#cf6679]/70" : "border-[#435540] focus-within:border-[#91b37c]"}`}>
+    <div className={`mx-auto flex h-11 w-full items-center gap-2 rounded-xl border bg-[#101610]/95 px-3 shadow-[0_12px_35px_rgba(0,0,0,0.35)] backdrop-blur-xl transition-colors ${error ? "border-[#cf6679]/70" : "border-[#435540] focus-within:bg-[#0b0e0b]"}`}>
       <Search className="h-[18px] w-[18px] shrink-0 text-[#aeb8a7]" />
-      <input value={callsign} onChange={(event) => { setCallsign(event.target.value.replace(/[^a-zA-Z0-9_]/g, "")); setError(false); }} onKeyDown={(event) => { if (event.key === "Enter") search(); }} placeholder="Search operative" aria-label="Search callsign" className="min-w-0 flex-1 bg-transparent font-sans text-sm text-slate-100 outline-none placeholder:text-[#7b8579]" />
+      <input value={callsign} onChange={(event) => { setCallsign(event.target.value.replace(/[^a-zA-Z0-9_]/g, "")); setError(false); }} onKeyDown={(event) => { if (event.key === "Enter") search(); }} placeholder="Search operative" aria-label="Search callsign" className="min-w-0 flex-1 rounded-md bg-transparent px-1.5 py-1 font-sans text-sm text-slate-100 outline-none transition-colors placeholder:text-[#7b8579] focus:bg-black/45" />
       <span className="font-mono text-[#687468]">#</span>
-      <input value={discriminator} maxLength={4} inputMode="numeric" onChange={(event) => { setDiscriminator(event.target.value.replace(/\D/g, "")); setError(false); }} onKeyDown={(event) => { if (event.key === "Enter") search(); }} placeholder="1234" aria-label="Search discriminator" className="w-10 bg-transparent font-mono text-xs text-slate-100 outline-none placeholder:text-[#687468]" />
+      <input value={discriminator} maxLength={4} inputMode="numeric" onChange={(event) => { setDiscriminator(event.target.value.replace(/\D/g, "")); setError(false); }} onKeyDown={(event) => { if (event.key === "Enter") search(); }} placeholder="1234" aria-label="Search discriminator" className="w-10 rounded-md bg-transparent px-1 py-1 font-mono text-xs text-slate-100 outline-none transition-colors placeholder:text-[#687468] focus:bg-black/45" />
       <button type="button" aria-label="Search profile" onClick={search} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[#394737] bg-white/[0.03] text-[#9ca99a] transition-colors hover:border-[#91b37c] hover:bg-[#91b37c]/10 hover:text-[#c9e99a]"><ChevronRight className="h-4 w-4" /></button>
     </div>
   );

@@ -234,7 +234,7 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
   };
 
   return (
-    <main className="relative min-h-dvh overflow-hidden bg-[#080a08] px-4 py-5 text-slate-100 sm:px-8 sm:py-8" onClick={(event) => { if (window.matchMedia("(min-width: 1024px)").matches && !profileCardRef.current?.contains(event.target as Node)) onBack(); }}>
+    <main className="relative min-h-dvh overflow-hidden bg-[#080a08] px-4 pb-5 pt-20 text-slate-100 sm:px-8 sm:pb-8 sm:pt-20 lg:py-8" onClick={(event) => { if (window.matchMedia("(min-width: 1024px)").matches && !profileCardRef.current?.contains(event.target as Node)) onBack(); }}>
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(120,145,103,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(120,145,103,0.08)_1px,transparent_1px)] [background-size:46px_46px] [mask-image:radial-gradient(ellipse_at_center,black,transparent_80%)]" />
       <div className="relative mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[1220px] items-center justify-center">
         <div className="absolute -top-1 left-0 hidden sm:-top-2 lg:block">
