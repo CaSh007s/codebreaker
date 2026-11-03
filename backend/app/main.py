@@ -10,7 +10,7 @@ from app.models.game import (
     HintRequest, HintResponse
 )
 from app.services.game_service import GameService
-from app.services.session_store import game_session, save_game, save_score, load_scores
+from app.services.session_store import delete_game, game_session, save_game, save_score, load_scores
 from app.services.multiplayer_service import multiplayer_service
 from contextlib import asynccontextmanager
 from typing import List
@@ -415,26 +415,30 @@ async def submit_guess(game_id: str, request: GuessRequest):
             raise HTTPException(status_code=400, detail="Game is no longer active")
         if game.time_limit and (datetime.now(timezone.utc) - game.created_at).total_seconds() >= game.time_limit:
             game.status = GameStatus.FAILED
-            return GuessResponse(bulls=0, cows=0, gray=0, shuffled_feedback=[], solved=False,
-                                 attempts_remaining=0, status=game.status, secret_code=game.secret_code)
-        if len(request.guess) != len(game.secret_code):
-            raise HTTPException(status_code=400, detail=f"Guess must be {len(game.secret_code)} digits long")
-        game.attempts += 1
-        game.last_guess_at = datetime.now(timezone.utc)
-        bulls, cows, gray = GameService.evaluate_guess(game.secret_code, request.guess)
-        shuffled_feedback = GameService.evaluate_positional(game.secret_code, request.guess, game.feedback_map)
-        solved = bulls == len(game.secret_code)
-        if solved:
-            game.status = GameStatus.SOLVED
-        elif game.max_attempts and game.attempts >= game.max_attempts:
-            game.status = GameStatus.FAILED
-        return GuessResponse(
-            bulls=bulls, cows=cows, gray=gray, shuffled_feedback=shuffled_feedback,
-            solved=solved,
-            attempts_remaining=max(0, game.max_attempts - game.attempts) if game.max_attempts else None,
-            status=game.status,
-            secret_code=game.secret_code if game.status != GameStatus.ACTIVE else None,
-        )
+            response = GuessResponse(bulls=0, cows=0, gray=0, shuffled_feedback=[], solved=False,
+                                     attempts_remaining=0, status=game.status, secret_code=game.secret_code)
+        else:
+            if len(request.guess) != len(game.secret_code):
+                raise HTTPException(status_code=400, detail=f"Guess must be {len(game.secret_code)} digits long")
+            game.attempts += 1
+            game.last_guess_at = datetime.now(timezone.utc)
+            bulls, cows, gray = GameService.evaluate_guess(game.secret_code, request.guess)
+            shuffled_feedback = GameService.evaluate_positional(game.secret_code, request.guess, game.feedback_map)
+            solved = bulls == len(game.secret_code)
+            if solved:
+                game.status = GameStatus.SOLVED
+            elif game.max_attempts and game.attempts >= game.max_attempts:
+                game.status = GameStatus.FAILED
+            response = GuessResponse(
+                bulls=bulls, cows=cows, gray=gray, shuffled_feedback=shuffled_feedback,
+                solved=solved,
+                attempts_remaining=max(0, game.max_attempts - game.attempts) if game.max_attempts else None,
+                status=game.status,
+                secret_code=game.secret_code if game.status != GameStatus.ACTIVE else None,
+            )
+    if response.status != GameStatus.ACTIVE:
+        await delete_game(game_id)
+    return response
 
 @app.post("/game/{game_id}/surrender")
 async def surrender_game(game_id: str):
@@ -442,7 +446,9 @@ async def surrender_game(game_id: str):
         if game.status != GameStatus.ACTIVE:
             raise HTTPException(status_code=400, detail="Game is no longer active")
         game.status = GameStatus.SURRENDERED
-        return {"secret_code": game.secret_code}
+        response = {"secret_code": game.secret_code}
+    await delete_game(game_id)
+    return response
 
 
 @app.post("/game/{game_id}/expire")
@@ -452,7 +458,17 @@ async def expire_game(game_id: str):
             if not game.time_limit or (datetime.now(timezone.utc) - game.created_at).total_seconds() < game.time_limit:
                 raise HTTPException(status_code=400, detail="Timer has not expired")
             game.status = GameStatus.FAILED
-        return {"secret_code": game.secret_code, "status": game.status.value}
+        response = {"secret_code": game.secret_code, "status": game.status.value}
+    if response["status"] != GameStatus.ACTIVE.value:
+        await delete_game(game_id)
+    return response
+
+
+@app.delete("/game/{game_id}", status_code=204)
+async def discard_game(game_id: str):
+    """Discard an abandoned single-player mission without recording a result."""
+    await delete_game(game_id)
+    return Response(status_code=204)
 
 @app.post("/game/{game_id}/hint", response_model=HintResponse)
 async def get_hint(game_id: str, request: HintRequest):

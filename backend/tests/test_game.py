@@ -24,7 +24,8 @@ def client():
 
 def stored_game(game_id):
     with redis.from_url(os.environ["REDIS_URL"], decode_responses=True) as connection:
-        return json.loads(connection.get(f"game:{game_id}"))
+        raw = connection.get(f"game:{game_id}")
+        return json.loads(raw) if raw else None
 
 
 def new_game(client, **config):
@@ -88,8 +89,8 @@ def test_solve_and_finished_game_cannot_be_overwritten(client):
     response = client.post(f"/game/{game_id}/guess", json={"guess": "1123"}).json()
     assert response["status"] == "solved"
     assert response["secret_code"] == "1123"
-    assert client.post(f"/game/{game_id}/surrender").status_code == 400
-    assert client.post(f"/game/{game_id}/guess", json={"guess": "1123"}).status_code == 400
+    assert client.post(f"/game/{game_id}/surrender").status_code == 404
+    assert client.post(f"/game/{game_id}/guess", json={"guess": "1123"}).status_code == 404
 
 
 def test_attempt_limit_and_invalid_guess(client):
@@ -99,6 +100,7 @@ def test_attempt_limit_and_invalid_guess(client):
     response = client.post(f"/game/{game_id}/guess", json={"guess": "9999"}).json()
     assert response["status"] == "failed"
     assert response["attempts_remaining"] == 0
+    assert stored_game(game_id) is None
 
 
 def test_timer_expiry_reveals_code_and_blocks_late_win(client):
@@ -111,8 +113,14 @@ def test_timer_expiry_reveals_code_and_blocks_late_win(client):
     response = client.post(f"/game/{game_id}/guess", json={"guess": "1123"}).json()
     assert response["status"] == "failed"
     assert not response["solved"]
-    assert stored_game(game_id)["attempts"] == 0
-    assert client.post(f"/game/{game_id}/expire").json()["secret_code"] == "1123"
+    assert stored_game(game_id) is None
+    assert client.post(f"/game/{game_id}/expire").status_code == 404
+
+
+def test_abandoned_active_game_can_be_discarded(client):
+    game_id = new_game(client)
+    assert client.delete(f"/game/{game_id}").status_code == 204
+    assert client.post(f"/game/{game_id}/guess", json={"guess": "1123"}).status_code == 404
 
 
 def test_hints_are_server_tracked(client):

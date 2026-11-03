@@ -150,6 +150,11 @@ export const useGameStore = create<GameStore>()((set, get) => ({
         allowRepeats,
         timerLimit ?? undefined
       );
+      if (get().view !== "game") {
+        await api.deleteGame(data.game_id);
+        set({ gameId: null, isLoading: false });
+        return;
+      }
       set({
         offlineGame: null,
         gameId: data.game_id,
@@ -163,6 +168,10 @@ export const useGameStore = create<GameStore>()((set, get) => ({
         startedAt: Date.now(),
       });
     } catch {
+      if (get().view !== "game") {
+        set({ isLoading: false });
+        return;
+      }
       const offlineGame = createOfflineGame(
         length,
         infiniteMode ? undefined : maxAttempts,
@@ -220,7 +229,7 @@ export const useGameStore = create<GameStore>()((set, get) => ({
         revealedCode = result.secret_code;
         attemptsRemaining = result.attempts_remaining;
       }
-      if (offlineGame) persistOfflineGame(offlineGame);
+      if (offlineGame) persistOfflineGame(offlineGame.status === "active" ? offlineGame : null);
       set((state: GameStore) => ({
         guesses: offlineGame
           ? offlineGame.guesses
@@ -292,9 +301,14 @@ export const useGameStore = create<GameStore>()((set, get) => ({
     set({ isLoading: true, error: null });
     try {
         const offlineGame = get().offlineGame;
-        const data = offlineGame
-          ? (offlineGame.status = "surrendered", persistOfflineGame(offlineGame), { secret_code: offlineGame.secretCode })
-          : await api.surrender(gameId);
+        let data: { secret_code: string };
+        if (offlineGame) {
+          offlineGame.status = "surrendered";
+          persistOfflineGame(null);
+          data = { secret_code: offlineGame.secretCode };
+        } else {
+          data = await api.surrender(gameId);
+        }
         set({ status: "surrendered", revealedCode: data.secret_code, isLoading: false });
         // Post to leaderboard as resigned
         await api.postScore({
@@ -325,7 +339,7 @@ export const useGameStore = create<GameStore>()((set, get) => ({
           return;
         }
         offlineGame.status = "failed";
-        persistOfflineGame(offlineGame);
+        persistOfflineGame(null);
         set({ status: "failed", revealedCode: offlineGame.secretCode, isLoading: false });
       } else {
         const data = await api.expire(gameId);

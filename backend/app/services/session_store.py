@@ -14,6 +14,10 @@ async def save_game(game: GameState):
     await multiplayer_service.redis_client.set(f"game:{game.id}", game.model_dump_json(), ex=GAME_EXPIRY)
 
 
+async def delete_game(game_id: str):
+    await multiplayer_service.redis_client.delete(f"game:{game_id}")
+
+
 @asynccontextmanager
 async def game_session(game_id: str):
     redis = multiplayer_service.redis_client

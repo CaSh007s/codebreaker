@@ -527,9 +527,34 @@ function GameView() {
     infiniteMode,
     calculateScore,
     revealedCode,
+    offlineGame,
   } = useGameStore();
   const uploadedGames = useRef(new Set<string>());
+  const missionRef = useRef({ gameId, status, offlineGame });
+  const lifecycleRef = useRef(0);
   const [showHelp, setShowHelp] = useState(false);
+
+  useEffect(() => {
+    missionRef.current = { gameId, status, offlineGame };
+  }, [gameId, offlineGame, status]);
+
+  useEffect(() => {
+    const lifecycle = ++lifecycleRef.current;
+    const isCurrentLifecycle = () => lifecycleRef.current === lifecycle;
+    return () => {
+      window.setTimeout(() => {
+        if (!isCurrentLifecycle()) return;
+        const mission = missionRef.current;
+        if (mission.status !== "active") return;
+        if (mission.offlineGame) {
+          localStorage.removeItem("codebreaker_offline_game");
+        } else if (mission.gameId) {
+          void api.deleteGame(mission.gameId);
+        }
+        useGameStore.getState().setView("landing");
+      }, 0);
+    };
+  }, []);
 
   // Timer logic
   useEffect(() => {

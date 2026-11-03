@@ -373,6 +373,10 @@ export const api = {
     return response.json();
   },
 
+  async deleteGame(gameId: string): Promise<void> {
+    await fetch(`${API_BASE_URL}/game/${gameId}`, { method: "DELETE", keepalive: true }).catch(() => undefined);
+  },
+
   async getHint(gameId: string, revealedIndices: number[], targetIndex?: number): Promise<{ position: number; digit: string }> {
     const response = await fetch(`${API_BASE_URL}/game/${gameId}/hint`, {
       method: "POST",
