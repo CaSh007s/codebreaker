@@ -337,22 +337,24 @@ export function getLocalBlockedUsers(): FriendRecord[] {
     .filter((friendship): friendship is FriendRecord => Boolean(friendship));
 }
 
-export function getLocalProfile(identity: string): ProfileResponse {
-  const viewer = requireLocalUser();
+export function getLocalProfile(identity: string, viewerId?: string): ProfileResponse {
+  const viewer = viewerId ? readAccounts().find((account) => account.user.user_id === viewerId)?.user : undefined;
   const target = findAccount(identity, true);
   if (!target) throw new Error("USER_NOT_FOUND // CHECK_CALLSIGN_AND_DISCRIMINATOR");
   const friendships = readFriendships();
-  const [userA, userB] = orderedIds(viewer.user_id, target.user.user_id);
-  const friendship = friendships.find((item) => item.userA === userA && item.userB === userB);
-  if (friendship?.status === "blocked" && friendship.blockedBy !== viewer.user_id) throw new Error("PROFILE_UNAVAILABLE // OPERATIVE_BLOCKED");
+  const friendship = viewer ? friendships.find((item) => {
+    const [userA, userB] = orderedIds(viewer.user_id, target.user.user_id);
+    return item.userA === userA && item.userB === userB;
+  }) : undefined;
+  if (friendship?.status === "blocked" && friendship.blockedBy !== viewer?.user_id) throw new Error("PROFILE_UNAVAILABLE // OPERATIVE_BLOCKED");
   const friendCount = friendships.filter((item) => item.status === "accepted" && (item.userA === target.user.user_id || item.userB === target.user.user_id)).length;
   const localScores = read<{ username: string; status: string; score: number }[]>("codebreaker_leaderboard", []);
   const records = localScores.filter((entry) => entry.username.toLowerCase() === target.user.username.toLowerCase());
   return {
     ...target.user,
     friend_count: friendCount,
-    friendship_status: friendship ? (friendship.status === "pending" ? (friendship.requestedBy === viewer.user_id ? "pending_outgoing" : "pending_incoming") : friendship.status) : null,
-    is_self: target.user.user_id === viewer.user_id,
+    friendship_status: friendship ? (friendship.status === "pending" ? (friendship.requestedBy === viewer?.user_id ? "pending_outgoing" : "pending_incoming") : friendship.status) : null,
+    is_self: target.user.user_id === viewer?.user_id,
     records: {
       games_played: records.length,
       wins: records.filter((entry) => entry.status === "solved").length,
@@ -404,6 +406,7 @@ export function sendLocalDirectMessage(otherUserId: string, body: string): Local
   if (!trimmed || trimmed.length > 2000) throw new Error("Message must contain 1 to 2000 characters");
   const message: LocalDirectMessage = { message_id: `local-message-${randomId()}`, sender_id: user.user_id, sender_username: user.username, recipient_id: otherUserId, body: trimmed, created_at: new Date().toISOString(), read: true };
   write(DIRECT_MESSAGES_KEY, [...read<LocalDirectMessage[]>(DIRECT_MESSAGES_KEY, []), message]);
+  addLocalNotification(otherUserId, "direct_message", `New message from ${user.username}`, `${user.username}#${user.discriminator} sent you a direct message.`, { user_id: user.user_id, identity: `${user.username}#${user.discriminator}`, message_id: message.message_id });
   return message;
 }
 

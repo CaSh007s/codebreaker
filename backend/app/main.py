@@ -236,9 +236,12 @@ async def list_friends(request: Request):
 
 @app.get("/social/profiles/{identity}", response_model=ProfileResponse)
 async def get_profile(request: Request, identity: str):
-    user = await authenticated_user(request)
     try:
-        profile = await account_service.get_profile(identity, user["user_id"])
+        user = await account_service.get_user(request.cookies.get(SESSION_COOKIE))
+    except AccountUnavailableError as error:
+        raise account_http_error(error) from error
+    try:
+        profile = await account_service.get_profile(identity, user["user_id"] if user else None)
         scores = await load_scores()
         matching_scores = [score for score in scores if not score.suspicious and score.username.casefold() == profile["username"].casefold()]
         profile["records"] = {

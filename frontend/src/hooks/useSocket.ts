@@ -64,8 +64,19 @@ export const useSocket = (room?: string) => {
     }, 60_000);
     return () => {
       clearInterval(heartbeat);
-      connection.removeAllListeners();
-      connection.disconnect();
+      let closed = false;
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        connection.removeAllListeners();
+        connection.disconnect();
+      };
+      if (connection.connected && room) {
+        connection.emit("leave_room", { room_id: room }, close);
+        window.setTimeout(close, 250);
+      } else {
+        close();
+      }
     };
   }, [room]);
 

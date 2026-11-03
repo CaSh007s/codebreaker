@@ -22,7 +22,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, AccountUser, formatAccountIdentity, formatFriendIdentity, FriendRecord, ProfileResponse } from "@/lib/api";
 import { avatarUrl, nextAvatar } from "@/lib/avatar";
-import { NotificationCenter } from "@/components/social/SocialCenter";
+import DirectMessagesPanel from "@/components/social/DirectMessagesPanel";
 
 type ProfileTab = "records" | "friends" | "about";
 
@@ -62,16 +62,21 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
     setError(null);
     setNotice(null);
     try {
-      const current = await api.getCurrentAccount();
-      if (!current) {
-        setError("SIGN_IN_REQUIRED_FOR_PROFILE");
-        router.replace("/");
+      let current: Awaited<ReturnType<typeof api.getCurrentAccount>> = null;
+      try {
+        current = await api.getCurrentAccount();
+      } catch (accountError) {
+        if (!identity) throw accountError;
+      }
+      setViewer(current?.user ?? null);
+      const profileIdentity = identity || (current ? formatAccountIdentity(current.user) : null);
+      if (!profileIdentity) {
+        setError("SEARCH_A_COMPLETE_HANDLE_TO_OPEN_A_PROFILE");
         return;
       }
-      setViewer(current.user);
-      const loaded = await api.getProfile(identity || formatAccountIdentity(current.user));
+      const loaded = await api.getProfile(profileIdentity);
       setProfile(loaded);
-      if (loaded.is_self) {
+      if (loaded.is_self && current) {
         const [friendList, blockedList] = await Promise.all([
           api.getFriends(),
           api.getBlockedUsers().catch(() => []),
@@ -88,7 +93,7 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
     } finally {
       if (!silent) setBusy(false);
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     void loadProfile(requestedIdentity);
@@ -232,7 +237,6 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
     <main className="relative min-h-dvh overflow-hidden bg-[#080a08] px-4 py-5 text-slate-100 sm:px-8 sm:py-8" onClick={(event) => { if (window.matchMedia("(min-width: 1024px)").matches && !profileCardRef.current?.contains(event.target as Node)) onBack(); }}>
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(120,145,103,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(120,145,103,0.08)_1px,transparent_1px)] [background-size:46px_46px] [mask-image:radial-gradient(ellipse_at_center,black,transparent_80%)]" />
       <div className="relative mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[1220px] items-center justify-center">
-        <div className="absolute right-2 top-2 z-40" onClick={(event) => event.stopPropagation()}><NotificationCenter /></div>
         <div className="absolute -top-1 left-0 hidden sm:-top-2 lg:block">
           <button type="button" onClick={onBack} className="flex items-center gap-3 text-left font-sans text-xl font-semibold text-slate-100 transition-colors hover:text-[#c9e99a]"><ArrowLeft className="h-6 w-6" strokeWidth={1.7} /> Profile</button>
         </div>
@@ -262,13 +266,13 @@ function ProfileContent({ requestedIdentity, onBack }: { requestedIdentity: stri
                   </div>
 
                   <div className="flex items-center justify-center gap-3 lg:justify-end">
-                     {!isOwnProfile && relationship === null && <button type="button" disabled={busy} onClick={() => void sendRequest()} className="flex items-center gap-2 rounded-xl bg-[#c9e99a] px-5 py-3 font-sans text-sm font-semibold text-[#162010] shadow-[0_0_20px_rgba(177,220,117,0.15)] transition-colors hover:bg-[#daf5ad] disabled:opacity-50"><UserPlus className="h-5 w-5" /> Add Friend</button>}
-                     {!isOwnProfile && relationship === "pending_outgoing" && <button type="button" disabled className="flex items-center gap-2 rounded-xl border border-[#c8b653]/50 bg-[#c8b653]/10 px-5 py-3 font-sans text-sm font-semibold text-[#c8b653]"><Check className="h-5 w-5" /> Friend Request Sent</button>}
-                     {!isOwnProfile && relationship === "pending_incoming" && <div className="flex flex-wrap justify-center gap-2 lg:justify-end"><button type="button" disabled={busy} onClick={() => void respondToRequest("accept")} className="flex items-center gap-2 rounded-xl bg-[#c9e99a] px-4 py-3 font-sans text-sm font-semibold text-[#162010] disabled:opacity-50"><Check className="h-5 w-5" /> Accept</button><button type="button" disabled={busy} onClick={() => void respondToRequest("decline")} className="rounded-xl border border-[#cf6679]/50 px-4 py-3 font-mono text-[10px] uppercase text-[#cf8896] disabled:opacity-50">Decline</button></div>}
-                     {!isOwnProfile && relationship === "blocked" && <button type="button" disabled={busy} onClick={() => void changeFriendship("unblock")} className="rounded-xl border border-[#c9e99a]/50 bg-[#c9e99a]/10 px-5 py-3 font-sans text-sm font-semibold text-[#c9e99a] disabled:opacity-50">Unblock</button>}
-                     {!isOwnProfile && relationship === "accepted" && <button type="button" disabled={busy} onClick={() => void startDirectGame()} className="flex items-center gap-2 rounded-xl bg-[#c9e99a] px-5 py-3 font-sans text-sm font-semibold text-[#162010] shadow-[0_0_20px_rgba(177,220,117,0.15)] transition-colors hover:bg-[#daf5ad] disabled:opacity-50"><Swords className="h-5 w-5" /> Start Game</button>}
-                     {!isOwnProfile && relationship === "accepted" && <button type="button" aria-label="Open direct messages" onClick={() => setShowMessages(true)} className="rounded-xl border border-[#687468] bg-white/[0.02] p-3 text-slate-200 transition-colors hover:border-[#a5bd8c]"><MessageCircle className="h-6 w-6" /></button>}
-                     {!isOwnProfile && <div className="relative"><button type="button" aria-label="More profile actions" onClick={() => setMenuOpen((open) => !open)} className="rounded-xl border border-[#687468] bg-white/[0.02] p-3 text-slate-200 transition-colors hover:border-[#a5bd8c]"><MoreHorizontal className="h-6 w-6" /></button>{menuOpen && <div className="absolute right-0 top-14 z-20 min-w-40 overflow-hidden rounded-xl border border-[#52604b] bg-[#171d16] p-1 shadow-2xl">{relationship === "accepted" && <button type="button" onClick={() => void changeFriendship("remove")} className="w-full rounded-lg px-3 py-2 text-left font-mono text-[9px] uppercase text-[#b9c4b1] hover:bg-white/5">REMOVE_FRIEND</button>}{relationship === "blocked" ? <button type="button" onClick={() => void changeFriendship("unblock")} className="w-full rounded-lg px-3 py-2 text-left font-mono text-[9px] uppercase text-[#c9e99a] hover:bg-white/5">UNBLOCK_OPERATIVE</button> : <button type="button" onClick={() => void changeFriendship("block")} className="w-full rounded-lg px-3 py-2 text-left font-mono text-[9px] uppercase text-[#cf8896] hover:bg-[#cf6679]/10">BLOCK_OPERATIVE</button>}<button type="button" onClick={() => void reportProfile()} className="w-full rounded-lg px-3 py-2 text-left font-mono text-[9px] uppercase text-[#cf8896] hover:bg-[#cf6679]/10">REPORT_OPERATIVE</button></div>}</div>}
+                      {viewer && !isOwnProfile && relationship === null && <button type="button" disabled={busy} onClick={() => void sendRequest()} className="flex items-center gap-2 rounded-xl bg-[#c9e99a] px-5 py-3 font-sans text-sm font-semibold text-[#162010] shadow-[0_0_20px_rgba(177,220,117,0.15)] transition-colors hover:bg-[#daf5ad] disabled:opacity-50"><UserPlus className="h-5 w-5" /> Add Friend</button>}
+                      {viewer && !isOwnProfile && relationship === "pending_outgoing" && <button type="button" disabled className="flex items-center gap-2 rounded-xl border border-[#c8b653]/50 bg-[#c8b653]/10 px-5 py-3 font-sans text-sm font-semibold text-[#c8b653]"><Check className="h-5 w-5" /> Friend Request Sent</button>}
+                      {viewer && !isOwnProfile && relationship === "pending_incoming" && <div className="flex flex-wrap justify-center gap-2 lg:justify-end"><button type="button" disabled={busy} onClick={() => void respondToRequest("accept")} className="flex items-center gap-2 rounded-xl bg-[#c9e99a] px-4 py-3 font-sans text-sm font-semibold text-[#162010] disabled:opacity-50"><Check className="h-5 w-5" /> Accept</button><button type="button" disabled={busy} onClick={() => void respondToRequest("decline")} className="rounded-xl border border-[#cf6679]/50 px-4 py-3 font-mono text-[10px] uppercase text-[#cf8896] disabled:opacity-50">Decline</button></div>}
+                      {viewer && !isOwnProfile && relationship === "blocked" && <button type="button" disabled={busy} onClick={() => void changeFriendship("unblock")} className="rounded-xl border border-[#c9e99a]/50 bg-[#c9e99a]/10 px-5 py-3 font-sans text-sm font-semibold text-[#c9e99a] disabled:opacity-50">Unblock</button>}
+                      {viewer && !isOwnProfile && relationship === "accepted" && <button type="button" disabled={busy} onClick={() => void startDirectGame()} className="flex items-center gap-2 rounded-xl bg-[#c9e99a] px-5 py-3 font-sans text-sm font-semibold text-[#162010] shadow-[0_0_20px_rgba(177,220,117,0.15)] transition-colors hover:bg-[#daf5ad] disabled:opacity-50"><Swords className="h-5 w-5" /> Start Game</button>}
+                      {viewer && !isOwnProfile && relationship === "accepted" && <button type="button" aria-label="Open direct messages" onClick={() => setShowMessages(true)} className="rounded-xl border border-[#687468] bg-white/[0.02] p-3 text-slate-200 transition-colors hover:border-[#a5bd8c]"><MessageCircle className="h-6 w-6" /></button>}
+                      {viewer && !isOwnProfile && <div className="relative"><button type="button" aria-label="More profile actions" onClick={() => setMenuOpen((open) => !open)} className="rounded-xl border border-[#687468] bg-white/[0.02] p-3 text-slate-200 transition-colors hover:border-[#a5bd8c]"><MoreHorizontal className="h-6 w-6" /></button>{menuOpen && <div className="absolute right-0 top-14 z-20 min-w-40 overflow-hidden rounded-xl border border-[#52604b] bg-[#171d16] p-1 shadow-2xl">{relationship === "accepted" && <button type="button" onClick={() => void changeFriendship("remove")} className="w-full rounded-lg px-3 py-2 text-left font-mono text-[9px] uppercase text-[#b9c4b1] hover:bg-white/5">REMOVE_FRIEND</button>}{relationship === "blocked" ? <button type="button" onClick={() => void changeFriendship("unblock")} className="w-full rounded-lg px-3 py-2 text-left font-mono text-[9px] uppercase text-[#c9e99a] hover:bg-white/5">UNBLOCK_OPERATIVE</button> : <button type="button" onClick={() => void changeFriendship("block")} className="w-full rounded-lg px-3 py-2 text-left font-mono text-[9px] uppercase text-[#cf8896] hover:bg-[#cf6679]/10">BLOCK_OPERATIVE</button>}<button type="button" onClick={() => void reportProfile()} className="w-full rounded-lg px-3 py-2 text-left font-mono text-[9px] uppercase text-[#cf8896] hover:bg-[#cf6679]/10">REPORT_OPERATIVE</button></div>}</div>}
                   </div>
                 </div>
               </div>
@@ -338,45 +342,6 @@ function LoadingState() {
 
 function ErrorState({ message }: { message: string }) {
   return <div className="flex min-h-[520px] flex-col items-center justify-center px-6 text-center"><p className="font-mono text-xs uppercase text-[#cf8896]">{message}</p><p className="mt-3 font-mono text-[9px] uppercase tracking-widest text-[#748570]">PROFILE_UNAVAILABLE</p></div>;
-}
-
-function DirectMessagesPanel({ profile, onClose }: { profile: ProfileResponse; onClose: () => void }) {
-  const [messages, setMessages] = useState<Awaited<ReturnType<typeof api.getDirectMessages>>>([]);
-  const [draft, setDraft] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-
-  const refresh = useCallback(async () => {
-    try { setMessages(await api.getDirectMessages(profile.user_id)); }
-    catch (requestError) { setError((requestError as Error).message); }
-  }, [profile.user_id]);
-
-  useEffect(() => {
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 5000);
-    return () => window.clearInterval(timer);
-  }, [refresh]);
-
-  const send = async () => {
-    if (!draft.trim()) return;
-    setSending(true); setError(null);
-    try {
-      const message = await api.sendDirectMessage(profile.user_id, draft);
-      setMessages((current) => [...current, message]);
-      setDraft("");
-    } catch (requestError) { setError((requestError as Error).message); }
-    finally { setSending(false); }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[210] flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section role="dialog" aria-modal="true" aria-label={`Messages with ${profile.username}`} className="flex h-[min(620px,90dvh)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[#56664e] bg-[#121812] shadow-2xl">
-        <header className="flex items-center justify-between border-b border-[#354332] px-5 py-4"><div><p className="font-mono text-[9px] uppercase tracking-widest text-[#82937a]">DIRECT_CHANNEL</p><p className="mt-1 font-sans text-lg font-semibold text-[#ecf2e7]">{profile.username}<span className="ml-2 font-mono text-sm text-[#82937a]">#{profile.discriminator}</span></p></div><button type="button" aria-label="Close direct messages" onClick={onClose} className="rounded-lg p-2 text-[#82937a] hover:bg-white/5 hover:text-white"><span className="text-xl">×</span></button></header>
-        <div className="flex-1 space-y-3 overflow-y-auto p-4" aria-live="polite">{messages.length === 0 ? <p className="py-16 text-center font-mono text-[9px] uppercase tracking-widest text-[#687468]">NO_TRANSMISSIONS_YET</p> : messages.map((message) => <div key={message.message_id} className={`flex ${message.sender_id === profile.user_id ? "justify-start" : "justify-end"}`}><div className={`max-w-[82%] rounded-2xl px-4 py-3 font-sans text-sm ${message.sender_id === profile.user_id ? "rounded-tl-none bg-[#253125] text-[#d9e3d3]" : "rounded-tr-none bg-[#b9dc83] text-[#172112]"}`}><p>{message.body}</p><time className="mt-2 block font-mono text-[8px] opacity-50">{new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></div></div>)}</div>
-        <footer className="border-t border-[#354332] p-4"><div className="flex gap-2 rounded-xl border border-[#465640] bg-black/20 p-2 focus-within:border-[#9bc575]"><input autoFocus value={draft} maxLength={2000} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Write a secure message..." aria-label="Direct message" className="min-w-0 flex-1 bg-transparent px-2 font-sans text-sm outline-none placeholder:text-[#687468]" /><button type="button" disabled={sending || !draft.trim()} onClick={() => void send()} className="rounded-lg bg-[#b9dc83] px-4 py-2 font-mono text-[9px] font-bold uppercase text-[#172112] disabled:opacity-40">SEND</button></div>{error && <p role="alert" className="mt-2 font-mono text-[9px] uppercase text-[#cf8896]">{error}</p>}</footer>
-      </section>
-    </div>
-  );
 }
 
 function formatDate(value: string) {

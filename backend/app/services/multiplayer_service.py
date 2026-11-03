@@ -130,8 +130,8 @@ class MultiplayerService:
         if not isinstance(token, str) or not 16 <= len(token) <= 128:
             return {"error": "Invalid player session"}
         username = player_info.get("username", "")
-        if not isinstance(username, str) or not 1 <= len(username.strip()) <= 15:
-            return {"error": "Codename must contain 1 to 15 characters"}
+        if not isinstance(username, str) or not 1 <= len(username.strip()) <= 24:
+            return {"error": "Codename must contain 1 to 24 characters"}
         player_info = {**player_info, "username": username.strip()}
 
         # Recovery if they already exist
@@ -181,6 +181,36 @@ class MultiplayerService:
             await self.save_room(room_id, room)
             return room
         return None
+
+    @room_transaction
+    async def abandon_room(self, room_id: str, sid: str):
+        """Remove an intentionally abandoned waiting room or waiting player.
+
+        Room creation happens before setup is submitted, so a client can leave
+        with zero registered players. Those rooms should be deleted immediately
+        instead of waiting for the normal expiry lease.
+        """
+        room = await self.get_room(room_id)
+        if not room:
+            return None
+
+        player_id = next((pid for pid, player in room["players"].items() if player.get("sid") == sid), None)
+        if room["status"] == "waiting":
+            if player_id:
+                room["players"].pop(player_id, None)
+            if not room["players"]:
+                await self.redis_client.delete(self._get_room_key(room_id))
+                return None
+            await self.save_room(room_id, room)
+            return room
+
+        # Active and finished rooms retain their state for the opponent or a
+        # rematch, but the departing socket is no longer connected.
+        if player_id:
+            room["players"][player_id]["connected"] = False
+            room["players"][player_id]["connection_status"] = "disconnected"
+            await self.save_room(room_id, room)
+        return room
 
     @room_transaction
     async def update_player_ready(self, room_id: str, sid: str, is_ready: bool) -> Optional[Dict[str, Any]]:

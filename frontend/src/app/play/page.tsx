@@ -1,9 +1,8 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { UserCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useGameStore } from "@/store/useGameStore";
 import { api, AccountUser, formatAccountIdentity, LeaderboardEntry } from "@/lib/api";
 import {
@@ -14,14 +13,22 @@ import {
   AbandonMissionModal,
 } from "@/components/game/SharedGameUI";
 import LoadingOverlay from "@/components/ui/LoadingOverlay";
-import { FriendsCenter, NotificationCenter } from "@/components/social/SocialCenter";
 
 export default function Home() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { view } = useGameStore();
   const [entryReady, setEntryReady] = useState(false);
+  const singleMode = searchParams.get("mode") === "single";
 
   useEffect(() => {
+    const gameStore = useGameStore.getState();
+    if (singleMode) {
+      gameStore.setMenuState("single");
+      if (gameStore.view === "game") gameStore.setView("landing");
+    } else if (gameStore.view === "landing") {
+      gameStore.setMenuState("main");
+    }
     const frame = requestAnimationFrame(() => {
       if (sessionStorage.getItem("codebreaker_entry_access")) {
         setEntryReady(true);
@@ -30,7 +37,7 @@ export default function Home() {
       }
     });
     return () => cancelAnimationFrame(frame);
-  }, [router]);
+  }, [router, singleMode]);
 
   if (!entryReady) return null;
 
@@ -40,7 +47,7 @@ export default function Home() {
       <TopHeader />
 
       <div
-        className={`flex-1 w-full flex flex-col items-center relative z-10 px-4 min-h-0 ${view === "landing" ? "overflow-y-auto" : "overflow-hidden"}`}
+        className={`flex-1 w-full flex flex-col items-center relative z-10 px-4 min-h-0 ${view === "landing" ? "overflow-y-auto pb-16 sm:pb-0" : "overflow-hidden"}`}
       >
         <AnimatePresence mode="wait">
           {view === "landing" ? (
@@ -67,7 +74,7 @@ function TopHeader() {
   };
 
   return (
-    <header className="w-full h-20 flex items-center justify-between px-6 sm:px-10 z-50 shrink-0">
+    <header className="w-full h-14 sm:h-20 flex items-center justify-between px-6 sm:px-10 z-50 shrink-0">
       <AnimatePresence mode="wait">
         {view === "game" ? (
           <motion.button
@@ -110,47 +117,9 @@ function TopHeader() {
       </AnimatePresence>
 
       <div className="flex items-center gap-3">
-        <NotificationCenter />
-        <ProfileShortcut />
         {view === "game" ? <OperativeIdentity /> : <div className="w-10" />}
       </div>
     </header>
-  );
-}
-
-function ProfileShortcut() {
-  const router = useRouter();
-  const [identity, setIdentity] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    const refresh = () => {
-      void api.getCurrentAccount()
-        .then((response) => {
-          if (active) setIdentity(response ? formatAccountIdentity(response.user) : null);
-        })
-        .catch(() => {
-          if (active) setIdentity(null);
-        });
-    };
-    refresh();
-    window.addEventListener("codebreaker-auth-changed", refresh);
-    return () => {
-      active = false;
-      window.removeEventListener("codebreaker-auth-changed", refresh);
-    };
-  }, []);
-
-  return (
-    <button
-      type="button"
-      aria-label="Open profile"
-      title="Profile"
-      onClick={() => router.push(identity ? `/profile?identity=${encodeURIComponent(identity)}` : "/profile")}
-      className="rounded-full border border-[#3a3a3c] bg-black/30 p-2 text-[#565758] transition-colors hover:border-[#538d4e]/60 hover:text-[#538d4e]"
-    >
-      <UserCircle className="h-4 w-4" />
-    </button>
   );
 }
 
@@ -227,7 +196,7 @@ function LandingView() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className={`relative flex flex-col items-center justify-center my-auto shrink-0 py-4 w-full gap-6 sm:gap-8 ${menuState === "category" ? "max-w-sm lg:max-w-5xl" : "max-w-sm lg:max-w-3xl"}`}
+      className={`relative flex flex-col items-center justify-center my-auto shrink-0 py-2 sm:py-4 w-full gap-3 sm:gap-8 ${menuState === "category" ? "max-w-sm lg:max-w-5xl" : "max-w-sm lg:max-w-3xl"}`}
     >
       <BinaryBackground />
       {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
@@ -252,7 +221,7 @@ function LandingView() {
 
       {menuState === "main" && <OperativeIdentity prominent />}
 
-      <div className="w-full relative min-h-75 flex items-center">
+      <div className="w-full relative min-h-0 sm:min-h-75 flex items-center">
         <AnimatePresence mode="wait">
           {menuState === "main" && (
             <motion.div
@@ -386,7 +355,7 @@ function LandingView() {
         </AnimatePresence>
       </div>
 
-      <div className="w-full flex justify-between gap-4 pt-4 px-2">
+      <div className="w-full flex justify-between gap-4 pt-2 sm:pt-4 px-2">
         <button
           onClick={() => setShowHowToPlay(true)}
           className="flex-1 py-2 px-3 border border-[#3a3a3c] rounded text-[#565758] hover:text-[#538d4e] hover:border-[#538d4e]/50 font-mono text-[9px] transition-all tracking-tighter uppercase text-center bg-white/5"
@@ -394,7 +363,10 @@ function LandingView() {
            FIELD_MANUAL
         </button>
         <button
-          onClick={() => setShowLeaderboard(true)}
+          onClick={() => {
+            window.dispatchEvent(new Event("codebreaker-registry-opened"));
+            setShowLeaderboard(true);
+          }}
           className="flex-1 py-2 px-3 border border-[#3a3a3c] rounded text-[#565758] hover:text-slate-100 hover:border-slate-500 font-mono text-[9px] transition-all tracking-tighter uppercase text-center bg-white/5"
         >
           CENTRAL_REGISTRY.reg
@@ -964,13 +936,8 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(username);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [accountMode, setAccountMode] = useState<"callsign" | "login" | "register">("callsign");
-  const [accountUsername, setAccountUsername] = useState(username);
-  const [accountPassword, setAccountPassword] = useState("");
   const [accountUser, setAccountUser] = useState<AccountUser | null>(null);
-  const [accountError, setAccountError] = useState<string | null>(null);
-  const [accountBusy, setAccountBusy] = useState(false);
-  const [showFriends, setShowFriends] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const isEditable = view === "landing" && menuState === "main";
 
@@ -983,7 +950,6 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
         if (response) {
           setUsername(response.user.username);
           setDraft(response.user.username);
-          setAccountUsername(response.user.username);
         }
       }).catch(() => undefined);
     };
@@ -1049,17 +1015,12 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
   const openEditor = () => {
     if (!isEditable) return;
     setDraft(username);
-    setAccountUsername(username);
-    setAccountPassword("");
     setValidationError(null);
-    setAccountError(null);
-    setAccountMode("callsign");
     void api.getCurrentAccount().then((response) => {
       if (response) {
         setAccountUser(response.user);
         setUsername(response.user.username);
         setDraft(response.user.username);
-        setAccountUsername(response.user.username);
       }
     }).catch(() => undefined);
     setIsEditing(true);
@@ -1081,8 +1042,7 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
       setIsEditing(false);
       return;
     }
-    setAccountBusy(true);
-    setAccountError(null);
+    setBusy(true);
     try {
       const response = await api.updateUsername(normalized.toUpperCase());
       setAccountUser(response.user);
@@ -1091,35 +1051,10 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
       setIsEditing(false);
       window.dispatchEvent(new Event("codebreaker-auth-changed"));
     } catch (error) {
-      setAccountError((error as Error).message);
+      setValidationError((error as Error).message);
     } finally {
-      setAccountBusy(false);
+      setBusy(false);
     }
-  };
-
-  const submitAccount = async () => {
-    setAccountBusy(true);
-    setAccountError(null);
-    try {
-      const response = accountMode === "register"
-        ? await api.register(accountUsername.trim(), accountPassword)
-        : await api.login(accountUsername.trim(), accountPassword);
-      setAccountUser(response.user);
-      setUsername(response.user.username);
-      window.dispatchEvent(new Event("codebreaker-auth-changed"));
-      setIsEditing(false);
-    } catch (error) {
-      setAccountError((error as Error).message);
-    } finally {
-      setAccountBusy(false);
-    }
-  };
-
-  const logoutAccount = async () => {
-    await api.logout();
-    setAccountUser(null);
-    setAccountMode("callsign");
-    window.dispatchEvent(new Event("codebreaker-auth-changed"));
   };
 
   return (
@@ -1169,11 +1104,10 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
               onClick={(event) => event.stopPropagation()}
               className="w-full max-w-sm rounded-2xl border border-[#3a3a3c] bg-[#121213] p-6 shadow-[0_0_50px_rgba(0,0,0,0.8)]"
             >
-              {accountMode === "callsign" ? (
                 <>
                   <div className="mb-5">
                     <p className="text-[#538d4e] font-mono text-xs font-bold tracking-widest">CALLSIGN_CONFIGURATION</p>
-                    <p className="mt-2 text-[#565758] font-mono text-[9px] uppercase">Guest play is instant. An account keeps this identity across devices.</p>
+                    <p className="mt-2 text-[#565758] font-mono text-[9px] uppercase">Edit your display callsign or generate a random suggestion.</p>
                     {accountUser && <p className="mt-2 text-[#538d4e] font-mono text-[9px] uppercase">HANDLE // {formatAccountIdentity(accountUser)}</p>}
                   </div>
                   <input
@@ -1193,42 +1127,13 @@ function OperativeIdentity({ prominent = false }: { prominent?: boolean }) {
                   {validationError && <p role="alert" className="mt-2 text-[9px] font-mono uppercase text-red-400">{validationError}</p>}
                   <div className="mt-5 grid grid-cols-2 gap-3">
                     <button type="button" onClick={generateNewAlias} className="rounded-lg border border-[#3a3a3c] py-3 text-[10px] font-mono uppercase text-slate-300 hover:border-[#538d4e] hover:text-[#538d4e]">GENERATE_ALIAS</button>
-                   <button type="button" disabled={accountBusy} onClick={() => void saveUsername()} className="rounded-lg bg-[#538d4e] py-3 text-[10px] font-mono font-bold uppercase text-black hover:bg-[#58a352] disabled:opacity-50">{accountBusy ? "SAVING..." : "SAVE_CALLSIGN"}</button>
-                  </div>
-                  <div className="mt-6 border-t border-[#3a3a3c] pt-5">
-                    {accountUser ? (
-                      <div className="space-y-3">
-                        <button type="button" onClick={() => { setIsEditing(false); setShowFriends(true); }} className="w-full rounded-lg border border-[#538d4e]/40 py-3 text-[10px] font-mono uppercase text-[#538d4e] hover:bg-[#538d4e]/10">OPEN_SOCIAL_CENTER</button>
-                        <button type="button" onClick={logoutAccount} className="w-full rounded-lg border border-[#cf6679]/40 py-3 text-[10px] font-mono uppercase text-[#cf6679] hover:bg-[#cf6679]/10">SIGN_OUT_OF_ACCOUNT</button>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 gap-3">
-                        <button type="button" onClick={() => setAccountMode("login")} className="rounded-lg border border-[#3a3a3c] py-3 text-[10px] font-mono uppercase text-slate-300 hover:border-[#538d4e] hover:text-[#538d4e]">SIGN_IN</button>
-                        <button type="button" onClick={() => setAccountMode("register")} className="rounded-lg border border-[#538d4e]/40 py-3 text-[10px] font-mono uppercase text-[#538d4e] hover:bg-[#538d4e]/10">CREATE_ACCOUNT</button>
-                      </div>
-                    )}
+                    <button type="button" disabled={busy} onClick={() => void saveUsername()} className="rounded-lg bg-[#538d4e] py-3 text-[10px] font-mono font-bold uppercase text-black hover:bg-[#58a352] disabled:opacity-50">{busy ? "SAVING..." : "SAVE_CALLSIGN"}</button>
                   </div>
                 </>
-              ) : (
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-[#538d4e] font-mono text-xs font-bold tracking-widest">{accountMode === "register" ? "CREATE_ACCOUNT" : "ACCOUNT_LOGIN"}</p>
-                     <p className="mt-2 text-[#565758] font-mono text-[9px] uppercase">Use a callsign and a password of at least 8 characters. The discriminator is assigned automatically.</p>
-                  </div>
-                   <input value={accountUsername} maxLength={29} onChange={(event) => setAccountUsername(event.target.value)} placeholder={accountMode === "login" ? "CALLSIGN_OR_CALLSIGN#1234" : "CALLSIGN"} className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 text-sm font-mono text-slate-100 outline-none focus:border-[#538d4e]" />
-                  <input type="password" value={accountPassword} onChange={(event) => setAccountPassword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void submitAccount(); }} placeholder="PASSWORD" className="w-full rounded-lg border border-[#3a3a3c] bg-black/30 px-3 py-3 text-sm font-mono text-slate-100 outline-none focus:border-[#538d4e]" />
-                  {accountError && <p role="alert" className="text-[9px] font-mono uppercase text-red-400">{accountError}</p>}
-                  <div className="grid grid-cols-2 gap-3">
-                    <button type="button" onClick={() => setAccountMode("callsign")} className="rounded-lg border border-[#3a3a3c] py-3 text-[10px] font-mono uppercase text-slate-300 hover:border-[#565758]">BACK</button>
-                    <button type="button" disabled={accountBusy} onClick={() => void submitAccount()} className="rounded-lg bg-[#538d4e] py-3 text-[10px] font-mono font-bold uppercase text-black hover:bg-[#58a352] disabled:opacity-50">{accountBusy ? "CONNECTING..." : accountMode === "register" ? "REGISTER" : "SIGN_IN"}</button>
-                  </div>
-                </div>
-              )}
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-      {showFriends && <FriendsCenter onClose={() => setShowFriends(false)} />}
     </>
   );
 }

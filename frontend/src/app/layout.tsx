@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
+import AppShell from "@/components/navigation/AppShell";
+import { Suspense } from "react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -57,7 +59,11 @@ export default function RootLayout({
             })();`,
           }}
         />
-        <Providers>{children}</Providers>
+        <Providers>
+          <Suspense fallback={<div className="min-h-dvh bg-[#080a08]" />}>
+            <AppShell>{children}</AppShell>
+          </Suspense>
+        </Providers>
       </body>
     </html>
   );

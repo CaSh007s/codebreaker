@@ -12,6 +12,7 @@ load_dotenv()
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 from app.services.multiplayer_service import multiplayer_service
+from app.services.account_service import AccountUnavailableError, account_service
 
 # Start with an in-process manager. The application lifespan upgrades this to
 # Redis pub/sub when Redis is available, which keeps local startup quiet.
@@ -35,6 +36,7 @@ app_sio = socketio.ASGIApp(sio)
 
 # Track which room a SID is in for easier cleanup
 sid_to_room = {}
+sid_to_user = {}
 
 # Chat constants
 MAX_MESSAGE_LENGTH = 200
@@ -145,20 +147,71 @@ async def chat_player(sid, room_id):
 
 @sio.event
 async def connect(sid, environ):
+    cookie_value = next((value for key, value in environ.get("headers", []) if key.lower() in (b"cookie", "cookie")), environ.get("HTTP_COOKIE", ""))
+    cookie_header = cookie_value.decode("utf-8", "ignore") if isinstance(cookie_value, bytes) else str(cookie_value)
+    session_token = next((part.split("=", 1)[1] for part in cookie_header.split(";") if part.strip().startswith("codebreaker_session=") and "=" in part), None)
+    if session_token:
+        try:
+            user = await account_service.get_user(session_token)
+            if user:
+                sid_to_user[sid] = user["user_id"]
+        except AccountUnavailableError:
+            pass
     print(f"Client connected: {sid}")
 
 @sio.event
 async def disconnect(sid):
     room_id = sid_to_room.get(sid)
     if room_id:
-        room = await multiplayer_service.leave_room(room_id, sid)
+        current_room = await multiplayer_service.get_room(room_id)
+        room = await (
+            multiplayer_service.abandon_room(room_id, sid)
+            if current_room and current_room.get("status") == "waiting"
+            else multiplayer_service.leave_room(room_id, sid)
+        )
         if room:
             username = _get_player_username(room, sid)
             await emit_system_message(room_id, f"{username} lost connection")
             await publish_room('room_update', room)
             
         sid_to_room.pop(sid, None)
+    sid_to_user.pop(sid, None)
     print(f"Client disconnected: {sid}")
+
+
+@game_event
+async def leave_room(sid, data):
+    """Clean up a room when the client intentionally navigates away."""
+    room_id = data.get("room_id")
+    if room_id and sid_to_room.get(sid) == room_id:
+        room = await multiplayer_service.abandon_room(room_id, sid)
+        await sio.leave_room(sid, room_id)
+        sid_to_room.pop(sid, None)
+        if room:
+            await publish_room("room_update", room)
+    return {"ok": True}
+
+
+@sio.on("direct_message")
+async def direct_message(sid, data):
+    """Persist and fan out an authenticated friend-to-friend message."""
+    user_id = sid_to_user.get(sid)
+    if not user_id or not isinstance(data, dict):
+        return {"ok": False, "error": "SIGN_IN_REQUIRED_FOR_MESSAGING"}
+    other_user_id = data.get("other_user_id")
+    body = data.get("body")
+    if not isinstance(other_user_id, str) or not 1 <= len(other_user_id) <= 128 or not isinstance(body, str):
+        return {"ok": False, "error": "INVALID_DIRECT_MESSAGE"}
+    try:
+        message = await account_service.send_direct_message(user_id, other_user_id, body)
+    except (ValueError, AccountUnavailableError) as error:
+        return {"ok": False, "error": str(error)}
+    payload = {**message, "read": True}
+    await sio.emit("direct_message", payload, to=sid)
+    for recipient_sid, recipient_user_id in list(sid_to_user.items()):
+        if recipient_user_id == other_user_id:
+            await sio.emit("direct_message", {**payload, "read": False}, to=recipient_sid)
+    return {"ok": True, "message": message}
 
 @game_event
 async def init_room(sid, data):

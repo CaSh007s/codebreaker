@@ -574,7 +574,7 @@ class AccountService:
         )
         return self._user(row) if row else None
 
-    async def get_profile(self, identity: str, current_user_id: str) -> dict[str, Any]:
+    async def get_profile(self, identity: str, current_user_id: str | None = None) -> dict[str, Any]:
         pool = self._require_storage()
         username, discriminator = split_identity(identity, require_discriminator=True)
         row = await pool.fetchrow(
@@ -584,10 +584,12 @@ class AccountService:
         if not row:
             raise ValueError("Operative not found")
         target_id = row["id"]
-        friendship = await pool.fetchrow(
-            "SELECT status, requested_by, blocked_by FROM cb_friendships WHERE (user_a = $1 AND user_b = $2) OR (user_a = $2 AND user_b = $1)",
-            current_user_id, target_id,
-        )
+        friendship = None
+        if current_user_id:
+            friendship = await pool.fetchrow(
+                "SELECT status, requested_by, blocked_by FROM cb_friendships WHERE (user_a = $1 AND user_b = $2) OR (user_a = $2 AND user_b = $1)",
+                current_user_id, target_id,
+            )
         if friendship and friendship["status"] == "blocked" and friendship["blocked_by"] != current_user_id:
             raise ValueError("PROFILE_UNAVAILABLE // OPERATIVE_BLOCKED")
         friend_count = await pool.fetchval(
@@ -655,8 +657,16 @@ class AccountService:
         if not body or len(body) > 2000:
             raise ValueError("Message must contain 1 to 2000 characters")
         row = await pool.fetchrow("INSERT INTO cb_direct_messages (id, sender_id, recipient_id, body) VALUES ($1, $2, $3, $4) RETURNING id, sender_id, body, created_at", str(uuid.uuid4()), user_id, other_user_id, body)
-        sender = await pool.fetchrow("SELECT username FROM cb_users WHERE id = $1", user_id)
-        return {"message_id": row["id"], "sender_id": user_id, "sender_username": sender["username"], "body": row["body"], "created_at": row["created_at"].isoformat(), "read": True}
+        sender = await pool.fetchrow("SELECT username, discriminator FROM cb_users WHERE id = $1", user_id)
+        message = {"message_id": row["id"], "sender_id": user_id, "sender_username": sender["username"], "recipient_id": other_user_id, "body": row["body"], "created_at": row["created_at"].isoformat(), "read": True}
+        await self.create_notification(
+            other_user_id,
+            "direct_message",
+            f"New message from {sender['username']}",
+            f"{sender['username']}#{sender['discriminator']} sent you a direct message.",
+            {"user_id": user_id, "identity": f"{sender['username']}#{sender['discriminator']}", "message_id": row["id"]},
+        )
+        return message
 
     async def report_user(self, reporter_id: str, target_user_id: str, reason: str) -> None:
         pool = self._require_storage()

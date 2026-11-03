@@ -76,10 +76,14 @@ export function NotificationCenter() {
                    const roomId = notification.payload.room_id;
                    if (roomId) router.push(`/multiplayer/${roomId}?mode=standard&level=${notification.payload.level || "4"}&repeats=${notification.payload.repeats || "false"}&direct=true`);
                    const identity = notification.payload.identity;
-                   if (identity && (notification.kind === "friend_request" || notification.kind === "friend_accepted")) {
-                     setOpen(false);
-                     router.push(`/profile?identity=${encodeURIComponent(identity)}`);
-                   }
+                    if (identity && (notification.kind === "friend_request" || notification.kind === "friend_accepted")) {
+                      setOpen(false);
+                      router.push(`/profile?identity=${encodeURIComponent(identity)}`);
+                    }
+                    if (notification.kind === "direct_message") {
+                      setOpen(false);
+                      router.push("/messages");
+                    }
                 }}
                 className={`w-full border-b border-white/5 px-4 py-3 text-left transition-colors hover:bg-white/5 ${notification.read ? "opacity-60" : "bg-[#538d4e]/5"}`}
               >

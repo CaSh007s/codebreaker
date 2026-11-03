@@ -28,6 +28,16 @@ body {
   touch-action: manipulation;
 }
 
+.app-shell {
+  background-image:
+    radial-gradient(circle at 18% 0%, rgba(89, 132, 77, 0.06), transparent 28rem),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.012), transparent 35%);
+}
+
+.mobile-bottom-dock {
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
 :where(button, a, input, textarea, select):focus-visible {
   outline: 2px solid #b8db85;
   outline-offset: 3px;

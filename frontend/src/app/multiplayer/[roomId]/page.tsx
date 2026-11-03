@@ -95,6 +95,14 @@ export default function MultiplayerRoom() {
   const repeats = searchParams.get("repeats") === "true";
   const direct = searchParams.get("direct") === "true";
 
+  useEffect(() => {
+    const active = view === "game" && roomData?.status !== "finished";
+    window.dispatchEvent(new CustomEvent("codebreaker-mission-state", { detail: { active } }));
+    return () => {
+      window.dispatchEvent(new CustomEvent("codebreaker-mission-state", { detail: { active: false } }));
+    };
+  }, [roomData?.status, view]);
+
   // Session Management
   useEffect(() => {
     let pid = sessionStorage.getItem("codebreaker_player_id");
@@ -107,13 +115,14 @@ export default function MultiplayerRoom() {
     // Try to recover codename/avatar
     const savedCodename = sessionStorage.getItem(`cb_codename_${roomId}`);
     const savedAvatar = sessionStorage.getItem(`cb_avatar_${roomId}`);
-    if (savedCodename || savedAvatar) {
+    const rememberedCodename = localStorage.getItem("codebreaker_operative")?.trim() || "";
+    const suggestedCodename = savedCodename || rememberedCodename;
+    const savedAvatarSeed = savedAvatar?.match(/seed=([^&]+)/)?.[1];
+    const suggestedAvatarSeed = savedAvatarSeed || (suggestedCodename ? `${suggestedCodename}-${crypto.randomUUID()}` : "");
+    if (suggestedCodename || suggestedAvatarSeed) {
       setTimeout(() => {
-        if (savedCodename) setUsername(savedCodename);
-        if (savedAvatar) {
-          const seedMatch = savedAvatar.match(/seed=([^&]+)/);
-          if (seedMatch) setAvatarSeed(seedMatch[1]);
-        }
+        if (suggestedCodename) setUsername(suggestedCodename);
+        if (suggestedAvatarSeed) setAvatarSeed(suggestedAvatarSeed);
       }, 0);
     }
   }, [roomId]);
@@ -750,13 +759,14 @@ function UserSetup({
           <label className="text-[#565758] font-mono text-[9px] uppercase tracking-widest opacity-70 ml-1">
             Codename
           </label>
+          <p className="-mt-1 ml-1 text-[8px] font-mono uppercase tracking-wider text-[#687468]">Your current callsign is suggested. Edit it or continue.</p>
           <input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="GHOST_STALKER..."
             className="w-full bg-black/40 border border-[#3a3a3c] rounded-lg px-4 py-3 font-mono text-sm focus:border-[#538d4e] outline-none transition-all placeholder:opacity-30"
-            maxLength={15}
+            maxLength={24}
           />
           {error && (
             <p className="text-[#cf6679] font-mono text-[9px] uppercase animate-pulse">

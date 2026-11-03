@@ -61,6 +61,25 @@ async def test_concurrent_capacity_and_duplicate_room_creation(match):
 
 
 @pytest.mark.asyncio
+async def test_abandoning_waiting_room_removes_empty_room(match):
+    service, room_id = match
+    assert await service.abandon_room(room_id, "sid-without-setup") is None
+    assert await service.get_room(room_id) is None
+
+
+@pytest.mark.asyncio
+async def test_abandoning_waiting_player_removes_room_when_last_player_leaves(match):
+    service, room_id = match
+    await service.register_player(room_id, "sid-0", {
+        "player_id": "player-0",
+        "username": "Player0",
+        "token": "test-session-token-0",
+    })
+    assert await service.abandon_room(room_id, "sid-0") is None
+    assert await service.get_room(room_id) is None
+
+
+@pytest.mark.asyncio
 async def test_malformed_socket_envelope_returns_error():
     with patch.object(socket_manager.sio, "emit", new_callable=AsyncMock) as emit:
         await socket_manager.init_room("sid", None)

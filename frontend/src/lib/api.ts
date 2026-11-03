@@ -221,7 +221,17 @@ export const api = {
   },
 
   async getProfile(identity: string): Promise<ProfileResponse> {
-    if (isLocalFallbackEnabled() && hasLocalSession()) return getLocalProfile(identity);
+    if (isLocalFallbackEnabled()) {
+      try {
+        return getLocalProfile(identity, getLocalCurrentAccount()?.user.user_id);
+      } catch (localError) {
+        try {
+          return await socialRequest<ProfileResponse>(`/social/profiles/${encodeURIComponent(identity)}`, {}, "OPERATIVE_OFFLINE // PROFILE_SEARCH_REQUIRES_ONLINE_UPLINK");
+        } catch {
+          throw localError;
+        }
+      }
+    }
     try {
       return await socialRequest<ProfileResponse>(`/social/profiles/${encodeURIComponent(identity)}`, {}, "OPERATIVE_OFFLINE // PROFILE_SEARCH_REQUIRES_ONLINE_UPLINK");
     } catch (error) {
